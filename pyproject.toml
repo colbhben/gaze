@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gaze"
+version = "0.1.0"
+description = "Hardware-agnostic dataset setup, rectification, validation, and viewing for heterogeneous gaze datasets."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Gaze pipeline contributors" }]
+dependencies = []
+
+[project.optional-dependencies]
+parquet = ["pandas>=2.0", "pyarrow>=14"]
+dev = ["pytest>=8", "pandas>=2.0", "pyarrow>=14"]
+
+[project.scripts]
+gaze = "gaze.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+gaze = ["viewer.html"]
