@@ -1,0 +1,50 @@
+# Python caches and tooling
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments and local installs
+.venv/
+venv/
+env/
+*.egg-info/
+build/
+dist/
+
+# Local dataset/download roots
+datasets/
+data/
+raw/
+raw_data/
+canonical/
+canonical_data/
+outputs/
+artifacts/
+
+# Large downloaded dataset archives/media
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.mp4
+*.mov
+*.mkv
+*.vrs
+*.mvnx
+*.glb
+*.npz
+
+# Generated canonical reports and split outputs
+alignment_report.json
+splits/
+
+# Logs and OS/editor noise
+*.log
+.DS_Store
+.idea/
+.vscode/
