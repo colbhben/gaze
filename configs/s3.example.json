@@ -1,5 +1,7 @@
 {
-  "bucket_uri": "s3://your-bucket/gaze",
+  "bucket_uri": "s3://far-research-internal/colbhben/gaze",
+  "access_mode": "file_mount",
+  "mount_root": "/nfs",
   "unprocessed_prefix": "unprocessed",
   "processed_prefix": "processed",
   "manifests_prefix": "manifests",

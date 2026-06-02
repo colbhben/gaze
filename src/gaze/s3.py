@@ -19,7 +19,9 @@ Runner = Callable[[list[str]], subprocess.CompletedProcess]
 
 @dataclass
 class S3Config:
-    bucket_uri: str
+    bucket_uri: str = "s3://far-research-internal/colbhben/gaze"
+    access_mode: str = "file_mount"
+    mount_root: str = "/nfs"
     unprocessed_prefix: str = "unprocessed"
     processed_prefix: str = "processed"
     manifests_prefix: str = "manifests"
@@ -50,11 +52,14 @@ class S3Config:
         return join_s3_uri(self.base_uri(), self.splits_prefix, f"{name}.s3.json")
 
 
-def load_s3_config(path: str | Path) -> S3Config:
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
+def load_s3_config(path: str | Path | None = None) -> S3Config:
+    config_path = Path(path) if path else None
+    data = json.loads(config_path.read_text(encoding="utf-8")) if config_path and config_path.exists() else {}
     cfg = S3Config(**data)
     if not cfg.bucket_uri.startswith("s3://"):
         raise ValueError("bucket_uri must start with s3://")
+    if cfg.access_mode not in {"file_mount", "awscli"}:
+        raise ValueError("access_mode must be file_mount or awscli")
     return cfg
 
 
@@ -98,8 +103,33 @@ def aws_sync_args(cfg: S3Config, source: str | Path, target: str | Path) -> list
     return args
 
 
+def is_s3_uri(value: str | Path) -> bool:
+    return str(value).startswith("s3://")
+
+
+def split_s3_uri(uri: str) -> tuple[str, str]:
+    if not uri.startswith("s3://"):
+        raise ValueError(f"not an S3 URI: {uri}")
+    remainder = uri[len("s3://") :]
+    bucket, _, key = remainder.partition("/")
+    return bucket, key
+
+
+def mount_path_for_uri(cfg: S3Config, uri: str) -> Path:
+    bucket, key = split_s3_uri(uri)
+    configured_bucket, _ = split_s3_uri(cfg.bucket_uri)
+    if bucket != configured_bucket:
+        raise ValueError(f"mounted bucket mismatch: {bucket} != {configured_bucket}")
+    return Path(cfg.mount_root) / key
+
+
+def storage_path(cfg: S3Config, value: str | Path) -> Path:
+    text = str(value)
+    return mount_path_for_uri(cfg, text) if is_s3_uri(text) else Path(value)
+
+
 def run_or_report(args: list[str], dry_run: bool, runner: Runner | None = None) -> dict[str, Any]:
-    item: dict[str, Any] = {"command": args, "dry_run": dry_run}
+    item: dict[str, Any] = {"transport": "awscli", "command": args, "dry_run": dry_run}
     if dry_run:
         return item
     if runner is None:
@@ -112,11 +142,68 @@ def run_or_report(args: list[str], dry_run: bool, runner: Runner | None = None) 
 
 
 def upload_file(cfg: S3Config, source: Path, target_uri: str, dry_run: bool = False, runner: Runner | None = None) -> dict[str, Any]:
+    if cfg.access_mode == "file_mount":
+        return copy_file_mount(cfg, source, target_uri, dry_run=dry_run)
     return run_or_report(aws_cp_args(cfg, source, target_uri), dry_run=dry_run, runner=runner)
 
 
 def sync_dir(cfg: S3Config, source: str | Path, target: str | Path, dry_run: bool = False, runner: Runner | None = None) -> dict[str, Any]:
+    if cfg.access_mode == "file_mount":
+        return sync_file_mount(cfg, source, target, dry_run=dry_run)
     return run_or_report(aws_sync_args(cfg, source, target), dry_run=dry_run, runner=runner)
+
+
+def copy_file_mount(cfg: S3Config, source: str | Path, target: str | Path, dry_run: bool = False) -> dict[str, Any]:
+    source_path = storage_path(cfg, source)
+    target_path = storage_path(cfg, target)
+    item = {
+        "transport": "file_mount",
+        "operation": "copy",
+        "source": str(source),
+        "target": str(target),
+        "source_path": str(source_path),
+        "target_path": str(target_path),
+        "dry_run": dry_run,
+    }
+    if dry_run:
+        return item
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source_path, target_path)
+    item["copied"] = True
+    return item
+
+
+def sync_file_mount(cfg: S3Config, source: str | Path, target: str | Path, dry_run: bool = False) -> dict[str, Any]:
+    source_path = storage_path(cfg, source)
+    target_path = storage_path(cfg, target)
+    item = {
+        "transport": "file_mount",
+        "operation": "sync",
+        "source": str(source),
+        "target": str(target),
+        "source_path": str(source_path),
+        "target_path": str(target_path),
+        "dry_run": dry_run,
+    }
+    if dry_run:
+        return item
+    if source_path.is_file():
+        target_path.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_path, target_path / source_path.name)
+        item["files_copied"] = 1
+        return item
+    target_path.mkdir(parents=True, exist_ok=True)
+    files_copied = 0
+    for path in source_path.rglob("*"):
+        if path.is_dir():
+            continue
+        relative = path.relative_to(source_path)
+        destination = target_path / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, destination)
+        files_copied += 1
+    item["files_copied"] = files_copied
+    return item
 
 
 def serial_download_backup(

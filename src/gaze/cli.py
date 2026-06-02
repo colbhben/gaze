@@ -14,6 +14,7 @@ from .rectify import rectify_dataset
 from .s3 import (
     create_s3_pull_manifest,
     load_s3_config,
+    mount_path_for_uri,
     parse_partitions,
     pull_processed_from_manifest,
     serial_download_backup,
@@ -164,6 +165,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         "ffmpeg": shutil.which("ffmpeg"),
         "ffprobe": shutil.which("ffprobe"),
         "aws": shutil.which("aws"),
+        "nfs_mount": "/nfs" if Path("/nfs").exists() else None,
         "parquet_available": parquet_available(),
     }
     print(json.dumps(report, indent=2, sort_keys=True))
@@ -171,8 +173,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print("warning: ffmpeg not found; video transcode/resample will require installing ffmpeg", file=sys.stderr)
     if not report["parquet_available"]:
         print("warning: pyarrow not found; tabular outputs will use explicit JSONL fallback files", file=sys.stderr)
-    if not report["aws"]:
-        print("warning: aws CLI not found; S3 tether commands require installing/configuring awscli", file=sys.stderr)
+    if not report["nfs_mount"]:
+        print("warning: /nfs mount not found; default S3 tether commands expect s3://far-research-internal mounted at /nfs", file=sys.stderr)
     return 0
 
 
@@ -247,9 +249,18 @@ def cmd_s3_layout(args: argparse.Namespace) -> int:
         json.dumps(
             {
                 "layout_version": 1,
+                "access_mode": cfg.access_mode,
                 "base": cfg.base_uri(),
+                "mount_root": cfg.mount_root,
+                "mounted_base": str(mount_path_for_uri(cfg, cfg.base_uri())) if cfg.access_mode == "file_mount" else None,
                 "unprocessed": cfg.unprocessed_uri("{dataset}", "{partition}", "{asset_key}"),
+                "unprocessed_mount": str(mount_path_for_uri(cfg, cfg.unprocessed_uri("{dataset}", "{partition}", "{asset_key}")))
+                if cfg.access_mode == "file_mount"
+                else None,
                 "processed_episode": cfg.processed_uri("{profile}", "{dataset}", "{episode_id}"),
+                "processed_episode_mount": str(mount_path_for_uri(cfg, cfg.processed_uri("{profile}", "{dataset}", "{episode_id}")))
+                if cfg.access_mode == "file_mount"
+                else None,
                 "processed_manifest": cfg.processed_manifest_uri("{profile}"),
                 "download_manifest": cfg.download_manifest_uri("{name}"),
                 "split_pull_manifest": cfg.split_uri("{name}"),

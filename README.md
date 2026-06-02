@@ -63,8 +63,24 @@ the platform package manager, for example `brew install ffmpeg`,
 
 ## S3-Backed Workflow
 
-Copy the example config and set the bucket/prefix that both machines can
-access:
+The default S3-backed path is:
+
+```text
+s3://far-research-internal/colbhben/gaze
+```
+
+The environment is expected to mount `s3://far-research-internal` at `/nfs`:
+
+```yaml
+file_mounts:
+  /nfs:
+    source: s3://far-research-internal
+```
+
+So the default pipeline writes through regular filesystem paths under
+`/nfs/colbhben/gaze/...`, while still recording canonical `s3://...` URIs in
+manifests. Copy the example config only if a machine needs to override the
+bucket path, mount path, or access mode:
 
 ```sh
 cp configs/s3.example.json configs/s3.json
@@ -73,7 +89,7 @@ cp configs/s3.example.json configs/s3.json
 The configured `bucket_uri` is the root of a static layout:
 
 ```text
-s3://your-bucket/gaze/
+s3://far-research-internal/colbhben/gaze/
   unprocessed/{dataset}/{partition}/{asset_key}/{filename}
   processed/{profile}/{dataset}/{episode_id}/...
   processed/{profile}/manifest.jsonl
@@ -81,8 +97,9 @@ s3://your-bucket/gaze/
   splits/{name}.s3.json
 ```
 
-`configs/s3.json` is ignored by git so each user can point at their own bucket,
-profile, region, storage class, or server-side encryption settings.
+`configs/s3.json` is ignored by git so each user can point at their own bucket
+or mount. Set `"access_mode": "awscli"` only for environments without the NFS
+mount; the default `"access_mode": "file_mount"` uses local file copies/syncs.
 
 ### A. Serial Download And Raw Backup
 
@@ -98,7 +115,7 @@ gaze s3 backup-raw \
   --manifest-name aea-v1
 ```
 
-Use `--dry-run` first to inspect the planned `aws s3 cp` operations without
+Use `--dry-run` first to inspect the planned file-mount copy operations without
 downloading or uploading.
 
 ### B. Serial Process And Processed Backup
@@ -147,5 +164,6 @@ gaze s3 pull-processed \
   --dest-root ./canonical_train
 ```
 
-All S3 commands shell out to the AWS CLI, so users should run `aws configure`
-or set the `aws_profile`/`aws_region` fields in `configs/s3.json`.
+With the default file-mount mode, no AWS CLI is required for moving objects
+between the local cache and mounted bucket. The optional AWS CLI settings in
+`configs/s3.example.json` are only used when `"access_mode": "awscli"`.
