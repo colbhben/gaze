@@ -108,6 +108,11 @@ def build_parser() -> argparse.ArgumentParser:
     add_s3_config_arg(backup_raw)
     backup_raw.add_argument("--raw-root", default=".gaze-cache/raw")
     backup_raw.add_argument("--manifest-name", default="latest")
+    backup_raw.add_argument("--max-download-bytes", type=int, help="Optional cap for one local download batch")
+    backup_raw.add_argument("--reserve-bytes", type=int, help="Local free-space reserve to keep unused")
+    backup_raw.add_argument("--storage-fraction", type=float, help="Maximum fraction of currently free local space to use")
+    backup_raw.add_argument("--include-unknown-size", action="store_true", help="Allow assets without known sizes into the batch")
+    backup_raw.add_argument("--keep-cache", action="store_true", help="Keep local downloaded files after successful upload")
     backup_raw.add_argument("--dry-run", action="store_true")
     backup_raw.set_defaults(func=cmd_s3_backup_raw)
 
@@ -175,6 +180,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print("warning: pyarrow not found; tabular outputs will use explicit JSONL fallback files", file=sys.stderr)
     if not report["nfs_mount"]:
         print("warning: /nfs mount not found; default S3 tether commands expect s3://far-research-internal mounted at /nfs", file=sys.stderr)
+    if not report["aws"]:
+        print("warning: aws CLI not found; uploads to canonical S3 paths require aws s3 commands", file=sys.stderr)
     return 0
 
 
@@ -250,15 +257,16 @@ def cmd_s3_layout(args: argparse.Namespace) -> int:
             {
                 "layout_version": 1,
                 "access_mode": cfg.access_mode,
+                "upload_mode": cfg.upload_mode,
                 "base": cfg.base_uri(),
                 "mount_root": cfg.mount_root,
-                "mounted_base": str(mount_path_for_uri(cfg, cfg.base_uri())) if cfg.access_mode == "file_mount" else None,
+                "mounted_base_for_access": str(mount_path_for_uri(cfg, cfg.base_uri())) if cfg.access_mode == "file_mount" else None,
                 "unprocessed": cfg.unprocessed_uri("{dataset}", "{partition}", "{asset_key}"),
-                "unprocessed_mount": str(mount_path_for_uri(cfg, cfg.unprocessed_uri("{dataset}", "{partition}", "{asset_key}")))
+                "unprocessed_access_path": str(mount_path_for_uri(cfg, cfg.unprocessed_uri("{dataset}", "{partition}", "{asset_key}")))
                 if cfg.access_mode == "file_mount"
                 else None,
                 "processed_episode": cfg.processed_uri("{profile}", "{dataset}", "{episode_id}"),
-                "processed_episode_mount": str(mount_path_for_uri(cfg, cfg.processed_uri("{profile}", "{dataset}", "{episode_id}")))
+                "processed_episode_access_path": str(mount_path_for_uri(cfg, cfg.processed_uri("{profile}", "{dataset}", "{episode_id}")))
                 if cfg.access_mode == "file_mount"
                 else None,
                 "processed_manifest": cfg.processed_manifest_uri("{profile}"),
@@ -283,6 +291,11 @@ def cmd_s3_backup_raw(args: argparse.Namespace) -> int:
         sequences=parse_set(args.sequences),
         dry_run=args.dry_run,
         manifest_name=args.manifest_name,
+        max_download_bytes=args.max_download_bytes,
+        reserve_bytes=args.reserve_bytes,
+        storage_fraction=args.storage_fraction,
+        include_unknown_size=args.include_unknown_size,
+        clean_after_upload=not args.keep_cache,
     )
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0 if all("error" not in operation.get("fetch", {}) for operation in report["operations"]) else 1

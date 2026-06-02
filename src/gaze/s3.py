@@ -20,6 +20,7 @@ Runner = Callable[[list[str]], subprocess.CompletedProcess]
 @dataclass
 class S3Config:
     bucket_uri: str = "s3://far-research-internal/colbhben/gaze"
+    upload_mode: str = "awscli"
     access_mode: str = "file_mount"
     mount_root: str = "/nfs"
     unprocessed_prefix: str = "unprocessed"
@@ -27,6 +28,8 @@ class S3Config:
     manifests_prefix: str = "manifests"
     splits_prefix: str = "splits"
     local_cache_root: str = ".gaze-cache"
+    local_storage_reserve_bytes: int = 10_000_000_000
+    local_storage_max_fraction: float = 0.9
     profile_name: str = "default-10hz"
     aws_profile: str | None = None
     aws_region: str | None = None
@@ -58,6 +61,8 @@ def load_s3_config(path: str | Path | None = None) -> S3Config:
     cfg = S3Config(**data)
     if not cfg.bucket_uri.startswith("s3://"):
         raise ValueError("bucket_uri must start with s3://")
+    if cfg.upload_mode != "awscli":
+        raise ValueError("upload_mode must be awscli")
     if cfg.access_mode not in {"file_mount", "awscli"}:
         raise ValueError("access_mode must be file_mount or awscli")
     return cfg
@@ -142,12 +147,18 @@ def run_or_report(args: list[str], dry_run: bool, runner: Runner | None = None) 
 
 
 def upload_file(cfg: S3Config, source: Path, target_uri: str, dry_run: bool = False, runner: Runner | None = None) -> dict[str, Any]:
-    if cfg.access_mode == "file_mount":
-        return copy_file_mount(cfg, source, target_uri, dry_run=dry_run)
+    if not is_s3_uri(target_uri):
+        raise ValueError("upload targets must be canonical s3:// URIs")
     return run_or_report(aws_cp_args(cfg, source, target_uri), dry_run=dry_run, runner=runner)
 
 
-def sync_dir(cfg: S3Config, source: str | Path, target: str | Path, dry_run: bool = False, runner: Runner | None = None) -> dict[str, Any]:
+def upload_dir(cfg: S3Config, source: str | Path, target_uri: str, dry_run: bool = False, runner: Runner | None = None) -> dict[str, Any]:
+    if not is_s3_uri(target_uri):
+        raise ValueError("upload targets must be canonical s3:// URIs")
+    return run_or_report(aws_sync_args(cfg, source, target_uri), dry_run=dry_run, runner=runner)
+
+
+def access_dir(cfg: S3Config, source: str | Path, target: str | Path, dry_run: bool = False, runner: Runner | None = None) -> dict[str, Any]:
     if cfg.access_mode == "file_mount":
         return sync_file_mount(cfg, source, target, dry_run=dry_run)
     return run_or_report(aws_sync_args(cfg, source, target), dry_run=dry_run, runner=runner)
@@ -216,10 +227,24 @@ def serial_download_backup(
     dry_run: bool = False,
     runner: Runner | None = None,
     manifest_name: str = "latest",
+    max_download_bytes: int | None = None,
+    reserve_bytes: int | None = None,
+    storage_fraction: float | None = None,
+    include_unknown_size: bool = False,
+    clean_after_upload: bool = True,
 ) -> dict[str, Any]:
     catalog = load_catalog(repo_root)
     assets = plan_downloads(catalog, datasets=datasets, modalities=modalities, sequences=sequences)
     raw_root = Path(raw_root)
+    ensure_not_nfs_path(cfg, raw_root)
+    storage = storage_budget(
+        raw_root,
+        reserve_bytes=cfg.local_storage_reserve_bytes if reserve_bytes is None else reserve_bytes,
+        storage_fraction=cfg.local_storage_max_fraction if storage_fraction is None else storage_fraction,
+        max_download_bytes=max_download_bytes,
+    )
+    selection = select_assets_for_storage(assets, storage["budget_bytes"], include_unknown_size=include_unknown_size)
+    assets = selection["selected"]
     download_manifest = raw_root / "download_manifest.json"
     if not dry_run:
         write_download_manifest(assets, download_manifest)
@@ -229,6 +254,8 @@ def serial_download_backup(
         target = Path(fetch_result["target"])
         s3_target = join_s3_uri(cfg.unprocessed_uri(asset.dataset, asset.sequence_id, asset.asset_key), asset.filename)
         upload_result = upload_file(cfg, target, s3_target, dry_run=dry_run, runner=runner)
+        if clean_after_upload and not dry_run and upload_result.get("returncode") == 0 and target.exists():
+            target.unlink()
         operations.append({"asset": asdict(asset), "fetch": fetch_result, "upload": upload_result, "s3_uri": s3_target})
     manifest_upload = None
     if dry_run:
@@ -237,6 +264,12 @@ def serial_download_backup(
         manifest_upload = upload_file(cfg, download_manifest, cfg.download_manifest_uri(manifest_name), dry_run=False, runner=runner)
     return {
         "layout_version": 1,
+        "storage": storage,
+        "selection": {
+            "selected_assets": len(selection["selected"]),
+            "selected_bytes": selection["selected_bytes"],
+            "skipped_assets": [asdict(asset) for asset in selection["skipped"]],
+        },
         "unprocessed_prefix": cfg.unprocessed_uri(),
         "manifest_uri": cfg.download_manifest_uri(manifest_name),
         "operations": operations,
@@ -262,7 +295,9 @@ def serial_process_backup(
     for dataset, partition in partitions:
         partition_raw = raw_cache / dataset / partition
         partition_canonical = processed_cache / profile
-        download = sync_dir(cfg, cfg.unprocessed_uri(dataset, partition), partition_raw, dry_run=dry_run, runner=runner)
+        ensure_not_nfs_path(cfg, partition_raw)
+        ensure_not_nfs_path(cfg, partition_canonical)
+        download = access_dir(cfg, cfg.unprocessed_uri(dataset, partition), partition_raw, dry_run=dry_run, runner=runner)
         rows: list[dict[str, Any]] = []
         if not dry_run:
             rows = rectify_dataset(raw_cache, partition_canonical, config=config, dataset=dataset, episodes={partition})
@@ -271,7 +306,7 @@ def serial_process_backup(
         for row in rows:
             episode_path = partition_canonical / row["episode_path"]
             target_uri = cfg.processed_uri(profile, row["dataset"], row["episode_id"])
-            episode_uploads.append(sync_dir(cfg, episode_path, target_uri, dry_run=dry_run, runner=runner))
+            episode_uploads.append(upload_dir(cfg, episode_path, target_uri, dry_run=dry_run, runner=runner))
         operations.append({"dataset": dataset, "partition": partition, "download": download, "episodes": rows, "uploads": episode_uploads})
         if clean and not dry_run:
             shutil.rmtree(partition_raw, ignore_errors=True)
@@ -321,13 +356,15 @@ def create_s3_pull_manifest(
     for split_name, ids in split.get("splits", {}).items():
         for episode in ids:
             dataset, episode_id = episode.split(":", 1)
+            s3_uri = cfg.processed_uri(profile_name, dataset, episode_id)
             episodes.append(
                 {
                     "split": split_name,
                     "id": episode,
                     "dataset": dataset,
                     "episode_id": episode_id,
-                    "s3_uri": cfg.processed_uri(profile_name, dataset, episode_id),
+                    "s3_uri": s3_uri,
+                    "nfs_path": str(mount_path_for_uri(cfg, s3_uri)) if cfg.access_mode == "file_mount" else None,
                 }
             )
     manifest = {
@@ -360,8 +397,61 @@ def pull_processed_from_manifest(
         if split and episode["split"] != split:
             continue
         target = dest / "episodes" / episode["dataset"] / episode["episode_id"]
-        operations.append(sync_dir(cfg, episode["s3_uri"], target, dry_run=dry_run, runner=runner))
+        operations.append(access_dir(cfg, episode["s3_uri"], target, dry_run=dry_run, runner=runner))
     return {"episodes": [op for op in manifest.get("episodes", []) if not split or op["split"] == split], "operations": operations}
+
+
+def ensure_not_nfs_path(cfg: S3Config, path: str | Path) -> None:
+    resolved = Path(path).resolve(strict=False)
+    mount = Path(cfg.mount_root).resolve(strict=False)
+    if resolved == mount or mount in resolved.parents:
+        raise ValueError(f"local working root must not be under the NFS mount {cfg.mount_root}: {path}")
+
+
+def storage_budget(
+    root: str | Path,
+    reserve_bytes: int,
+    storage_fraction: float,
+    max_download_bytes: int | None = None,
+) -> dict[str, Any]:
+    path = Path(root)
+    path.mkdir(parents=True, exist_ok=True)
+    usage = shutil.disk_usage(path)
+    fraction_budget = int(usage.free * storage_fraction)
+    reserve_budget = max(0, usage.free - reserve_bytes)
+    budget = min(fraction_budget, reserve_budget)
+    if max_download_bytes is not None:
+        budget = min(budget, max_download_bytes)
+    return {
+        "root": str(path),
+        "total_bytes": usage.total,
+        "used_bytes": usage.used,
+        "free_bytes": usage.free,
+        "reserve_bytes": reserve_bytes,
+        "storage_fraction": storage_fraction,
+        "budget_bytes": max(0, budget),
+    }
+
+
+def select_assets_for_storage(assets: list, budget_bytes: int, include_unknown_size: bool = False) -> dict[str, Any]:
+    known = [asset for asset in assets if asset.size_bytes is not None]
+    unknown = [asset for asset in assets if asset.size_bytes is None]
+    ordered = sorted(known, key=lambda asset: asset.size_bytes or 0, reverse=True)
+    selected = []
+    skipped = []
+    used = 0
+    for asset in ordered:
+        size = int(asset.size_bytes or 0)
+        if used + size <= budget_bytes:
+            selected.append(asset)
+            used += size
+        else:
+            skipped.append(asset)
+    if include_unknown_size:
+        selected.extend(unknown)
+    else:
+        skipped.extend(unknown)
+    return {"selected": selected, "skipped": skipped, "selected_bytes": used}
 
 
 def parse_partitions(value: str) -> list[tuple[str, str]]:

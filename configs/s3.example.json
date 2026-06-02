@@ -1,5 +1,6 @@
 {
   "bucket_uri": "s3://far-research-internal/colbhben/gaze",
+  "upload_mode": "awscli",
   "access_mode": "file_mount",
   "mount_root": "/nfs",
   "unprocessed_prefix": "unprocessed",
@@ -7,6 +8,8 @@
   "manifests_prefix": "manifests",
   "splits_prefix": "splits",
   "local_cache_root": ".gaze-cache",
+  "local_storage_reserve_bytes": 10000000000,
+  "local_storage_max_fraction": 0.9,
   "profile_name": "default-10hz",
   "aws_profile": null,
   "aws_region": null,

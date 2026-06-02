@@ -77,10 +77,10 @@ file_mounts:
     source: s3://far-research-internal
 ```
 
-So the default pipeline writes through regular filesystem paths under
-`/nfs/colbhben/gaze/...`, while still recording canonical `s3://...` URIs in
-manifests. Copy the example config only if a machine needs to override the
-bucket path, mount path, or access mode:
+The pipeline uses that mount for access/reads, but uploads are intentionally
+performed with `aws s3` commands to the canonical S3 path. Copy the example
+config only if a machine needs to override the bucket path, mount path, or AWS
+settings:
 
 ```sh
 cp configs/s3.example.json configs/s3.json
@@ -98,13 +98,16 @@ s3://far-research-internal/colbhben/gaze/
 ```
 
 `configs/s3.json` is ignored by git so each user can point at their own bucket
-or mount. Set `"access_mode": "awscli"` only for environments without the NFS
-mount; the default `"access_mode": "file_mount"` uses local file copies/syncs.
+or mount. The default `"upload_mode": "awscli"` uses `aws s3 cp/sync` for
+uploads, while `"access_mode": "file_mount"` maps `s3://far-research-internal`
+paths to `/nfs`.
 
 ### A. Serial Download And Raw Backup
 
-This downloads one selected asset at a time, backs it up under
-`unprocessed/`, and writes/uploads a download manifest:
+This detects free space on `--raw-root`, rejects roots under `/nfs`, selects
+the largest set of known-size assets that fit the local storage budget, then
+downloads to the local root and uploads each asset under `unprocessed/` with
+`aws s3 cp`:
 
 ```sh
 gaze s3 backup-raw \
@@ -115,14 +118,16 @@ gaze s3 backup-raw \
   --manifest-name aea-v1
 ```
 
-Use `--dry-run` first to inspect the planned file-mount copy operations without
-downloading or uploading.
+Use `--dry-run` first to inspect the planned local downloads and AWS uploads without
+downloading or uploading. Use `--max-download-bytes`, `--reserve-bytes`, and
+`--storage-fraction` to tune the local fitting logic.
 
 ### B. Serial Process And Processed Backup
 
-This pulls one raw partition at a time from `unprocessed/`, rectifies it into
-canonical form, uploads the processed episode directory under `processed/`, and
-uploads `processed/{profile}/manifest.jsonl`:
+This accesses one raw partition at a time through `/nfs`, copies it into the
+local cache, rectifies it into canonical form, uploads the processed episode
+directory under `processed/` with `aws s3 sync`, and uploads
+`processed/{profile}/manifest.jsonl`:
 
 ```sh
 gaze s3 process-serial \
@@ -164,6 +169,12 @@ gaze s3 pull-processed \
   --dest-root ./canonical_train
 ```
 
-With the default file-mount mode, no AWS CLI is required for moving objects
-between the local cache and mounted bucket. The optional AWS CLI settings in
-`configs/s3.example.json` are only used when `"access_mode": "awscli"`.
+Processed data access uses `/nfs`, so the viewer can point directly at the
+mounted processed prefix:
+
+```sh
+gaze serve --canonical-root /nfs/colbhben/gaze/processed/default-10hz
+```
+
+Uploads require the AWS CLI because the canonical upload path is always the
+`s3://far-research-internal/colbhben/gaze/...` URI.
