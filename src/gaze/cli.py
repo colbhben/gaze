@@ -11,6 +11,14 @@ from .config import load_config
 from .datasets import load_catalog
 from .download import estimate_downloads, fetch_assets, plan_downloads, verify_links, write_download_manifest
 from .rectify import rectify_dataset
+from .s3 import (
+    create_s3_pull_manifest,
+    load_s3_config,
+    parse_partitions,
+    pull_processed_from_manifest,
+    serial_download_backup,
+    serial_process_backup,
+)
 from .server import serve
 from .splits import SplitRequest, create_split
 from .table import parquet_available
@@ -88,6 +96,45 @@ def build_parser() -> argparse.ArgumentParser:
     view = sub.add_parser("view", help="Launch the local browser viewer.")
     add_serve_args(view)
     view.set_defaults(open=True, func=cmd_serve)
+
+    s3 = sub.add_parser("s3", help="S3-backed serial pipeline commands.")
+    s3_sub = s3.add_subparsers(required=True)
+    layout = s3_sub.add_parser("layout", help="Show the configured static S3 layout.")
+    add_s3_config_arg(layout)
+    layout.set_defaults(func=cmd_s3_layout)
+
+    backup_raw = add_dataset_common(s3_sub.add_parser("backup-raw", help="Serially download selected assets and back them up to S3."))
+    add_s3_config_arg(backup_raw)
+    backup_raw.add_argument("--raw-root", default=".gaze-cache/raw")
+    backup_raw.add_argument("--manifest-name", default="latest")
+    backup_raw.add_argument("--dry-run", action="store_true")
+    backup_raw.set_defaults(func=cmd_s3_backup_raw)
+
+    process_serial = s3_sub.add_parser("process-serial", help="Serially pull raw partitions from S3, rectify, and upload processed episodes.")
+    add_s3_config_arg(process_serial)
+    process_serial.add_argument("--partitions", required=True, help="Comma-separated dataset:partition entries")
+    process_serial.add_argument("--local-cache-root")
+    process_serial.add_argument("--config")
+    process_serial.add_argument("--dry-run", action="store_true")
+    process_serial.add_argument("--keep-cache", action="store_true")
+    process_serial.set_defaults(func=cmd_s3_process_serial)
+
+    pull_manifest = s3_sub.add_parser("create-pull-manifest", help="Create a static S3 pull manifest from a train/holdout split.")
+    add_s3_config_arg(pull_manifest)
+    pull_manifest.add_argument("--split-path", required=True)
+    pull_manifest.add_argument("--output", required=True)
+    pull_manifest.add_argument("--profile")
+    pull_manifest.add_argument("--upload", action="store_true")
+    pull_manifest.add_argument("--dry-run", action="store_true")
+    pull_manifest.set_defaults(func=cmd_s3_create_pull_manifest)
+
+    pull_processed = s3_sub.add_parser("pull-processed", help="Download processed episodes from a static S3 pull manifest.")
+    add_s3_config_arg(pull_processed)
+    pull_processed.add_argument("--pull-manifest", required=True)
+    pull_processed.add_argument("--dest-root", required=True)
+    pull_processed.add_argument("--split", help="Only pull one split, e.g. train or holdout")
+    pull_processed.add_argument("--dry-run", action="store_true")
+    pull_processed.set_defaults(func=cmd_s3_pull_processed)
     return parser
 
 
@@ -107,11 +154,16 @@ def add_serve_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--open", action="store_true", help="Open the browser automatically")
 
 
+def add_s3_config_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--s3-config", default="configs/s3.json", help="Path to user S3 config JSON")
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     report = {
         "python": sys.version.split()[0],
         "ffmpeg": shutil.which("ffmpeg"),
         "ffprobe": shutil.which("ffprobe"),
+        "aws": shutil.which("aws"),
         "parquet_available": parquet_available(),
     }
     print(json.dumps(report, indent=2, sort_keys=True))
@@ -119,6 +171,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print("warning: ffmpeg not found; video transcode/resample will require installing ffmpeg", file=sys.stderr)
     if not report["parquet_available"]:
         print("warning: pyarrow not found; tabular outputs will use explicit JSONL fallback files", file=sys.stderr)
+    if not report["aws"]:
+        print("warning: aws CLI not found; S3 tether commands require installing/configuring awscli", file=sys.stderr)
     return 0
 
 
@@ -184,6 +238,83 @@ def cmd_split_create(args: argparse.Namespace) -> int:
 
 def cmd_serve(args: argparse.Namespace) -> int:
     serve(args.canonical_root, host=args.host, port=args.port, open_browser=args.open)
+    return 0
+
+
+def cmd_s3_layout(args: argparse.Namespace) -> int:
+    cfg = load_s3_config(args.s3_config)
+    print(
+        json.dumps(
+            {
+                "layout_version": 1,
+                "base": cfg.base_uri(),
+                "unprocessed": cfg.unprocessed_uri("{dataset}", "{partition}", "{asset_key}"),
+                "processed_episode": cfg.processed_uri("{profile}", "{dataset}", "{episode_id}"),
+                "processed_manifest": cfg.processed_manifest_uri("{profile}"),
+                "download_manifest": cfg.download_manifest_uri("{name}"),
+                "split_pull_manifest": cfg.split_uri("{name}"),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def cmd_s3_backup_raw(args: argparse.Namespace) -> int:
+    cfg = load_s3_config(args.s3_config)
+    report = serial_download_backup(
+        args.repo_root,
+        cfg,
+        args.raw_root,
+        datasets=parse_set(args.datasets),
+        modalities=parse_set(args.modalities),
+        sequences=parse_set(args.sequences),
+        dry_run=args.dry_run,
+        manifest_name=args.manifest_name,
+    )
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0 if all("error" not in operation.get("fetch", {}) for operation in report["operations"]) else 1
+
+
+def cmd_s3_process_serial(args: argparse.Namespace) -> int:
+    cfg = load_s3_config(args.s3_config)
+    report = serial_process_backup(
+        cfg,
+        parse_partitions(args.partitions),
+        config=load_config(args.config) if args.config else None,
+        local_cache_root=args.local_cache_root,
+        dry_run=args.dry_run,
+        clean=not args.keep_cache,
+    )
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_s3_create_pull_manifest(args: argparse.Namespace) -> int:
+    cfg = load_s3_config(args.s3_config)
+    report = create_s3_pull_manifest(
+        cfg,
+        args.split_path,
+        args.output,
+        profile=args.profile,
+        upload=args.upload,
+        dry_run=args.dry_run,
+    )
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_s3_pull_processed(args: argparse.Namespace) -> int:
+    cfg = load_s3_config(args.s3_config)
+    report = pull_processed_from_manifest(
+        cfg,
+        args.pull_manifest,
+        args.dest_root,
+        split=args.split,
+        dry_run=args.dry_run,
+    )
+    print(json.dumps(report, indent=2, sort_keys=True))
     return 0
 
 

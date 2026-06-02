@@ -25,6 +25,8 @@ canonical/
 canonical_data/
 outputs/
 artifacts/
+.gaze-cache/
+configs/s3.json
 
 # Large downloaded dataset archives/media
 *.tar

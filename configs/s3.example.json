@@ -1,0 +1,13 @@
+{
+  "bucket_uri": "s3://your-bucket/gaze",
+  "unprocessed_prefix": "unprocessed",
+  "processed_prefix": "processed",
+  "manifests_prefix": "manifests",
+  "splits_prefix": "splits",
+  "local_cache_root": ".gaze-cache",
+  "profile_name": "default-10hz",
+  "aws_profile": null,
+  "aws_region": null,
+  "storage_class": null,
+  "server_side_encryption": null
+}

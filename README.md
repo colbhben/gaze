@@ -60,3 +60,92 @@ files until `pyarrow` is installed.
 `ffmpeg` is a system dependency rather than a Python package. Install it with
 the platform package manager, for example `brew install ffmpeg`,
 `apt-get install ffmpeg`, or `conda install -c conda-forge ffmpeg`.
+
+## S3-Backed Workflow
+
+Copy the example config and set the bucket/prefix that both machines can
+access:
+
+```sh
+cp configs/s3.example.json configs/s3.json
+```
+
+The configured `bucket_uri` is the root of a static layout:
+
+```text
+s3://your-bucket/gaze/
+  unprocessed/{dataset}/{partition}/{asset_key}/{filename}
+  processed/{profile}/{dataset}/{episode_id}/...
+  processed/{profile}/manifest.jsonl
+  manifests/downloads/{name}.json
+  splits/{name}.s3.json
+```
+
+`configs/s3.json` is ignored by git so each user can point at their own bucket,
+profile, region, storage class, or server-side encryption settings.
+
+### A. Serial Download And Raw Backup
+
+This downloads one selected asset at a time, backs it up under
+`unprocessed/`, and writes/uploads a download manifest:
+
+```sh
+gaze s3 backup-raw \
+  --s3-config configs/s3.json \
+  --raw-root .gaze-cache/raw \
+  --datasets aea \
+  --modalities video,gaze,annotation \
+  --manifest-name aea-v1
+```
+
+Use `--dry-run` first to inspect the planned `aws s3 cp` operations without
+downloading or uploading.
+
+### B. Serial Process And Processed Backup
+
+This pulls one raw partition at a time from `unprocessed/`, rectifies it into
+canonical form, uploads the processed episode directory under `processed/`, and
+uploads `processed/{profile}/manifest.jsonl`:
+
+```sh
+gaze s3 process-serial \
+  --s3-config configs/s3.json \
+  --partitions toy:ep1,toy:ep2 \
+  --config configs/rectify.json
+```
+
+Partitions are written as `dataset:partition_id`. The default profile is
+`default-10hz` unless changed in `configs/s3.json` or the rectification config.
+By default, local per-partition cache directories are removed after upload to
+keep disk pressure low; pass `--keep-cache` to retain them for debugging.
+
+### C. Split Manifests And Pulling Processed Data
+
+Create a split from a local processed manifest, then convert it into a static
+S3 pull manifest:
+
+```sh
+gaze split create \
+  --canonical-root .gaze-cache/processed/default-10hz \
+  --name demo \
+  --ratios train=0.8,holdout=0.2
+
+gaze s3 create-pull-manifest \
+  --s3-config configs/s3.json \
+  --split-path .gaze-cache/processed/default-10hz/splits/demo.json \
+  --output .gaze-cache/splits/demo.s3.json \
+  --upload
+```
+
+Then another machine can pull only the split it needs:
+
+```sh
+gaze s3 pull-processed \
+  --s3-config configs/s3.json \
+  --pull-manifest .gaze-cache/splits/demo.s3.json \
+  --split train \
+  --dest-root ./canonical_train
+```
+
+All S3 commands shell out to the AWS CLI, so users should run `aws configure`
+or set the `aws_profile`/`aws_region` fields in `configs/s3.json`.
