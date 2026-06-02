@@ -23,7 +23,7 @@ class RectifyValidateSplitTests(unittest.TestCase):
 
             manifest = rectify_dataset(raw_root, canonical_root, default_config())
             self.assertEqual(len(manifest), 2)
-            self.assertTrue((canonical_root / "manifest.parquet.jsonl").exists())
+            self.assertTrue((canonical_root / "manifest.parquet").exists() or (canonical_root / "manifest.parquet.jsonl").exists())
 
             report = validate_canonical_root(canonical_root)
             self.assertTrue(report["ok"], json.dumps(report, indent=2))

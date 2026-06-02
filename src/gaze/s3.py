@@ -277,17 +277,21 @@ def serial_process_backup(
             shutil.rmtree(partition_raw, ignore_errors=True)
             for row in rows:
                 shutil.rmtree(partition_canonical / row["episode_path"], ignore_errors=True)
-    manifest_path = processed_cache / profile / "manifest.jsonl"
+    manifest_dir = processed_cache / profile
+    canonical_manifest_path = manifest_dir / "manifest.parquet"
+    export_manifest_path = manifest_dir / "manifest.jsonl"
     manifest_upload = None
     if dry_run:
         manifest_upload = {"s3_uri": cfg.processed_manifest_uri(profile), "dry_run": True}
     else:
-        write_table(manifest_rows, manifest_path)
-        manifest_upload = upload_file(cfg, manifest_path, cfg.processed_manifest_uri(profile), dry_run=False, runner=runner)
+        canonical_manifest_output = write_table(manifest_rows, canonical_manifest_path)
+        write_table(manifest_rows, export_manifest_path)
+        manifest_upload = upload_file(cfg, export_manifest_path, cfg.processed_manifest_uri(profile), dry_run=False, runner=runner)
     return {
         "layout_version": 1,
         "processed_prefix": cfg.processed_uri(profile),
         "manifest_uri": cfg.processed_manifest_uri(profile),
+        "local_manifest": str(canonical_manifest_output) if not dry_run else str(canonical_manifest_path),
         "operations": operations,
         "manifest_upload": manifest_upload,
     }

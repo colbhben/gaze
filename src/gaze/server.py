@@ -154,9 +154,13 @@ def viewer_html() -> str:
     aside { border-right: 1px solid #9995; padding: 16px; overflow: auto; }
     main { padding: 16px; display: grid; gap: 12px; align-content: start; }
     button { width: 100%; text-align: left; padding: 8px; margin: 4px 0; border: 1px solid #9996; background: transparent; border-radius: 6px; }
-    .stage { position: relative; width: min(100%, 960px); background: #111; }
-    video, canvas { width: 100%; display: block; }
-    canvas { position: absolute; inset: 0; pointer-events: none; }
+    .stage { position: relative; width: min(100%, 960px); aspect-ratio: 16 / 9; background: #111; overflow: hidden; }
+    video, canvas, .fallback { position: absolute; inset: 0; width: 100%; height: 100%; }
+    video { display: block; object-fit: contain; }
+    canvas { pointer-events: none; z-index: 2; }
+    .fallback { display: none; place-items: center; color: #ddd; font-size: 14px; z-index: 1; }
+    .stage.no-video video { display: none; }
+    .stage.no-video .fallback { display: grid; }
     table { border-collapse: collapse; width: min(100%, 960px); }
     td, th { border: 1px solid #9994; padding: 4px 6px; font-size: 13px; }
   </style>
@@ -165,16 +169,33 @@ def viewer_html() -> str:
   <aside><h1>Episodes</h1><div id="episodes"></div></aside>
   <main>
     <h2 id="title">Select an episode</h2>
-    <div class="stage"><video id="video" controls></video><canvas id="overlay"></canvas></div>
+    <div class="stage no-video" id="stage"><video id="video" controls></video><div class="fallback" id="fallback">No playable video for this episode</div><canvas id="overlay"></canvas></div>
     <table><thead><tr><th>time_s</th><th>label</th><th>text</th></tr></thead><tbody id="annotations"></tbody></table>
   </main>
   <script>
     const episodesEl = document.querySelector('#episodes');
+    const stage = document.querySelector('#stage');
     const video = document.querySelector('#video');
+    const fallback = document.querySelector('#fallback');
     const canvas = document.querySelector('#overlay');
     const ctx = canvas.getContext('2d');
     let gaze = [];
+    let noVideo = true;
+    let episodeDuration = 0;
+    let syntheticStart = performance.now();
+    let loadToken = 0;
     async function json(url) { return (await fetch(url)).json(); }
+    function setNoVideo(enabled) {
+      noVideo = enabled;
+      stage.classList.toggle('no-video', enabled);
+      if (enabled) {
+        video.removeAttribute('src');
+        video.load();
+        syntheticStart = performance.now();
+      }
+    }
+    video.addEventListener('loadedmetadata', () => setNoVideo(false));
+    video.addEventListener('error', () => setNoVideo(true));
     async function loadEpisodes() {
       const payload = await json('/api/episodes');
       episodesEl.innerHTML = '';
@@ -186,21 +207,42 @@ def viewer_html() -> str:
       });
     }
     async function loadEpisode(id) {
+      const token = ++loadToken;
       document.querySelector('#title').textContent = id;
+      document.querySelector('#annotations').innerHTML = '';
+      gaze = [];
+      fallback.textContent = 'Loading episode...';
       const ep = await json(`/api/episodes/${encodeURIComponent(id)}`);
-      video.removeAttribute('src');
+      if (token !== loadToken) return;
+      episodeDuration = ep.duration_s || 0;
+      setNoVideo(true);
+      fallback.textContent = ep.files.video ? 'No playable video for this episode' : 'No video file for this episode';
       if (ep.files.video) video.src = `/api/episodes/${encodeURIComponent(id)}/video`;
-      gaze = (await json(`/api/episodes/${encodeURIComponent(id)}/gaze`)).rows || [];
+      const gazePayload = await json(`/api/episodes/${encodeURIComponent(id)}/gaze`);
+      if (token !== loadToken) return;
+      gaze = gazePayload.rows || [];
       const ann = (await json(`/api/episodes/${encodeURIComponent(id)}/annotations`)).rows || [];
+      if (token !== loadToken) return;
       document.querySelector('#annotations').innerHTML = ann.slice(0, 200).map(row => `<tr><td>${row.time_s}</td><td>${row.label || ''}</td><td>${row.text || ''}</td></tr>`).join('');
       draw();
     }
     function draw() {
-      const rect = video.getBoundingClientRect();
+      const rect = stage.getBoundingClientRect();
       canvas.width = rect.width;
       canvas.height = rect.height;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const t = video.currentTime || 0;
+      const elapsed = (performance.now() - syntheticStart) / 1000;
+      const t = noVideo ? (episodeDuration ? elapsed % episodeDuration : elapsed) : (video.currentTime || 0);
+      if (noVideo) {
+        ctx.strokeStyle = '#ffffff22';
+        ctx.lineWidth = 1;
+        for (let x = 0; x < canvas.width; x += 80) {
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+        }
+        for (let y = 0; y < canvas.height; y += 80) {
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+        }
+      }
       const row = gaze.reduce((best, item) => Math.abs(item.time_s - t) < Math.abs((best?.time_s || 999999) - t) ? item : best, null);
       if (row && row.x_norm != null && row.y_norm != null) {
         ctx.fillStyle = '#ff4757';
