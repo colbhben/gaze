@@ -15,6 +15,7 @@ from .table import read_table, write_table
 
 
 Runner = Callable[[list[str]], subprocess.CompletedProcess]
+ProgressCallback = Callable[[dict[str, Any]], None]
 
 
 @dataclass
@@ -232,6 +233,11 @@ def serial_download_backup(
     storage_fraction: float | None = None,
     include_unknown_size: bool = False,
     clean_after_upload: bool = True,
+    workers: int = 1,
+    dataset_workers: dict[str, int] | None = None,
+    download_timeout_s: float = 120.0,
+    progress_callback: ProgressCallback | None = None,
+    stream_uploads: bool = False,
 ) -> dict[str, Any]:
     catalog = load_catalog(repo_root)
     assets = plan_downloads(catalog, datasets=datasets, modalities=modalities, sequences=sequences)
@@ -249,11 +255,22 @@ def serial_download_backup(
     if not dry_run:
         write_download_manifest(assets, download_manifest)
     operations = []
+    upload_runner = runner
+    if stream_uploads and upload_runner is None:
+        upload_runner = lambda command: subprocess.run(command, check=True, text=True)
     for asset in assets:
-        fetch_result = fetch_assets([asset], raw_root, dry_run=dry_run)[0]
+        worker_count = (dataset_workers or {}).get(asset.dataset, workers)
+        fetch_result = fetch_assets(
+            [asset],
+            raw_root,
+            dry_run=dry_run,
+            workers=worker_count,
+            timeout_s=download_timeout_s,
+            progress_callback=progress_callback,
+        )[0]
         target = Path(fetch_result["target"])
         s3_target = join_s3_uri(cfg.unprocessed_uri(asset.dataset, asset.sequence_id, asset.asset_key), asset.filename)
-        upload_result = upload_file(cfg, target, s3_target, dry_run=dry_run, runner=runner)
+        upload_result = upload_file(cfg, target, s3_target, dry_run=dry_run, runner=upload_runner)
         if clean_after_upload and not dry_run and upload_result.get("returncode") == 0 and target.exists():
             target.unlink()
         operations.append({"asset": asdict(asset), "fetch": fetch_result, "upload": upload_result, "s3_uri": s3_target})

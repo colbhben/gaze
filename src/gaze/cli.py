@@ -58,6 +58,9 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.add_argument("--raw-root", required=True)
     fetch.add_argument("--dry-run", action="store_true")
     fetch.add_argument("--manifest-out")
+    fetch.add_argument("--workers", type=int, default=1, help="Per-asset ranged-download workers when the source supports byte ranges")
+    fetch.add_argument("--download-timeout", type=float, default=120.0)
+    fetch.add_argument("--progress", action="store_true", help="Print download progress to stderr")
     fetch.set_defaults(func=cmd_datasets_fetch)
 
     rectify = sub.add_parser("rectify", help="Rectify raw fixture/dataset roots into canonical episodes.")
@@ -113,6 +116,11 @@ def build_parser() -> argparse.ArgumentParser:
     backup_raw.add_argument("--storage-fraction", type=float, help="Maximum fraction of currently free local space to use")
     backup_raw.add_argument("--include-unknown-size", action="store_true", help="Allow assets without known sizes into the batch")
     backup_raw.add_argument("--keep-cache", action="store_true", help="Keep local downloaded files after successful upload")
+    backup_raw.add_argument("--workers", type=int, default=1, help="Default per-asset ranged-download workers")
+    backup_raw.add_argument("--dataset-workers", help="Comma-separated worker overrides, e.g. aea=48,hot3d=36")
+    backup_raw.add_argument("--download-timeout", type=float, default=120.0)
+    backup_raw.add_argument("--progress", action="store_true", help="Print download progress to stderr")
+    backup_raw.add_argument("--stream-uploads", action="store_true", help="Let aws s3 cp stream progress directly to the terminal")
     backup_raw.add_argument("--dry-run", action="store_true")
     backup_raw.set_defaults(func=cmd_s3_backup_raw)
 
@@ -206,7 +214,14 @@ def cmd_datasets_fetch(args: argparse.Namespace) -> int:
     assets = selected_assets(catalog, args)
     if args.manifest_out:
         write_download_manifest(assets, args.manifest_out)
-    rows = fetch_assets(assets, args.raw_root, dry_run=args.dry_run)
+    rows = fetch_assets(
+        assets,
+        args.raw_root,
+        dry_run=args.dry_run,
+        workers=args.workers,
+        timeout_s=args.download_timeout,
+        progress_callback=make_progress_printer() if args.progress else None,
+    )
     emit(rows, as_json=args.json)
     return 0 if all("error" not in row for row in rows) else 1
 
@@ -296,6 +311,11 @@ def cmd_s3_backup_raw(args: argparse.Namespace) -> int:
         storage_fraction=args.storage_fraction,
         include_unknown_size=args.include_unknown_size,
         clean_after_upload=not args.keep_cache,
+        workers=args.workers,
+        dataset_workers=parse_dataset_workers(args.dataset_workers),
+        download_timeout_s=args.download_timeout,
+        progress_callback=make_progress_printer() if args.progress else None,
+        stream_uploads=args.stream_uploads,
     )
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0 if all("error" not in operation.get("fetch", {}) for operation in report["operations"]) else 1
@@ -356,6 +376,64 @@ def parse_set(value: str | None) -> set[str] | None:
         return None
     return {item.strip() for item in value.split(",") if item.strip()}
 
+
+def parse_dataset_workers(value: str | None) -> dict[str, int] | None:
+    if not value:
+        return None
+    result = {}
+    for raw_item in value.split(","):
+        item = raw_item.strip()
+        if not item:
+            continue
+        dataset, separator, workers = item.partition("=")
+        if separator != "=":
+            raise ValueError(f"invalid dataset worker override: {item}")
+        result[dataset.strip()] = int(workers)
+    return result
+
+
+def make_progress_printer(interval_s: float = 30.0):
+    last_printed: dict[tuple, float] = {}
+
+    def progress_printer(event: dict) -> None:
+        key = (event.get("dataset"), event.get("sequence_id"), event.get("asset_key"))
+        now = __import__("time").monotonic()
+        if event.get("event") == "download-start":
+            print(
+                "download start "
+                f"{event.get('dataset')}:{event.get('sequence_id')}:{event.get('asset_key')} "
+                f"workers={event.get('workers')} range={event.get('range_download')} "
+                f"done={event.get('bytes_done')} total={event.get('bytes_total')}",
+                file=sys.stderr,
+                flush=True,
+            )
+            last_printed[key] = now
+            return
+        if event.get("event") != "download-progress":
+            return
+        done = int(event.get("bytes_done") or 0)
+        total = event.get("bytes_total")
+        if total and done >= int(total):
+            should_print = True
+        else:
+            should_print = now - last_printed.get(key, 0.0) >= interval_s
+        if not should_print:
+            return
+        elapsed = max(0.001, float(event.get("elapsed_s") or 0.001))
+        mbps = done / elapsed / 1_000_000
+        suffix = f"{done} bytes"
+        if total:
+            suffix += f" / {total} bytes ({done / int(total) * 100:.1f}%)"
+        print(
+            "download progress "
+            f"{event.get('dataset')}:{event.get('sequence_id')}:{event.get('asset_key')} "
+            f"{suffix} at {mbps:.1f} MB/s",
+            file=sys.stderr,
+            flush=True,
+        )
+        last_printed[key] = now
+
+    return progress_printer
 
 def parse_ratios(value: str) -> dict[str, float]:
     result = {}

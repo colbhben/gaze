@@ -46,7 +46,11 @@ class CatalogTests(unittest.TestCase):
             fetched = fetch_assets(assets, Path(tmp) / "raw", dry_run=True)
             self.assertEqual(len(fetched), 1)
             self.assertTrue(fetched[0]["dry_run"])
+            self.assertEqual(fetched[0]["workers"], 1)
             self.assertFalse((Path(tmp) / "raw").exists())
+
+            threaded = fetch_assets(assets, Path(tmp) / "raw", dry_run=True, workers=8)
+            self.assertEqual(threaded[0]["workers"], 8)
 
 
 if __name__ == "__main__":

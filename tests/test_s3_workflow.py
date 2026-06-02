@@ -44,9 +44,11 @@ class S3WorkflowTests(unittest.TestCase):
                 modalities={"gaze"},
                 sequences={"loc5_script4_seq6_rec1"},
                 dry_run=True,
+                workers=48,
             )
             self.assertEqual(len(report["operations"]), 1)
             operation = report["operations"][0]
+            self.assertEqual(operation["fetch"]["workers"], 48)
             self.assertIn("s3://example-bucket/gaze/unprocessed/aea/loc5_script4_seq6_rec1/mps_eye_gaze/", operation["s3_uri"])
             self.assertEqual(operation["upload"]["transport"], "awscli")
             self.assertEqual(operation["upload"]["command"][0:3], ["aws", "s3", "cp"])
