@@ -26,23 +26,14 @@ from .table import parquet_available
 from .validate import validate_canonical_root
 
 
-COMMAND_OVERVIEW = """Commands:
-  doctor             Check local tools and optional Python features.
-  datasets plan      Estimate available files before downloading.
-  datasets verify-links
-                     Check dataset documentation and sampled manifest URLs.
-  datasets fetch     Download selected raw assets to a local raw root.
-  rectify            Convert raw episodes into the canonical layout.
-  validate alignment Compare canonical outputs with their raw sources.
-  split create       Create train/holdout split manifests.
-  serve              Start the local API and viewer.
-  view               Start the viewer and open it in a browser.
-  s3 ...             Run S3-backed backup, processing, and pull flows.
-
-Common value formats:
+HELP_NOTES = """Common value formats:
   Comma-separated filters have no spaces: --datasets aea,hot3d --modalities video,gaze
   Repeated overrides use dotted keys: --set target_hz=5 --set video.width=392
   Paths may be relative to the current directory or absolute.
+
+Subcommand help:
+  Use -h after any command group or command to see its focused options.
+  Examples: gaze datasets -h, gaze datasets fetch -h, gaze s3 backup-raw -h
 """
 
 DATASET_FILTER_HELP = """Dataset filters:
@@ -84,6 +75,11 @@ class GazeArgumentParser(argparse.ArgumentParser):
         )
 
 
+def name_positionals(parser: argparse.ArgumentParser, title: str, description: str | None = None) -> None:
+    parser._positionals.title = title
+    parser._positionals.description = description
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -109,9 +105,10 @@ def build_parser() -> argparse.ArgumentParser:
             "Plan, download, rectify, validate, split, and view heterogeneous gaze datasets. "
             "Use a subcommand with -h to see the options available for that workflow."
         ),
-        epilog=COMMAND_OVERVIEW + "\nExamples:\n  gaze doctor\n  gaze datasets plan --datasets aea --modalities video,gaze\n  gaze rectify --raw-root ./raw --canonical-root ./canonical --dataset toy\n  gaze view --canonical-root ./canonical",
+        epilog=HELP_NOTES + "\nExamples:\n  gaze doctor\n  gaze datasets plan --datasets aea --modalities video,gaze\n  gaze rectify --raw-root ./raw --canonical-root ./canonical --dataset toy\n  gaze view --canonical-root ./canonical",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    name_positionals(parser, "commands", "Choose one command, then add that command's options.")
     parser.add_argument("--version", action="version", version=f"gaze {__version__}")
     sub = parser.add_subparsers(dest="command", metavar="<command>", parser_class=GazeArgumentParser)
 
@@ -132,6 +129,7 @@ def build_parser() -> argparse.ArgumentParser:
         + "\nExamples:\n  gaze datasets plan --modalities video,gaze,annotation\n  gaze datasets fetch --raw-root ./raw --datasets aea --modalities video --dry-run",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    name_positionals(datasets, "dataset commands", "Choose one dataset command.")
     datasets_sub = datasets.add_subparsers(dest="datasets_command", metavar="<datasets-command>", required=True, parser_class=GazeArgumentParser)
     add_dataset_common(
         datasets_sub.add_parser(
@@ -196,6 +194,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog="Example:\n  gaze validate alignment --canonical-root ./canonical --raw-root ./raw",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    name_positionals(validate, "validation commands", "Choose one validation command.")
     validate_sub = validate.add_subparsers(dest="validate_command", metavar="<validate-command>", required=True, parser_class=GazeArgumentParser)
     alignment = validate_sub.add_parser(
         "alignment",
@@ -215,6 +214,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog="Example:\n  gaze split create --canonical-root ./canonical --name default --ratios train=0.8,holdout=0.2",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    name_positionals(split, "split commands", "Choose one split command.")
     split_sub = split.add_subparsers(dest="split_command", metavar="<split-command>", required=True, parser_class=GazeArgumentParser)
     create = split_sub.add_parser(
         "create",
@@ -270,6 +270,7 @@ def build_parser() -> argparse.ArgumentParser:
         + "\nExamples:\n  gaze s3 layout --s3-config configs/s3.json\n  gaze s3 backup-raw --s3-config configs/s3.json --raw-root .gaze-cache/raw --datasets aea --dry-run",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    name_positionals(s3, "S3 commands", "Choose one S3 command.")
     s3_sub = s3.add_subparsers(dest="s3_command", metavar="<s3-command>", required=True, parser_class=GazeArgumentParser)
     layout = s3_sub.add_parser(
         "layout",

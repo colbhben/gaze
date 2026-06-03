@@ -32,34 +32,35 @@ gaze rectify -h
 gaze s3 backup-raw -h
 ```
 
-Options are invoked with long flags. Flags that take values use a space before
-the value, for example `--canonical-root ./canonical`. Boolean flags are present
-or absent, for example `--dry-run` or `--progress`. Comma-separated filters do
-not need spaces:
+Command words are positional: put them after `gaze` in order, for example
+`gaze datasets fetch` or `gaze s3 backup-raw`. Options are invoked with long
+flags. Flags that take values use a space before the value, for example
+`--canonical-root ./canonical`. Boolean flags are present or absent, for
+example `--dry-run` or `--progress`. Comma-separated filters do not need spaces:
 
 ```sh
 gaze datasets plan --datasets aea,hot3d --modalities video,gaze
 gaze rectify --raw-root ./raw --canonical-root ./canonical --episodes ep1,ep2
 ```
 
-Available commands:
+Command reference:
 
-```text
-gaze doctor
-gaze datasets plan
-gaze datasets verify-links
-gaze datasets fetch
-gaze rectify
-gaze validate alignment
-gaze split create
-gaze serve
-gaze view
-gaze s3 layout
-gaze s3 backup-raw
-gaze s3 process-serial
-gaze s3 create-pull-manifest
-gaze s3 pull-processed
-```
+| Command | Meaning |
+| --- | --- |
+| `gaze doctor` | Checks local runtime dependencies and optional features. |
+| `gaze datasets plan` | Estimates selected dataset assets before downloading. |
+| `gaze datasets verify-links` | Checks documentation and sampled manifest URLs. |
+| `gaze datasets fetch` | Downloads selected raw assets to a local raw root. |
+| `gaze rectify` | Converts raw episodes into the canonical layout. |
+| `gaze validate alignment` | Validates canonical outputs and optional raw-source alignment. |
+| `gaze split create` | Creates deterministic train/holdout manifests. |
+| `gaze serve` | Starts the local API and browser viewer. |
+| `gaze view` | Starts the viewer and opens it in a browser. |
+| `gaze s3 layout` | Shows the configured static S3 layout. |
+| `gaze s3 backup-raw` | Downloads selected raw assets and backs them up to S3. |
+| `gaze s3 process-serial` | Pulls raw partitions from S3, rectifies them, and uploads processed episodes. |
+| `gaze s3 create-pull-manifest` | Creates a static S3 pull manifest from a local split. |
+| `gaze s3 pull-processed` | Downloads processed episodes from a static S3 pull manifest. |
 
 Common dataset-selection options:
 
