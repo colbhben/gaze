@@ -50,3 +50,7 @@ splits/
 .DS_Store
 .idea/
 .vscode/
+.codex/
+
+# Docs
+docs/

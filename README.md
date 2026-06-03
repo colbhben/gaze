@@ -21,6 +21,130 @@ gaze split create --canonical-root /path/to/canonical --name default
 gaze view --canonical-root /path/to/canonical
 ```
 
+## CLI Help And Options
+
+Run `gaze -h` to see every available top-level command. Run any command with
+`-h` to see the options for that specific workflow:
+
+```sh
+gaze datasets fetch -h
+gaze rectify -h
+gaze s3 backup-raw -h
+```
+
+Options are invoked with long flags. Flags that take values use a space before
+the value, for example `--canonical-root ./canonical`. Boolean flags are present
+or absent, for example `--dry-run` or `--progress`. Comma-separated filters do
+not need spaces:
+
+```sh
+gaze datasets plan --datasets aea,hot3d --modalities video,gaze
+gaze rectify --raw-root ./raw --canonical-root ./canonical --episodes ep1,ep2
+```
+
+Available commands:
+
+```text
+gaze doctor
+gaze datasets plan
+gaze datasets verify-links
+gaze datasets fetch
+gaze rectify
+gaze validate alignment
+gaze split create
+gaze serve
+gaze view
+gaze s3 layout
+gaze s3 backup-raw
+gaze s3 process-serial
+gaze s3 create-pull-manifest
+gaze s3 pull-processed
+```
+
+Common dataset-selection options:
+
+| Option | How to invoke | Meaning |
+| --- | --- | --- |
+| `--repo-root` | `--repo-root /path/to/repo` | Repository root containing `DATASETS.md` and `download_links`; defaults to the current directory. |
+| `--datasets` | `--datasets aea,hot3d` | Limits work to dataset slugs. Known slugs include `aea`, `hot3d`, `nymeria`, `holoassist`, `egtea`, and `ego-exo4d`. Omit it to include all cataloged datasets. |
+| `--modalities` | `--modalities video,gaze,annotation` | Limits work to normalized modalities. Available values are `video`, `gaze`, `annotation`, `depth`, and `other`. |
+| `--sequences` | `--sequences loc1_script1_seq1_rec1,ep2` | Limits work to exact provider sequence ids from manifests. |
+| `--json` | `--json` | Emits JSON instead of the default human-readable table. |
+
+Dataset download options:
+
+| Option | How to invoke | Meaning |
+| --- | --- | --- |
+| `--raw-root` | `--raw-root ./raw` | Local destination for downloaded raw assets. Required for `datasets fetch`; defaults to `.gaze-cache/raw` for `s3 backup-raw`. |
+| `--dry-run` | `--dry-run` | Shows the planned work without downloading, uploading, deleting, or copying files. |
+| `--manifest-out` | `--manifest-out selected-assets.json` | Writes the selected asset manifest before fetching. |
+| `--workers` | `--workers 8` | Per-asset ranged-download worker count when a source supports byte ranges. |
+| `--download-timeout` | `--download-timeout 300` | HTTP timeout in seconds for download requests. |
+| `--progress` | `--progress` | Prints periodic download progress to stderr. |
+| `--sample-per-dataset` | `--sample-per-dataset 10` | Number of manifest links to sample per selected dataset for `verify-links`. |
+| `--timeout` | `--timeout 30` | HTTP timeout in seconds for `verify-links`. |
+
+Rectification and validation options:
+
+| Option | How to invoke | Meaning |
+| --- | --- | --- |
+| `--raw-root` | `--raw-root ./raw` | Raw input root. Required for `rectify`; optional for `validate alignment` when comparing canonical data back to raw inputs. |
+| `--canonical-root` | `--canonical-root ./canonical` | Canonical output or input root. Required for `rectify`, `validate alignment`, `split create`, `serve`, and `view`. |
+| `--dataset` | `--dataset aea` | Rectifies only one dataset slug under the raw root. |
+| `--episodes` | `--episodes ep1,ep2` | Rectifies only the listed episode ids. |
+| `--config` | `--config configs/rectify.local.json` | Loads a JSON rectification config instead of the built-in defaults. |
+| `--set` | `--set target_hz=5 --set video.width=392` | Overrides one config value. Repeat the flag for multiple overrides. Dotted keys address nested config groups. |
+
+Common `--set` keys include `profile_name`, `target_hz`, `video.fps`,
+`video.width`, `video.height`, `video.format`, `video.codec`,
+`video.resize_mode`, `gaze.frequency_hz`, `gaze.coordinates`,
+`annotation.frequency_hz`, `depth.enabled`, `depth.frequency_hz`, and
+`validation.time_tolerance_s`.
+
+Split options:
+
+| Option | How to invoke | Meaning |
+| --- | --- | --- |
+| `--name` | `--name demo` | Split name and output filename stem under `<canonical-root>/splits`; defaults to `default`. |
+| `--ratios` | `--ratios train=0.8,holdout=0.2` | Comma-separated split names and fractions. |
+| `--seed` | `--seed 42` | Random seed for deterministic split assignment. |
+| `--mode` | `--mode heterogeneous` | Split strategy. Available values are `heterogeneous` and `homogeneous`. |
+| `--include-datasets` | `--include-datasets aea,hot3d` | Includes only the listed dataset slugs. |
+| `--include-modalities` | `--include-modalities video,gaze` | Includes only episodes with the listed modalities. |
+| `--group-by` | `--group-by dataset` | Metadata field used for homogeneous grouping. |
+| `--stratify-by` | `--stratify-by participant` | Optional metadata field used to balance split assignment. |
+
+Viewer options:
+
+| Option | How to invoke | Meaning |
+| --- | --- | --- |
+| `--host` | `--host 127.0.0.1` | Interface for the local HTTP server; defaults to `127.0.0.1`. |
+| `--port` | `--port 8765` | TCP port for the local HTTP server; defaults to `8765`. |
+| `--open` | `--open` | Opens the viewer in the default browser. `gaze view` enables this automatically. |
+
+S3 workflow options:
+
+| Option | How to invoke | Meaning |
+| --- | --- | --- |
+| `--s3-config` | `--s3-config configs/s3.json` | User S3 config JSON. Defaults to `configs/s3.json`. |
+| `--manifest-name` | `--manifest-name aea-v1` | Name for the raw download manifest under `manifests/downloads`. |
+| `--max-download-bytes` | `--max-download-bytes 50000000000` | Maximum bytes to download in one local batch. |
+| `--reserve-bytes` | `--reserve-bytes 10000000000` | Minimum local free-space reserve to keep unused. |
+| `--storage-fraction` | `--storage-fraction 0.75` | Maximum fraction of currently free local space to use for one batch. |
+| `--include-unknown-size` | `--include-unknown-size` | Allows assets without known byte sizes into a download batch. |
+| `--keep-cache` | `--keep-cache` | Retains local cache files after successful upload or processing. |
+| `--dataset-workers` | `--dataset-workers aea=48,hot3d=36` | Overrides ranged-download worker counts for specific datasets. |
+| `--stream-uploads` | `--stream-uploads` | Lets `aws s3 cp` stream upload progress directly to the terminal. |
+| `--partitions` | `--partitions toy:ep1,toy:ep2` | Required for `s3 process-serial`; each entry is `dataset:partition_id`. |
+| `--local-cache-root` | `--local-cache-root .gaze-cache` | Overrides the local cache root from the S3 config for `process-serial`. |
+| `--split-path` | `--split-path ./canonical/splits/demo.json` | Local split manifest produced by `gaze split create`. |
+| `--output` | `--output .gaze-cache/splits/demo.s3.json` | Local output path for a generated S3 pull manifest. |
+| `--profile` | `--profile default-10hz` | Processed profile name for pull-manifest creation. |
+| `--upload` | `--upload` | Uploads the generated pull manifest to the configured S3 splits prefix. |
+| `--pull-manifest` | `--pull-manifest .gaze-cache/splits/demo.s3.json` | Static S3 pull manifest used by `s3 pull-processed`. |
+| `--dest-root` | `--dest-root ./canonical_train` | Local destination root for pulled processed episodes. |
+| `--split` | `--split train` | Pulls only one split bucket from a pull manifest. |
+
 Canonical tabular outputs are written as Parquet when a Parquet engine
 (`pyarrow`) is installed. On bare machines, the same schemas are written as
 explicit JSONL fallback files and referenced from `episode.json`, so alignment

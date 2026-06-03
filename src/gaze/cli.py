@@ -26,150 +26,355 @@ from .table import parquet_available
 from .validate import validate_canonical_root
 
 
+COMMAND_OVERVIEW = """Commands:
+  doctor             Check local tools and optional Python features.
+  datasets plan      Estimate available files before downloading.
+  datasets verify-links
+                     Check dataset documentation and sampled manifest URLs.
+  datasets fetch     Download selected raw assets to a local raw root.
+  rectify            Convert raw episodes into the canonical layout.
+  validate alignment Compare canonical outputs with their raw sources.
+  split create       Create train/holdout split manifests.
+  serve              Start the local API and viewer.
+  view               Start the viewer and open it in a browser.
+  s3 ...             Run S3-backed backup, processing, and pull flows.
+
+Common value formats:
+  Comma-separated filters have no spaces: --datasets aea,hot3d --modalities video,gaze
+  Repeated overrides use dotted keys: --set target_hz=5 --set video.width=392
+  Paths may be relative to the current directory or absolute.
+"""
+
+DATASET_FILTER_HELP = """Dataset filters:
+  --datasets limits work to dataset slugs such as aea, hot3d, nymeria,
+    holoassist, egtea, or ego-exo4d. Omit it to include every cataloged dataset.
+  --modalities limits assets by normalized modality: video, gaze, annotation,
+    depth, or other. Omit it to include all modalities.
+  --sequences limits assets to exact sequence ids from provider manifests.
+  --json switches table output to JSON for scripts.
+"""
+
+RECTIFY_OVERRIDE_HELP = """Override examples:
+  --set target_hz=5
+  --set profile_name=qwen3-vl-gaze-5hz-392px
+  --set video.fps=5 --set video.width=392 --set video.height=392
+  --set video.resize_mode=pad --set depth.enabled=false
+
+Supported config groups include profile_name, target_hz, video.*, gaze.*,
+annotation.*, depth.*, and validation.*. See src/gaze/config.py for defaults.
+"""
+
+S3_CONFIG_HELP = """S3 config:
+  The JSON file describes the bucket URI, mount root, upload/access modes,
+  local cache budget, profile name, and optional AWS profile/region settings.
+  Copy configs/s3.example.json to configs/s3.json before customizing it.
+"""
+
+
+class GazeArgumentParser(argparse.ArgumentParser):
+    """ArgumentParser with command-local examples and friendlier errors."""
+
+    def error(self, message: str) -> None:
+        self.print_usage(sys.stderr)
+        self.exit(
+            2,
+            f"{self.prog}: error: {message}\n"
+            f"Run '{self.prog} -h' to see available options, value formats, and examples. "
+            "If the error followed a subcommand, run that subcommand with -h.\n",
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if not hasattr(args, "func"):
         parser.print_help()
+        print("\nChoose one command above, for example: gaze doctor", file=sys.stderr)
         return 2
     try:
         return args.func(args)
     except Exception as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        print(
+            f"error: {exc}\n"
+            "Run the same command with -h for option details and examples.",
+            file=sys.stderr,
+        )
         return 1
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="gaze", description="Gaze dataset planning, rectification, validation, and viewing.")
+    parser = GazeArgumentParser(
+        prog="gaze",
+        description=(
+            "Plan, download, rectify, validate, split, and view heterogeneous gaze datasets. "
+            "Use a subcommand with -h to see the options available for that workflow."
+        ),
+        epilog=COMMAND_OVERVIEW + "\nExamples:\n  gaze doctor\n  gaze datasets plan --datasets aea --modalities video,gaze\n  gaze rectify --raw-root ./raw --canonical-root ./canonical --dataset toy\n  gaze view --canonical-root ./canonical",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("--version", action="version", version=f"gaze {__version__}")
-    sub = parser.add_subparsers()
+    sub = parser.add_subparsers(dest="command", metavar="<command>", parser_class=GazeArgumentParser)
 
-    doctor = sub.add_parser("doctor", help="Check local runtime dependencies.")
+    doctor = sub.add_parser(
+        "doctor",
+        help="Check local runtime dependencies.",
+        description="Print a JSON report describing local tools and optional runtime features used by gaze.",
+        epilog="Example:\n  gaze doctor",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     doctor.set_defaults(func=cmd_doctor)
 
-    datasets = sub.add_parser("datasets", help="Dataset catalog and download commands.")
-    datasets_sub = datasets.add_subparsers(required=True)
-    add_dataset_common(datasets_sub.add_parser("plan", help="Estimate selected dataset assets.")).set_defaults(func=cmd_datasets_plan)
-    verify = add_dataset_common(datasets_sub.add_parser("verify-links", help="HEAD-check docs and sampled manifest links."))
-    verify.add_argument("--sample-per-dataset", type=int, default=3)
-    verify.add_argument("--timeout", type=float, default=15.0)
+    datasets = sub.add_parser(
+        "datasets",
+        help="Dataset catalog and download commands.",
+        description="Inspect the dataset catalog, verify provider links, or download selected raw assets.",
+        epilog=DATASET_FILTER_HELP
+        + "\nExamples:\n  gaze datasets plan --modalities video,gaze,annotation\n  gaze datasets fetch --raw-root ./raw --datasets aea --modalities video --dry-run",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    datasets_sub = datasets.add_subparsers(dest="datasets_command", metavar="<datasets-command>", required=True, parser_class=GazeArgumentParser)
+    add_dataset_common(
+        datasets_sub.add_parser(
+            "plan",
+            help="Estimate selected dataset assets.",
+            description="Summarize matching catalog assets and estimated download sizes without contacting providers.",
+            epilog=DATASET_FILTER_HELP + "\nExample:\n  gaze datasets plan --datasets aea,hot3d --modalities video,gaze",
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        )
+    ).set_defaults(func=cmd_datasets_plan)
+    verify = add_dataset_common(
+        datasets_sub.add_parser(
+            "verify-links",
+            help="HEAD-check docs and sampled manifest links.",
+            description="Check selected provider URLs with HTTP HEAD requests. This is useful before a long fetch.",
+            epilog=DATASET_FILTER_HELP
+            + "\nExample:\n  gaze datasets verify-links --datasets aea --sample-per-dataset 10 --timeout 30",
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        )
+    )
+    verify.add_argument("--sample-per-dataset", metavar="N", type=int, default=3, help="Number of manifest assets to sample per selected dataset; default: 3.")
+    verify.add_argument("--timeout", metavar="SECONDS", type=float, default=15.0, help="HTTP timeout in seconds for each link check; default: 15.0.")
     verify.set_defaults(func=cmd_datasets_verify)
-    fetch = add_dataset_common(datasets_sub.add_parser("fetch", help="Fetch selected assets explicitly."))
-    fetch.add_argument("--raw-root", required=True)
-    fetch.add_argument("--dry-run", action="store_true")
-    fetch.add_argument("--manifest-out")
-    fetch.add_argument("--workers", type=int, default=1, help="Per-asset ranged-download workers when the source supports byte ranges")
-    fetch.add_argument("--download-timeout", type=float, default=120.0)
-    fetch.add_argument("--progress", action="store_true", help="Print download progress to stderr")
+    fetch = add_dataset_common(
+        datasets_sub.add_parser(
+            "fetch",
+            help="Fetch selected assets explicitly.",
+            description="Download matching raw assets into a local raw root. Existing complete files are reused when possible.",
+            epilog=DATASET_FILTER_HELP
+            + "\nExamples:\n  gaze datasets fetch --raw-root ./raw --datasets aea --modalities video,gaze\n  gaze datasets fetch --raw-root ./raw --sequences loc1_script1_seq1_rec1 --dry-run --json",
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        )
+    )
+    fetch.add_argument("--raw-root", metavar="PATH", required=True, help="Destination directory for downloaded raw dataset assets. Required.")
+    fetch.add_argument("--dry-run", action="store_true", help="Plan matching downloads and output the report without writing files.")
+    fetch.add_argument("--manifest-out", metavar="PATH", help="Write the selected asset manifest to this JSON file before fetching.")
+    fetch.add_argument("--workers", metavar="N", type=int, default=1, help="Per-asset ranged-download worker count when the source supports byte ranges; default: 1.")
+    fetch.add_argument("--download-timeout", metavar="SECONDS", type=float, default=120.0, help="HTTP timeout in seconds for each download request; default: 120.0.")
+    fetch.add_argument("--progress", action="store_true", help="Print periodic download progress to stderr while fetching.")
     fetch.set_defaults(func=cmd_datasets_fetch)
 
-    rectify = sub.add_parser("rectify", help="Rectify raw fixture/dataset roots into canonical episodes.")
-    rectify.add_argument("--raw-root", required=True)
-    rectify.add_argument("--canonical-root", required=True)
-    rectify.add_argument("--dataset")
-    rectify.add_argument("--episodes", help="Comma-separated episode ids")
-    rectify.add_argument("--config")
-    rectify.add_argument("--set", action="append", default=[], dest="overrides", help="Config override, e.g. target_hz=5")
+    rectify = sub.add_parser(
+        "rectify",
+        help="Rectify raw fixture/dataset roots into canonical episodes.",
+        description="Read raw episodes, resample them to the configured timeline, and write the canonical episode layout.",
+        epilog=RECTIFY_OVERRIDE_HELP
+        + "\nExamples:\n  gaze rectify --raw-root ./raw --canonical-root ./canonical\n  gaze rectify --raw-root ./raw --canonical-root ./canonical --dataset toy --episodes ep1,ep2 --set target_hz=5",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    rectify.add_argument("--raw-root", metavar="PATH", required=True, help="Directory containing raw dataset folders or fixture episodes. Required.")
+    rectify.add_argument("--canonical-root", metavar="PATH", required=True, help="Output directory for canonical episodes, manifests, and tables. Required.")
+    rectify.add_argument("--dataset", metavar="SLUG", help="Only rectify one dataset slug under the raw root, for example toy or aea. Omit for all datasets.")
+    rectify.add_argument("--episodes", metavar="ID[,ID...]", help="Comma-separated episode ids to rectify within the selected dataset(s), for example ep1,ep2.")
+    rectify.add_argument("--config", metavar="PATH", help="Path to a rectification JSON config. Omit to use built-in defaults.")
+    rectify.add_argument("--set", metavar="KEY=VALUE", action="append", default=[], dest="overrides", help="Override one config value. Repeat for multiple overrides, for example --set target_hz=5 --set video.resize_mode=pad.")
     rectify.set_defaults(func=cmd_rectify)
 
-    validate = sub.add_parser("validate", help="Validation commands.")
-    validate_sub = validate.add_subparsers(required=True)
-    alignment = validate_sub.add_parser("alignment", help="Validate raw-to-canonical alignment.")
-    alignment.add_argument("--canonical-root", required=True)
-    alignment.add_argument("--raw-root")
+    validate = sub.add_parser(
+        "validate",
+        help="Validation commands.",
+        description="Run checks that compare canonical outputs against expected structure and raw-source alignment.",
+        epilog="Example:\n  gaze validate alignment --canonical-root ./canonical --raw-root ./raw",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    validate_sub = validate.add_subparsers(dest="validate_command", metavar="<validate-command>", required=True, parser_class=GazeArgumentParser)
+    alignment = validate_sub.add_parser(
+        "alignment",
+        help="Validate raw-to-canonical alignment.",
+        description="Validate canonical episode timelines, modality tables, video frame counts, and optional raw-source preservation.",
+        epilog="Examples:\n  gaze validate alignment --canonical-root ./canonical\n  gaze validate alignment --canonical-root ./canonical --raw-root ./raw",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    alignment.add_argument("--canonical-root", metavar="PATH", required=True, help="Canonical root produced by gaze rectify. Required.")
+    alignment.add_argument("--raw-root", metavar="PATH", help="Optional raw root used to compare canonical outputs against raw inputs.")
     alignment.set_defaults(func=cmd_validate_alignment)
 
-    split = sub.add_parser("split", help="Split commands.")
-    split_sub = split.add_subparsers(required=True)
-    create = split_sub.add_parser("create", help="Create seeded train/holdout manifests.")
-    create.add_argument("--canonical-root", required=True)
-    create.add_argument("--name", default="default")
-    create.add_argument("--ratios", default="train=0.8,holdout=0.2")
-    create.add_argument("--seed", type=int, default=0)
-    create.add_argument("--mode", choices=["heterogeneous", "homogeneous"], default="heterogeneous")
-    create.add_argument("--include-datasets")
-    create.add_argument("--include-modalities")
-    create.add_argument("--group-by", default="dataset")
-    create.add_argument("--stratify-by")
+    split = sub.add_parser(
+        "split",
+        help="Split commands.",
+        description="Create deterministic train/holdout manifests from canonical episodes.",
+        epilog="Example:\n  gaze split create --canonical-root ./canonical --name default --ratios train=0.8,holdout=0.2",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    split_sub = split.add_subparsers(dest="split_command", metavar="<split-command>", required=True, parser_class=GazeArgumentParser)
+    create = split_sub.add_parser(
+        "create",
+        help="Create seeded train/holdout manifests.",
+        description="Create a named split manifest under the canonical root using deterministic seeded assignment.",
+        epilog=(
+            "Split arguments:\n"
+            "  --mode heterogeneous allows datasets/modalities to mix across split buckets.\n"
+            "  --mode homogeneous keeps grouped units together based on --group-by.\n"
+            "  --ratios is a comma-separated map whose values should sum to 1.0.\n\n"
+            "Examples:\n"
+            "  gaze split create --canonical-root ./canonical --name demo\n"
+            "  gaze split create --canonical-root ./canonical --include-datasets aea,hot3d --include-modalities video,gaze --seed 42"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    create.add_argument("--canonical-root", metavar="PATH", required=True, help="Canonical root containing rectified episodes. Required.")
+    create.add_argument("--name", metavar="NAME", default="default", help="Split name and output filename stem under <canonical-root>/splits; default: default.")
+    create.add_argument("--ratios", metavar="NAME=FLOAT[,NAME=FLOAT...]", default="train=0.8,holdout=0.2", help="Comma-separated split ratios, for example train=0.8,holdout=0.2; default: train=0.8,holdout=0.2.")
+    create.add_argument("--seed", metavar="INT", type=int, default=0, help="Integer random seed for deterministic split assignment; default: 0.")
+    create.add_argument("--mode", choices=["heterogeneous", "homogeneous"], default="heterogeneous", help="Split strategy. Choices: heterogeneous, homogeneous. Default: heterogeneous.")
+    create.add_argument("--include-datasets", metavar="SLUG[,SLUG...]", help="Only include these dataset slugs in the split, for example aea,hot3d.")
+    create.add_argument("--include-modalities", metavar="MOD[,MOD...]", help="Only include episodes with these modalities, for example video,gaze.")
+    create.add_argument("--group-by", metavar="FIELD", default="dataset", help="Episode metadata field used for homogeneous grouping; default: dataset.")
+    create.add_argument("--stratify-by", metavar="FIELD", help="Optional episode metadata field used to balance split assignment.")
     create.set_defaults(func=cmd_split_create)
 
-    serve_parser = sub.add_parser("serve", help="Serve the local API and browser viewer.")
+    serve_parser = sub.add_parser(
+        "serve",
+        help="Serve the local API and browser viewer.",
+        description="Start the local HTTP API and static browser viewer for a canonical root.",
+        epilog="Example:\n  gaze serve --canonical-root ./canonical --host 127.0.0.1 --port 8765",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     add_serve_args(serve_parser)
     serve_parser.set_defaults(func=cmd_serve)
 
-    view = sub.add_parser("view", help="Launch the local browser viewer.")
+    view = sub.add_parser(
+        "view",
+        help="Launch the local browser viewer.",
+        description="Start the local viewer for a canonical root and open it in the default browser.",
+        epilog="Example:\n  gaze view --canonical-root ./canonical",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     add_serve_args(view)
     view.set_defaults(open=True, func=cmd_serve)
 
-    s3 = sub.add_parser("s3", help="S3-backed serial pipeline commands.")
-    s3_sub = s3.add_subparsers(required=True)
-    layout = s3_sub.add_parser("layout", help="Show the configured static S3 layout.")
+    s3 = sub.add_parser(
+        "s3",
+        help="S3-backed serial pipeline commands.",
+        description="Run serial S3 workflows that back up raw assets, process partitions, create pull manifests, and pull processed data.",
+        epilog=S3_CONFIG_HELP
+        + "\nExamples:\n  gaze s3 layout --s3-config configs/s3.json\n  gaze s3 backup-raw --s3-config configs/s3.json --raw-root .gaze-cache/raw --datasets aea --dry-run",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    s3_sub = s3.add_subparsers(dest="s3_command", metavar="<s3-command>", required=True, parser_class=GazeArgumentParser)
+    layout = s3_sub.add_parser(
+        "layout",
+        help="Show the configured static S3 layout.",
+        description="Print the S3 URI layout and, when configured, the local mount paths used for read access.",
+        epilog=S3_CONFIG_HELP + "\nExample:\n  gaze s3 layout --s3-config configs/s3.json",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     add_s3_config_arg(layout)
     layout.set_defaults(func=cmd_s3_layout)
 
-    backup_raw = add_dataset_common(s3_sub.add_parser("backup-raw", help="Serially download selected assets and back them up to S3."))
+    backup_raw = add_dataset_common(
+        s3_sub.add_parser(
+            "backup-raw",
+            help="Serially download selected assets and back them up to S3.",
+            description="Download selected raw assets to local disk, upload them to the configured S3 unprocessed layout, and optionally clean local cache files.",
+            epilog=DATASET_FILTER_HELP
+            + "\n"
+            + S3_CONFIG_HELP
+            + "\nExamples:\n  gaze s3 backup-raw --s3-config configs/s3.json --raw-root .gaze-cache/raw --datasets aea --modalities video,gaze --dry-run\n  gaze s3 backup-raw --datasets aea --max-download-bytes 50000000000 --reserve-bytes 10000000000 --progress",
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        )
+    )
     add_s3_config_arg(backup_raw)
-    backup_raw.add_argument("--raw-root", default=".gaze-cache/raw")
-    backup_raw.add_argument("--manifest-name", default="latest")
-    backup_raw.add_argument("--max-download-bytes", type=int, help="Optional cap for one local download batch")
-    backup_raw.add_argument("--reserve-bytes", type=int, help="Local free-space reserve to keep unused")
-    backup_raw.add_argument("--storage-fraction", type=float, help="Maximum fraction of currently free local space to use")
-    backup_raw.add_argument("--include-unknown-size", action="store_true", help="Allow assets without known sizes into the batch")
-    backup_raw.add_argument("--keep-cache", action="store_true", help="Keep local downloaded files after successful upload")
-    backup_raw.add_argument("--workers", type=int, default=1, help="Default per-asset ranged-download workers")
-    backup_raw.add_argument("--dataset-workers", help="Comma-separated worker overrides, e.g. aea=48,hot3d=36")
-    backup_raw.add_argument("--download-timeout", type=float, default=120.0)
-    backup_raw.add_argument("--progress", action="store_true", help="Print download progress to stderr")
-    backup_raw.add_argument("--stream-uploads", action="store_true", help="Let aws s3 cp stream progress directly to the terminal")
-    backup_raw.add_argument("--dry-run", action="store_true")
+    backup_raw.add_argument("--raw-root", metavar="PATH", default=".gaze-cache/raw", help="Local download/cache directory for raw assets; default: .gaze-cache/raw. Must not be under /nfs.")
+    backup_raw.add_argument("--manifest-name", metavar="NAME", default="latest", help="Name for the uploaded download manifest under manifests/downloads; default: latest.")
+    backup_raw.add_argument("--max-download-bytes", metavar="BYTES", type=int, help="Optional maximum bytes to download in one local batch.")
+    backup_raw.add_argument("--reserve-bytes", metavar="BYTES", type=int, help="Minimum local free-space reserve to leave unused after choosing a batch.")
+    backup_raw.add_argument("--storage-fraction", metavar="FLOAT", type=float, help="Maximum fraction of currently free local space to use for one batch, for example 0.75.")
+    backup_raw.add_argument("--include-unknown-size", action="store_true", help="Allow assets without known byte sizes into the local batch; otherwise they are skipped for disk safety.")
+    backup_raw.add_argument("--keep-cache", action="store_true", help="Keep local downloaded files after successful upload instead of deleting them.")
+    backup_raw.add_argument("--workers", metavar="N", type=int, default=1, help="Default per-asset ranged-download worker count; default: 1.")
+    backup_raw.add_argument("--dataset-workers", metavar="SLUG=N[,SLUG=N...]", help="Per-dataset worker overrides, for example aea=48,hot3d=36.")
+    backup_raw.add_argument("--download-timeout", metavar="SECONDS", type=float, default=120.0, help="HTTP timeout in seconds for each download request; default: 120.0.")
+    backup_raw.add_argument("--progress", action="store_true", help="Print periodic download progress to stderr while fetching raw assets.")
+    backup_raw.add_argument("--stream-uploads", action="store_true", help="Let aws s3 cp stream upload progress directly to the terminal.")
+    backup_raw.add_argument("--dry-run", action="store_true", help="Show the planned download/upload report without downloading, uploading, or deleting files.")
     backup_raw.set_defaults(func=cmd_s3_backup_raw)
 
-    process_serial = s3_sub.add_parser("process-serial", help="Serially pull raw partitions from S3, rectify, and upload processed episodes.")
+    process_serial = s3_sub.add_parser(
+        "process-serial",
+        help="Serially pull raw partitions from S3, rectify, and upload processed episodes.",
+        description="Copy configured raw partitions from S3/mount access into local cache, rectify them, upload processed episodes, and update the processed manifest.",
+        epilog=S3_CONFIG_HELP
+        + "\nExamples:\n  gaze s3 process-serial --s3-config configs/s3.json --partitions toy:ep1,toy:ep2\n  gaze s3 process-serial --partitions aea:loc1_script1_seq1_rec1 --config ./rectify.json --keep-cache",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     add_s3_config_arg(process_serial)
-    process_serial.add_argument("--partitions", required=True, help="Comma-separated dataset:partition entries")
-    process_serial.add_argument("--local-cache-root")
-    process_serial.add_argument("--config")
-    process_serial.add_argument("--dry-run", action="store_true")
-    process_serial.add_argument("--keep-cache", action="store_true")
+    process_serial.add_argument("--partitions", metavar="DATASET:PARTITION[,DATASET:PARTITION...]", required=True, help="Comma-separated raw partitions to process, for example toy:ep1,toy:ep2. Required.")
+    process_serial.add_argument("--local-cache-root", metavar="PATH", help="Override the local cache root from the S3 config for this run.")
+    process_serial.add_argument("--config", metavar="PATH", help="Path to a rectification JSON config. Omit to use built-in defaults.")
+    process_serial.add_argument("--dry-run", action="store_true", help="Show the processing/upload plan without copying, rectifying, uploading, or deleting files.")
+    process_serial.add_argument("--keep-cache", action="store_true", help="Keep local per-partition cache directories after successful upload.")
     process_serial.set_defaults(func=cmd_s3_process_serial)
 
-    pull_manifest = s3_sub.add_parser("create-pull-manifest", help="Create a static S3 pull manifest from a train/holdout split.")
+    pull_manifest = s3_sub.add_parser(
+        "create-pull-manifest",
+        help="Create a static S3 pull manifest from a train/holdout split.",
+        description="Convert a local split manifest into a static manifest with S3/mount source paths for processed episode pulling.",
+        epilog=S3_CONFIG_HELP
+        + "\nExample:\n  gaze s3 create-pull-manifest --s3-config configs/s3.json --split-path ./canonical/splits/demo.json --output .gaze-cache/splits/demo.s3.json --upload",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     add_s3_config_arg(pull_manifest)
-    pull_manifest.add_argument("--split-path", required=True)
-    pull_manifest.add_argument("--output", required=True)
-    pull_manifest.add_argument("--profile")
-    pull_manifest.add_argument("--upload", action="store_true")
-    pull_manifest.add_argument("--dry-run", action="store_true")
+    pull_manifest.add_argument("--split-path", metavar="PATH", required=True, help="Local split JSON created by gaze split create. Required.")
+    pull_manifest.add_argument("--output", metavar="PATH", required=True, help="Local path where the S3 pull manifest JSON should be written. Required.")
+    pull_manifest.add_argument("--profile", metavar="NAME", help="Processed profile name to reference; defaults to the profile configured in the S3 config.")
+    pull_manifest.add_argument("--upload", action="store_true", help="Upload the generated pull manifest to the configured S3 splits prefix.")
+    pull_manifest.add_argument("--dry-run", action="store_true", help="Print the planned manifest/upload report without writing or uploading.")
     pull_manifest.set_defaults(func=cmd_s3_create_pull_manifest)
 
-    pull_processed = s3_sub.add_parser("pull-processed", help="Download processed episodes from a static S3 pull manifest.")
+    pull_processed = s3_sub.add_parser(
+        "pull-processed",
+        help="Download processed episodes from a static S3 pull manifest.",
+        description="Read a static pull manifest and copy selected processed episodes into a local destination root.",
+        epilog="Examples:\n  gaze s3 pull-processed --s3-config configs/s3.json --pull-manifest .gaze-cache/splits/demo.s3.json --dest-root ./canonical_train\n  gaze s3 pull-processed --pull-manifest ./demo.s3.json --split train --dest-root ./canonical_train --dry-run",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     add_s3_config_arg(pull_processed)
-    pull_processed.add_argument("--pull-manifest", required=True)
-    pull_processed.add_argument("--dest-root", required=True)
-    pull_processed.add_argument("--split", help="Only pull one split, e.g. train or holdout")
-    pull_processed.add_argument("--dry-run", action="store_true")
+    pull_processed.add_argument("--pull-manifest", metavar="PATH", required=True, help="Static S3 pull manifest created by gaze s3 create-pull-manifest. Required.")
+    pull_processed.add_argument("--dest-root", metavar="PATH", required=True, help="Local destination root for copied processed episodes. Required.")
+    pull_processed.add_argument("--split", metavar="NAME", help="Only pull one split bucket, for example train or holdout. Omit to pull all buckets.")
+    pull_processed.add_argument("--dry-run", action="store_true", help="Show the planned copies without writing files.")
     pull_processed.set_defaults(func=cmd_s3_pull_processed)
     return parser
 
 
 def add_dataset_common(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    parser.add_argument("--repo-root", default=".")
-    parser.add_argument("--datasets", help="Comma-separated dataset slugs")
-    parser.add_argument("--modalities", help="Comma-separated modalities: video,gaze,annotation,depth")
-    parser.add_argument("--sequences", help="Comma-separated sequence ids")
-    parser.add_argument("--json", action="store_true", help="Emit JSON")
+    parser.add_argument("--repo-root", metavar="PATH", default=".", help="Repository root containing DATASETS.md and download_links; default: current directory.")
+    parser.add_argument("--datasets", metavar="SLUG[,SLUG...]", help="Comma-separated dataset slugs to include, for example aea,hot3d. Omit to include all datasets.")
+    parser.add_argument("--modalities", metavar="MOD[,MOD...]", help="Comma-separated modalities to include: video,gaze,annotation,depth,other. Omit to include all modalities.")
+    parser.add_argument("--sequences", metavar="ID[,ID...]", help="Comma-separated provider sequence ids to include exactly. Omit to include all sequences.")
+    parser.add_argument("--json", action="store_true", help="Emit JSON instead of the default human-readable table.")
     return parser
 
 
 def add_serve_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--canonical-root", required=True)
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument("--open", action="store_true", help="Open the browser automatically")
+    parser.add_argument("--canonical-root", metavar="PATH", required=True, help="Canonical root containing rectified episodes and manifest files. Required.")
+    parser.add_argument("--host", metavar="HOST", default="127.0.0.1", help="Interface to bind the local HTTP server; default: 127.0.0.1.")
+    parser.add_argument("--port", metavar="PORT", type=int, default=8765, help="TCP port for the local HTTP server; default: 8765.")
+    parser.add_argument("--open", action="store_true", help="Open the viewer URL in the default browser after the server starts.")
 
 
 def add_s3_config_arg(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--s3-config", default="configs/s3.json", help="Path to user S3 config JSON")
+    parser.add_argument("--s3-config", metavar="PATH", default="configs/s3.json", help="Path to user S3 config JSON; default: configs/s3.json.")
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
