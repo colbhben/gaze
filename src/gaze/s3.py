@@ -269,10 +269,16 @@ def serial_download_backup(
             progress_callback=progress_callback,
         )[0]
         target = Path(fetch_result["target"])
-        s3_target = join_s3_uri(cfg.unprocessed_uri(asset.dataset, asset.sequence_id, asset.asset_key), asset.filename)
-        upload_result = upload_file(cfg, target, s3_target, dry_run=dry_run, runner=upload_runner)
-        if clean_after_upload and not dry_run and upload_result.get("returncode") == 0 and target.exists():
-            target.unlink()
+        if fetch_result.get("directory"):
+            s3_target = cfg.unprocessed_uri(asset.dataset, asset.sequence_id, asset.asset_key)
+            upload_result = upload_dir(cfg, target, s3_target, dry_run=dry_run, runner=upload_runner)
+            if clean_after_upload and not dry_run and upload_result.get("returncode") == 0 and target.exists():
+                shutil.rmtree(target, ignore_errors=True)
+        else:
+            s3_target = join_s3_uri(cfg.unprocessed_uri(asset.dataset, asset.sequence_id, asset.asset_key), asset.filename)
+            upload_result = upload_file(cfg, target, s3_target, dry_run=dry_run, runner=upload_runner)
+            if clean_after_upload and not dry_run and upload_result.get("returncode") == 0 and target.exists():
+                target.unlink()
         operations.append({"asset": asdict(asset), "fetch": fetch_result, "upload": upload_result, "s3_uri": s3_target})
     manifest_upload = None
     if dry_run:

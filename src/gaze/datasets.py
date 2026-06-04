@@ -45,6 +45,7 @@ class DatasetDoc:
     instructions: list[str] = field(default_factory=list)
     urls: dict[str, list[str]] = field(default_factory=dict)
     manifest_paths: list[Path] = field(default_factory=list)
+    credential_paths: list[Path] = field(default_factory=list)
 
 
 @dataclass
@@ -57,6 +58,7 @@ class Asset:
     url: str | None
     size_bytes: int | None = None
     sha1: str | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -74,6 +76,7 @@ class DatasetCatalog:
                 continue
             for manifest in doc.manifest_paths:
                 assets.extend(load_manifest_assets(manifest, slug))
+            assets.extend(load_provider_manifest_assets(doc))
             assets.extend(load_direct_doc_assets(doc))
         return assets
 
@@ -117,6 +120,9 @@ def parse_datasets_md(path: str | Path) -> dict[str, DatasetDoc]:
         if line.endswith(".json") and not line.startswith("http"):
             current.manifest_paths.append((source.parent / line).resolve())
             continue
+        if line.endswith(".txt") and not line.startswith("http"):
+            current.credential_paths.append((source.parent / line).resolve())
+            continue
         if line.startswith("http://") or line.startswith("https://"):
             if current_section == "instructions":
                 current.instructions.append(line)
@@ -150,6 +156,57 @@ def load_manifest_assets(path: str | Path, dataset_slug: str) -> list[Asset]:
                 )
             )
     return assets
+
+
+def load_provider_manifest_assets(doc: DatasetDoc) -> list[Asset]:
+    if doc.slug != "ego-exo4d":
+        return []
+    credential_path = str(doc.credential_paths[0]) if doc.credential_paths else "download_links/ego-exo4d.txt"
+    release = "v2"
+    base = "s3://ego4d-consortium-sharing/egoexo-public"
+    common = {
+        "download_kind": "egoexo_manifest",
+        "release": release,
+        "credential_path": credential_path,
+    }
+    return [
+        Asset(
+            dataset=doc.slug,
+            sequence_id=release,
+            asset_key="takes",
+            modality="video",
+            filename="takes",
+            url=f"{base}/{release}/takes/manifest.json",
+            extra={**common, "views": ["ego"], "benchmarks": ["atomic_action_descriptions", "expert_commentary"]},
+        ),
+        Asset(
+            dataset=doc.slug,
+            sequence_id=release,
+            asset_key="take_eye_gaze",
+            modality="gaze",
+            filename="take_eye_gaze",
+            url=f"{base}/{release}/take_eye_gaze/manifest.json",
+            extra={**common, "benchmarks": ["atomic_action_descriptions", "expert_commentary"]},
+        ),
+        Asset(
+            dataset=doc.slug,
+            sequence_id=release,
+            asset_key="annotations_atomic_descriptions",
+            modality="annotation",
+            filename="annotations_atomic_descriptions",
+            url=f"{base}/{release}/annotations/manifest.json",
+            extra={**common, "benchmarks": ["atomic_descriptions"]},
+        ),
+        Asset(
+            dataset=doc.slug,
+            sequence_id=release,
+            asset_key="annotations_expert_commentary",
+            modality="annotation",
+            filename="annotations_expert_commentary",
+            url=f"{base}/{release}/annotations/manifest.json",
+            extra={**common, "benchmarks": ["expert_commentary"]},
+        ),
+    ]
 
 
 def load_direct_doc_assets(doc: DatasetDoc) -> list[Asset]:

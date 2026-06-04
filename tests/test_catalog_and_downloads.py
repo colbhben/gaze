@@ -60,6 +60,15 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual({asset.modality for asset in assets}, {"pose"})
         self.assertEqual({asset.asset_key for asset in assets}, {"hand_data", "mps_slam_trajectories"})
 
+    def test_egoexo_s3_manifest_assets_are_cataloged(self) -> None:
+        catalog = load_catalog(REPO_ROOT)
+        assets = filter_assets(catalog.manifest_assets("ego4d"), modalities={"video", "gaze", "annotation"})
+        self.assertEqual({asset.dataset for asset in assets}, {"ego-exo4d"})
+        self.assertEqual({asset.modality for asset in assets}, {"video", "gaze", "annotation"})
+        self.assertIn("takes", {asset.asset_key for asset in assets})
+        self.assertIn("take_eye_gaze", {asset.asset_key for asset in assets})
+        self.assertTrue(all(asset.extra.get("download_kind") == "egoexo_manifest" for asset in assets))
+
 
 if __name__ == "__main__":
     unittest.main()

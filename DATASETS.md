@@ -17,6 +17,7 @@ https://hl2data.z5.web.core.windows.net/holoassist-data-release/data-annotation-
 # Ego-Exo4d
 ## Instructions
 https://github.com/facebookresearch/Ego4d
+download_links/ego-exo4d.txt
 
 ## Video
 takes

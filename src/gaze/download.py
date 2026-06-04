@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import concurrent.futures
+import os
+import re
+import subprocess
 from dataclasses import asdict, dataclass
 import hashlib
 import json
@@ -68,6 +71,8 @@ def verify_links(assets: list[Asset], sample_per_dataset: int = 3, timeout_s: fl
 
 def head_check(asset: Asset, timeout_s: float = 15.0) -> LinkCheck:
     assert asset.url is not None
+    if asset.extra.get("download_kind") == "egoexo_manifest":
+        return s3_manifest_check(asset, timeout_s=timeout_s)
     request = urllib.request.Request(asset.url, method="HEAD", headers={"User-Agent": "gaze-pipeline/0.1"})
     try:
         with urllib.request.urlopen(request, timeout=timeout_s) as response:
@@ -97,7 +102,7 @@ def fetch_assets(
     root = Path(raw_root)
     results = []
     for asset in assets:
-        target = root / asset.dataset / asset.sequence_id / asset.filename
+        target = target_path_for_asset(root, asset)
         worker_count = max(1, workers)
         item = {
             "dataset": asset.dataset,
@@ -108,8 +113,17 @@ def fetch_assets(
             "workers": worker_count,
             "downloaded": False,
             "verified": False,
+            "directory": asset.extra.get("download_kind") == "egoexo_manifest",
         }
         if dry_run:
+            results.append(item)
+            continue
+        if asset.extra.get("download_kind") == "egoexo_manifest":
+            try:
+                item.update(download_egoexo_manifest_asset(asset, target, timeout_s=timeout_s, progress_callback=progress_callback))
+                item["verified"] = True
+            except Exception as exc:
+                item["error"] = str(exc)
             results.append(item)
             continue
         if not asset.url:
@@ -145,6 +159,165 @@ def fetch_assets(
             item["error"] = str(exc)
         results.append(item)
     return results
+
+
+def target_path_for_asset(root: Path, asset: Asset) -> Path:
+    if asset.extra.get("download_kind") == "egoexo_manifest":
+        return root / asset.dataset / asset.sequence_id / asset.asset_key
+    return root / asset.dataset / asset.sequence_id / asset.filename
+
+
+def s3_manifest_check(asset: Asset, timeout_s: float = 15.0) -> LinkCheck:
+    assert asset.url is not None
+    credential_path = asset.extra.get("credential_path")
+    if credential_path and not Path(credential_path).exists():
+        return LinkCheck(asset.dataset, asset.sequence_id, asset.asset_key, asset.url, False, error=f"credential file not found: {credential_path}")
+    try:
+        completed = run_aws(asset, ["s3", "cp", asset.url, "-"], timeout_s=timeout_s, capture_output=True)
+        ok = completed.returncode == 0 and completed.stdout.strip().startswith(b"[")
+        return LinkCheck(
+            dataset=asset.dataset,
+            sequence_id=asset.sequence_id,
+            asset_key=asset.asset_key,
+            url=asset.url,
+            ok=ok,
+            status=0 if ok else completed.returncode,
+            content_type="application/json" if ok else None,
+            error=None if ok else completed.stderr.decode("utf-8", errors="replace")[-500:],
+        )
+    except Exception as exc:
+        return LinkCheck(asset.dataset, asset.sequence_id, asset.asset_key, asset.url, False, error=str(exc))
+
+
+def download_egoexo_manifest_asset(
+    asset: Asset,
+    target: Path,
+    timeout_s: float,
+    progress_callback: ProgressCallback | None = None,
+) -> dict:
+    assert asset.url is not None
+    target.mkdir(parents=True, exist_ok=True)
+    manifest_bytes = run_aws(asset, ["s3", "cp", asset.url, "-"], timeout_s=timeout_s, capture_output=True, check=True).stdout
+    manifest = json.loads(manifest_bytes.decode("utf-8"))
+    paths = select_egoexo_paths(manifest, asset.extra)
+    downloaded = 0
+    reused = 0
+    bytes_total = sum(item.get("size") or 0 for item in paths)
+    bytes_done = 0
+    for item in paths:
+        relative = Path(item["relative_path"])
+        output = target / relative
+        expected_size = item.get("size")
+        if output.exists() and (expected_size is None or output.stat().st_size == expected_size):
+            reused += 1
+            bytes_done += expected_size or output.stat().st_size
+            continue
+        output.parent.mkdir(parents=True, exist_ok=True)
+        if progress_callback:
+            progress_callback(
+                {
+                    "dataset": asset.dataset,
+                    "sequence_id": asset.sequence_id,
+                    "asset_key": asset.asset_key,
+                    "target": str(output),
+                    "event": "download-start",
+                    "bytes_done": bytes_done,
+                    "bytes_total": bytes_total,
+                }
+            )
+        run_aws(asset, ["s3", "cp", item["source_path"], str(output)], timeout_s=timeout_s, capture_output=True, check=True)
+        if expected_size is not None and output.stat().st_size != expected_size:
+            raise RuntimeError(f"downloaded size mismatch for {output}: {output.stat().st_size} != {expected_size}")
+        downloaded += 1
+        bytes_done += expected_size or output.stat().st_size
+        if progress_callback:
+            progress_callback(
+                {
+                    "dataset": asset.dataset,
+                    "sequence_id": asset.sequence_id,
+                    "asset_key": asset.asset_key,
+                    "target": str(output),
+                    "event": "download-progress",
+                    "bytes_done": bytes_done,
+                    "bytes_total": bytes_total,
+                }
+            )
+    return {
+        "downloaded": downloaded > 0,
+        "reused": reused > 0,
+        "files": len(paths),
+        "files_downloaded": downloaded,
+        "files_reused": reused,
+        "bytes": bytes_done,
+        "bytes_total": bytes_total,
+        "range_download": False,
+    }
+
+
+def select_egoexo_paths(manifest: list[dict], filters: dict) -> list[dict]:
+    benchmarks = set(filters.get("benchmarks") or [])
+    views = set(filters.get("views") or [])
+    splits = set(filters.get("splits") or [])
+    universities = set(filters.get("universities") or [])
+    selected: list[dict] = []
+    for entry in manifest:
+        entry_benchmarks = set(entry.get("benchmarks") or [])
+        entry_splits = set(entry.get("splits") or [])
+        if benchmarks and entry_benchmarks and not (entry_benchmarks & benchmarks):
+            continue
+        if splits and entry_splits and not (entry_splits & splits):
+            continue
+        for path in entry.get("paths") or []:
+            path_views = set(path.get("views") or [])
+            path_universities = set(path.get("universities") or [])
+            if views and path_views and not (path_views & views):
+                continue
+            if universities and path_universities and not (path_universities & universities):
+                continue
+            selected.append(path)
+    return selected
+
+
+def run_aws(
+    asset: Asset,
+    args: list[str],
+    timeout_s: float,
+    capture_output: bool,
+    check: bool = False,
+) -> subprocess.CompletedProcess:
+    env = aws_env_for_asset(asset)
+    completed = subprocess.run(["aws", *args], env=env, timeout=timeout_s, capture_output=capture_output, check=False)
+    if check and completed.returncode != 0:
+        stderr = completed.stderr.decode("utf-8", errors="replace") if completed.stderr else ""
+        raise RuntimeError(f"aws {' '.join(args[:3])} failed with exit code {completed.returncode}: {stderr[-500:]}")
+    return completed
+
+
+def aws_env_for_asset(asset: Asset) -> dict[str, str]:
+    env = os.environ.copy()
+    credential_path = asset.extra.get("credential_path")
+    if credential_path:
+        credentials = parse_aws_credentials_file(credential_path)
+        env.update(credentials)
+    return env
+
+
+def parse_aws_credentials_file(path: str | Path) -> dict[str, str]:
+    source = Path(path)
+    if not source.exists():
+        return {}
+    text = source.read_text(encoding="utf-8")
+    values = {
+        "AWS_ACCESS_KEY_ID": extract_credential_value(text, r"Access Key ID:\s*(\S+)"),
+        "AWS_SECRET_ACCESS_KEY": extract_credential_value(text, r"Secret Access Key:\s*(\S+)"),
+        "AWS_DEFAULT_REGION": extract_credential_value(text, r"Region:\s*(\S+)"),
+    }
+    return {key: value for key, value in values.items() if value}
+
+
+def extract_credential_value(text: str, pattern: str) -> str | None:
+    match = re.search(pattern, text)
+    return match.group(1).strip() if match else None
 
 
 def download_file(
