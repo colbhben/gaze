@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import unquote, urlparse
 import webbrowser
 
 from .splits import SplitRequest, create_split
@@ -90,7 +90,7 @@ class GazeRequestHandler(BaseHTTPRequestHandler):
                 return
             self.send_file(episode_root / video, "video/mp4")
             return
-        if key in {"timeline", "gaze", "annotations", "depth"}:
+        if key in {"timeline", "gaze", "annotations", "annotation_intervals", "depth"}:
             table = doc.get("files", {}).get(key)
             if not table:
                 self.send_json({"rows": []})
@@ -130,12 +130,49 @@ class GazeRequestHandler(BaseHTTPRequestHandler):
         if not path.exists():
             self.send_error(404, "file not found")
             return
-        data = path.read_bytes()
-        self.send_response(200)
+        file_size = path.stat().st_size
+        range_header = self.headers.get("Range")
+        start = 0
+        end = file_size - 1
+        status = 200
+        if range_header:
+            try:
+                unit, _, spec = range_header.partition("=")
+                if unit.strip() != "bytes":
+                    raise ValueError("unsupported range unit")
+                start_text, _, end_text = spec.partition("-")
+                if start_text:
+                    start = int(start_text)
+                    end = int(end_text) if end_text else end
+                else:
+                    suffix = int(end_text)
+                    start = max(file_size - suffix, 0)
+                if start < 0 or end < start or start >= file_size:
+                    raise ValueError("invalid range")
+                end = min(end, file_size - 1)
+                status = 206
+            except ValueError:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{file_size}")
+                self.end_headers()
+                return
+        length = end - start + 1
+        self.send_response(status)
         self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(length))
+        if status == 206:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
         self.end_headers()
-        self.wfile.write(data)
+        with path.open("rb") as handle:
+            handle.seek(start)
+            remaining = length
+            while remaining > 0:
+                chunk = handle.read(min(1024 * 1024, remaining))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                remaining -= len(chunk)
 
     def log_message(self, format: str, *args) -> None:  # noqa: A002
         return
@@ -154,6 +191,7 @@ def viewer_html() -> str:
     aside { border-right: 1px solid #9995; padding: 16px; overflow: auto; }
     main { padding: 16px; display: grid; gap: 12px; align-content: start; }
     button { width: 100%; text-align: left; padding: 8px; margin: 4px 0; border: 1px solid #9996; background: transparent; border-radius: 6px; }
+    select { width: 100%; padding: 7px; margin: 0 0 12px; border: 1px solid #9996; border-radius: 6px; background: Canvas; color: CanvasText; }
     .stage { position: relative; width: min(100%, 960px); aspect-ratio: 16 / 9; background: #111; overflow: hidden; }
     video, canvas, .fallback { position: absolute; inset: 0; width: 100%; height: 100%; }
     video { display: block; object-fit: contain; }
@@ -161,45 +199,61 @@ def viewer_html() -> str:
     .fallback { display: none; place-items: center; color: #ddd; font-size: 14px; z-index: 1; }
     .stage.no-video video { display: none; }
     .stage.no-video .fallback { display: grid; }
+    .now { width: min(100%, 960px); border: 1px solid #9994; padding: 10px; border-radius: 6px; min-height: 44px; }
+    .muted { color: #777; }
+    .active-row { outline: 2px solid #ff4757; outline-offset: -2px; }
     table { border-collapse: collapse; width: min(100%, 960px); }
     td, th { border: 1px solid #9994; padding: 4px 6px; font-size: 13px; }
   </style>
 </head>
 <body>
-  <aside><h1>Episodes</h1><div id="episodes"></div></aside>
+  <aside><h1>Episodes</h1><select id="datasetFilter"></select><div id="episodes"></div></aside>
   <main>
     <h2 id="title">Select an episode</h2>
     <div class="stage no-video" id="stage"><video id="video" controls></video><div class="fallback" id="fallback">No playable video for this episode</div><canvas id="overlay"></canvas></div>
-    <table><thead><tr><th>time_s</th><th>label</th><th>text</th></tr></thead><tbody id="annotations"></tbody></table>
+    <div class="now" id="currentAnnotation"><span class="muted">No annotation selected</span></div>
+    <table><thead><tr><th>start_s</th><th>end_s</th><th>label</th><th>text</th></tr></thead><tbody id="annotations"></tbody></table>
   </main>
   <script>
     const episodesEl = document.querySelector('#episodes');
+    const datasetFilter = document.querySelector('#datasetFilter');
     const stage = document.querySelector('#stage');
     const video = document.querySelector('#video');
     const fallback = document.querySelector('#fallback');
+    const currentAnnotation = document.querySelector('#currentAnnotation');
     const canvas = document.querySelector('#overlay');
     const ctx = canvas.getContext('2d');
+    let episodes = [];
     let gaze = [];
-    let noVideo = true;
+    let annotations = [];
+    let mediaState = 'empty';
     let episodeDuration = 0;
     let syntheticStart = performance.now();
     let loadToken = 0;
     async function json(url) { return (await fetch(url)).json(); }
-    function setNoVideo(enabled) {
-      noVideo = enabled;
-      stage.classList.toggle('no-video', enabled);
-      if (enabled) {
-        video.removeAttribute('src');
-        video.load();
-        syntheticStart = performance.now();
-      }
+    function setMediaState(state, message) {
+      mediaState = state;
+      stage.classList.toggle('no-video', state !== 'video');
+      if (message) fallback.textContent = message;
+      if (state === 'no-video') syntheticStart = performance.now();
     }
-    video.addEventListener('loadedmetadata', () => setNoVideo(false));
-    video.addEventListener('error', () => setNoVideo(true));
+    video.addEventListener('loadedmetadata', () => setMediaState('video'));
+    video.addEventListener('canplay', () => setMediaState('video'));
+    video.addEventListener('error', () => setMediaState('no-video', 'No playable video for this episode'));
+    video.addEventListener('timeupdate', updateCurrentAnnotation);
+    video.addEventListener('seeked', updateCurrentAnnotation);
     async function loadEpisodes() {
       const payload = await json('/api/episodes');
+      episodes = payload.episodes;
+      const datasets = [...new Set(episodes.map(ep => ep.dataset).filter(Boolean))].sort();
+      datasetFilter.innerHTML = '<option value="">All datasets</option>' + datasets.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
+      datasetFilter.onchange = renderEpisodeList;
+      renderEpisodeList();
+    }
+    function renderEpisodeList() {
+      const selected = datasetFilter.value;
       episodesEl.innerHTML = '';
-      payload.episodes.forEach(ep => {
+      episodes.filter(ep => !selected || ep.dataset === selected).forEach(ep => {
         const button = document.createElement('button');
         button.textContent = `${ep.id} (${ep.modalities || ''})`;
         button.onclick = () => loadEpisode(ep.id);
@@ -210,30 +264,61 @@ def viewer_html() -> str:
       const token = ++loadToken;
       document.querySelector('#title').textContent = id;
       document.querySelector('#annotations').innerHTML = '';
+      currentAnnotation.innerHTML = '<span class="muted">Loading annotations</span>';
       gaze = [];
+      annotations = [];
+      video.pause();
+      video.removeAttribute('src');
+      video.load();
       fallback.textContent = 'Loading episode...';
+      setMediaState('loading');
       const ep = await json(`/api/episodes/${encodeURIComponent(id)}`);
       if (token !== loadToken) return;
       episodeDuration = ep.duration_s || 0;
-      setNoVideo(true);
-      fallback.textContent = ep.files.video ? 'No playable video for this episode' : 'No video file for this episode';
-      if (ep.files.video) video.src = `/api/episodes/${encodeURIComponent(id)}/video`;
+      if (ep.files.video) {
+        setMediaState('loading', 'Loading video...');
+        video.src = `/api/episodes/${encodeURIComponent(id)}/video`;
+      } else {
+        setMediaState('no-video', 'No video file for this episode');
+      }
       const gazePayload = await json(`/api/episodes/${encodeURIComponent(id)}/gaze`);
       if (token !== loadToken) return;
       gaze = gazePayload.rows || [];
-      const ann = (await json(`/api/episodes/${encodeURIComponent(id)}/annotations`)).rows || [];
+      const intervalRows = (await json(`/api/episodes/${encodeURIComponent(id)}/annotation_intervals`)).rows || [];
       if (token !== loadToken) return;
-      document.querySelector('#annotations').innerHTML = ann.slice(0, 200).map(row => `<tr><td>${row.time_s}</td><td>${row.label || ''}</td><td>${row.text || ''}</td></tr>`).join('');
+      annotations = intervalRows.length ? intervalRows : sampledToIntervals((await json(`/api/episodes/${encodeURIComponent(id)}/annotations`)).rows || []);
+      document.querySelector('#annotations').innerHTML = annotations.slice(0, 500).map((row, index) => `<tr data-index="${index}"><td>${formatTime(row.start_s)}</td><td>${formatTime(row.end_s)}</td><td>${escapeHtml(row.label || '')}</td><td>${escapeHtml(row.text || '')}</td></tr>`).join('');
+      updateCurrentAnnotation();
       draw();
+    }
+    function sampledToIntervals(rows) {
+      return rows.map((row, index) => ({ start_s: row.time_s, end_s: rows[index + 1]?.time_s ?? episodeDuration, label: row.label, text: row.text }));
+    }
+    function activeTime() {
+      if (mediaState === 'video') return video.currentTime || 0;
+      if (mediaState === 'no-video') return episodeDuration ? ((performance.now() - syntheticStart) / 1000) % episodeDuration : 0;
+      return 0;
+    }
+    function activeAnnotation(t) {
+      return annotations.find(row => Number(row.start_s) <= t && t < Number(row.end_s)) || null;
+    }
+    function updateCurrentAnnotation() {
+      const t = activeTime();
+      const row = activeAnnotation(t);
+      [...document.querySelectorAll('#annotations tr')].forEach(tr => tr.classList.toggle('active-row', row && Number(tr.dataset.index) === annotations.indexOf(row)));
+      if (!row) {
+        currentAnnotation.innerHTML = `<span class="muted">${formatTime(t)}s: no active annotation</span>`;
+        return;
+      }
+      currentAnnotation.innerHTML = `<strong>${formatTime(t)}s</strong> ${escapeHtml(row.label || '')}<br>${escapeHtml(row.text || '')}`;
     }
     function draw() {
       const rect = stage.getBoundingClientRect();
       canvas.width = rect.width;
       canvas.height = rect.height;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const elapsed = (performance.now() - syntheticStart) / 1000;
-      const t = noVideo ? (episodeDuration ? elapsed % episodeDuration : elapsed) : (video.currentTime || 0);
-      if (noVideo) {
+      const t = activeTime();
+      if (mediaState === 'no-video') {
         ctx.strokeStyle = '#ffffff22';
         ctx.lineWidth = 1;
         for (let x = 0; x < canvas.width; x += 80) {
@@ -242,6 +327,10 @@ def viewer_html() -> str:
         for (let y = 0; y < canvas.height; y += 80) {
           ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
         }
+      }
+      if (mediaState === 'loading') {
+        requestAnimationFrame(draw);
+        return;
       }
       const row = gaze.reduce((best, item) => Math.abs(item.time_s - t) < Math.abs((best?.time_s || 999999) - t) ? item : best, null);
       if (row && row.x_norm != null && row.y_norm != null) {
@@ -253,7 +342,15 @@ def viewer_html() -> str:
         ctx.fill();
         ctx.stroke();
       }
+      updateCurrentAnnotation();
       requestAnimationFrame(draw);
+    }
+    function formatTime(value) {
+      const number = Number(value);
+      return Number.isFinite(number) ? number.toFixed(2).replace(/\\.?0+$/, '') : '';
+    }
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
     }
     loadEpisodes();
   </script>

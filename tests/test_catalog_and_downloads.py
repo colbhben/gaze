@@ -25,6 +25,7 @@ class CatalogTests(unittest.TestCase):
         self.assertTrue(any(asset.modality == "video" for asset in assets))
         self.assertTrue(any(asset.modality == "gaze" for asset in assets))
         self.assertTrue(any(asset.modality == "annotation" for asset in assets))
+        self.assertTrue(any(asset.modality == "pose" for asset in assets))
 
     def test_download_plan_filters_and_estimates(self) -> None:
         catalog = load_catalog(REPO_ROOT)
@@ -51,6 +52,13 @@ class CatalogTests(unittest.TestCase):
 
             threaded = fetch_assets(assets, Path(tmp) / "raw", dry_run=True, workers=8)
             self.assertEqual(threaded[0]["workers"], 8)
+
+    def test_pose_modality_selects_pose_assets(self) -> None:
+        catalog = load_catalog(REPO_ROOT)
+        assets = filter_assets(catalog.manifest_assets("hot3d"), modalities={"pose"})
+        self.assertTrue(assets)
+        self.assertEqual({asset.modality for asset in assets}, {"pose"})
+        self.assertEqual({asset.asset_key for asset in assets}, {"hand_data", "mps_slam_trajectories"})
 
 
 if __name__ == "__main__":

@@ -5,11 +5,11 @@ import hashlib
 import json
 import math
 from pathlib import Path
-import shutil
 from typing import Any
 
 from .config import RectifyConfig, default_config
 from .table import read_table, write_table
+from .video import transcode_video
 
 
 @dataclass
@@ -95,10 +95,11 @@ def rectify_episode(raw: RawEpisode, canonical_root: Path, cfg: RectifyConfig) -
     output_files["timeline"] = str(write_table(timeline, episode_root / "timeline.parquet").relative_to(episode_root))
 
     video_file = raw.files.get("video")
+    video_info = None
     if video_file and video_file.exists():
         target_video = episode_root / f"video.{cfg.video.format}"
         if video_file.resolve() != target_video.resolve():
-            shutil.copyfile(video_file, target_video)
+            video_info = transcode_video(video_file, target_video, cfg)
         output_files["video"] = target_video.name
 
     if raw.files.get("gaze") and raw.files["gaze"].exists():
@@ -129,6 +130,7 @@ def rectify_episode(raw: RawEpisode, canonical_root: Path, cfg: RectifyConfig) -
             "files": {key: str(value) for key, value in raw.files.items()},
             "fingerprint": source_fingerprint,
         },
+        "video_processing": video_info,
         "files": output_files,
         "modalities": sorted(k for k in output_files if k not in {"timeline", "annotation_intervals"}),
     }

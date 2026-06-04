@@ -68,7 +68,7 @@ Common dataset-selection options:
 | --- | --- | --- |
 | `--repo-root` | `--repo-root /path/to/repo` | Repository root containing `DATASETS.md` and `download_links`; defaults to the current directory. |
 | `--datasets` | `--datasets aea,hot3d` | Limits work to dataset slugs. Known slugs include `aea`, `hot3d`, `nymeria`, `holoassist`, `egtea`, and `ego-exo4d`. Omit it to include all cataloged datasets. |
-| `--modalities` | `--modalities video,gaze,annotation` | Limits work to normalized modalities. Available values are `video`, `gaze`, `annotation`, `depth`, and `other`. |
+| `--modalities` | `--modalities video,gaze,annotation` | Limits work to normalized modalities. Available values are `video`, `gaze`, `annotation`, `depth`, `pose`, and `other`. |
 | `--sequences` | `--sequences loc1_script1_seq1_rec1,ep2` | Limits work to exact provider sequence ids from manifests. |
 | `--json` | `--json` | Emits JSON instead of the default human-readable table. |
 

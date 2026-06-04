@@ -19,6 +19,7 @@ MODALITY_ASSET_KEYS: dict[str, tuple[str, ...]] = {
         "narration_motion_narration_csv",
     ),
     "depth": ("ahat_depth", "take_point_cloud", "mps_slam_points", "semidense_observations"),
+    "pose": ("hand_data", "mps_slam_trajectories"),
 }
 
 
@@ -175,6 +176,8 @@ def normalize_modality(name: str) -> str:
         return "annotation"
     if lowered == "depth":
         return "depth"
+    if lowered == "pose":
+        return "pose"
     if lowered == "video":
         return "video"
     if lowered == "gaze":

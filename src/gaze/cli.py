@@ -40,7 +40,7 @@ DATASET_FILTER_HELP = """Dataset filters:
   --datasets limits work to dataset slugs such as aea, hot3d, nymeria,
     holoassist, egtea, or ego-exo4d. Omit it to include every cataloged dataset.
   --modalities limits assets by normalized modality: video, gaze, annotation,
-    depth, or other. Omit it to include all modalities.
+    depth, pose, or other. Omit it to include all modalities.
   --sequences limits assets to exact sequence ids from provider manifests.
   --json switches table output to JSON for scripts.
 """
@@ -361,7 +361,7 @@ def build_parser() -> argparse.ArgumentParser:
 def add_dataset_common(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument("--repo-root", metavar="PATH", default=".", help="Repository root containing DATASETS.md and download_links; default: current directory.")
     parser.add_argument("--datasets", metavar="SLUG[,SLUG...]", help="Comma-separated dataset slugs to include, for example aea,hot3d. Omit to include all datasets.")
-    parser.add_argument("--modalities", metavar="MOD[,MOD...]", help="Comma-separated modalities to include: video,gaze,annotation,depth,other. Omit to include all modalities.")
+    parser.add_argument("--modalities", metavar="MOD[,MOD...]", help="Comma-separated modalities to include: video,gaze,annotation,depth,pose,other. Omit to include all modalities.")
     parser.add_argument("--sequences", metavar="ID[,ID...]", help="Comma-separated provider sequence ids to include exactly. Omit to include all sequences.")
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of the default human-readable table.")
     return parser
