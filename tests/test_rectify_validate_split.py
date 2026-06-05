@@ -7,6 +7,7 @@ import unittest
 
 from gaze.config import default_config
 from gaze.rectify import rectify_dataset
+from gaze.manifest import inspect_raw_root, write_manifest
 from gaze.splits import SplitRequest, create_split
 from gaze.table import read_table, write_csv, write_table
 from gaze.validate import validate_canonical_root
@@ -95,6 +96,50 @@ class RectifyValidateSplitTests(unittest.TestCase):
             report = validate_canonical_root(canonical_root)
             self.assertFalse(report["ok"])
             self.assertIn("timeline sample count", json.dumps(report))
+
+    def test_manifest_driven_rectification_accepts_raw_column_variants(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            raw_root = tmp_path / "raw"
+            canonical_root = tmp_path / "canonical"
+            manifest_path = tmp_path / "raw_manifest.json"
+            root = raw_root / "toy" / "ep1"
+            root.mkdir(parents=True)
+            write_csv(
+                [
+                    {"timestamp_ms": 0, "x": 0.1, "y": 0.2},
+                    {"timestamp_ms": 100, "x": 0.2, "y": 0.3},
+                    {"timestamp_ms": 200, "x": 0.3, "y": 0.4},
+                ],
+                root / "gaze_points.csv",
+            )
+            write_csv(
+                [
+                    {"start_time": 0.0, "end_time": 0.1, "action": "a", "narration": "step a"},
+                    {"start_time": 0.1, "end_time": 0.2, "action": "b", "narration": "step b"},
+                ],
+                root / "action_annotations.csv",
+            )
+            write_csv(
+                [
+                    {"timestamp_ms": 0, "depth": 1.0},
+                    {"timestamp_ms": 200, "depth": 1.2},
+                ],
+                root / "depth_samples.csv",
+            )
+            manifest = inspect_raw_root(raw_root, repo_root=Path(__file__).resolve().parents[1], datasets={"toy"})
+            write_manifest(manifest, manifest_path)
+
+            rows = rectify_dataset(raw_root, canonical_root, default_config(), raw_manifest=manifest_path)
+            self.assertEqual(len(rows), 1)
+            episode_json = canonical_root / "episodes" / "toy" / "ep1" / "episode.json"
+            doc = json.loads(episode_json.read_text())
+            gaze_rows = read_table(episode_json.parent / doc["files"]["gaze"])
+            self.assertEqual(gaze_rows[0]["x_norm"], 0.1)
+            self.assertEqual(gaze_rows[-1]["y_norm"], 0.4)
+
+            report = validate_canonical_root(canonical_root)
+            self.assertTrue(report["ok"], json.dumps(report, indent=2))
 
 
 def make_raw_episode(raw_root: Path, dataset: str, episode_id: str) -> Path:

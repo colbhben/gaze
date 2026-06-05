@@ -10,6 +10,7 @@ from . import __version__
 from .config import load_config
 from .datasets import load_catalog
 from .download import estimate_downloads, fetch_assets, plan_downloads, verify_links, write_download_manifest
+from .manifest import copy_manifest, inspect_raw_root, wait_for_downloads_and_write_manifest, write_manifest
 from .rectify import rectify_dataset
 from .s3 import (
     create_s3_pull_manifest,
@@ -171,6 +172,39 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.add_argument("--progress", action="store_true", help="Print periodic download progress to stderr while fetching.")
     fetch.set_defaults(func=cmd_datasets_fetch)
 
+    inspect_manifest = add_dataset_common(
+        datasets_sub.add_parser(
+            "inspect-manifest",
+            help="Inspect downloaded raw datasets and write a raw-format manifest.",
+            description="Traverse a raw dataset root, infer observed file structures and data formats, and write a JSON manifest that also records the canonical rectified layout.",
+            epilog=DATASET_FILTER_HELP
+            + "\nExample:\n  gaze datasets inspect-manifest --raw-root .gaze-cache/raw --manifest-out .gaze-cache/raw_manifest.json",
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        )
+    )
+    inspect_manifest.add_argument("--raw-root", metavar="PATH", required=True, help="Raw dataset root to inspect. Required.")
+    inspect_manifest.add_argument("--manifest-out", metavar="PATH", required=True, help="JSON manifest to write. Required.")
+    inspect_manifest.add_argument("--copy-out", metavar="PATH", help="Optional second local path to copy the manifest to after writing.")
+    inspect_manifest.set_defaults(func=cmd_datasets_inspect_manifest)
+
+    watch_manifest = add_dataset_common(
+        datasets_sub.add_parser(
+            "watch-manifest",
+            help="Wait for downloads to finish, then write the raw-format manifest.",
+            description="Poll the raw root until every catalog-selected asset is present and stable, traverse the raw datasets once, and write the inferred raw/canonical manifest.",
+            epilog=DATASET_FILTER_HELP
+            + "\nExample:\n  gaze datasets watch-manifest --raw-root .gaze-cache/raw --manifest-out .gaze-cache/raw_manifest.json --poll-seconds 60",
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        )
+    )
+    watch_manifest.add_argument("--raw-root", metavar="PATH", required=True, help="Raw dataset root to watch. Required.")
+    watch_manifest.add_argument("--manifest-out", metavar="PATH", required=True, help="JSON manifest to write once downloads are complete. Required.")
+    watch_manifest.add_argument("--copy-out", metavar="PATH", help="Optional second local path to copy the completed manifest to after writing.")
+    watch_manifest.add_argument("--poll-seconds", metavar="SECONDS", type=float, default=60.0, help="Seconds between completion checks; default: 60.")
+    watch_manifest.add_argument("--stable-checks", metavar="N", type=int, default=2, help="Consecutive complete checks required before inspection; default: 2.")
+    watch_manifest.add_argument("--timeout-seconds", metavar="SECONDS", type=float, help="Optional maximum watch time before failing.")
+    watch_manifest.set_defaults(func=cmd_datasets_watch_manifest)
+
     rectify = sub.add_parser(
         "rectify",
         help="Rectify raw fixture/dataset roots into canonical episodes.",
@@ -184,6 +218,7 @@ def build_parser() -> argparse.ArgumentParser:
     rectify.add_argument("--dataset", metavar="SLUG", help="Only rectify one dataset slug under the raw root, for example toy or aea. Omit for all datasets.")
     rectify.add_argument("--episodes", metavar="ID[,ID...]", help="Comma-separated episode ids to rectify within the selected dataset(s), for example ep1,ep2.")
     rectify.add_argument("--config", metavar="PATH", help="Path to a rectification JSON config. Omit to use built-in defaults.")
+    rectify.add_argument("--raw-manifest", metavar="PATH", help="Raw-format manifest from datasets inspect-manifest/watch-manifest. Enables rectification from observed dataset structure when episode.json files are absent.")
     rectify.add_argument("--set", metavar="KEY=VALUE", action="append", default=[], dest="overrides", help="Override one config value. Repeat for multiple overrides, for example --set target_hz=5 --set video.resize_mode=pad.")
     rectify.set_defaults(func=cmd_rectify)
 
@@ -432,6 +467,49 @@ def cmd_datasets_fetch(args: argparse.Namespace) -> int:
     return 0 if all("error" not in row for row in rows) else 1
 
 
+def cmd_datasets_inspect_manifest(args: argparse.Namespace) -> int:
+    manifest = inspect_raw_root(
+        args.raw_root,
+        repo_root=args.repo_root,
+        datasets=parse_set(args.datasets),
+        modalities=parse_set(args.modalities),
+        sequences=parse_set(args.sequences),
+    )
+    written = write_manifest(manifest, args.manifest_out)
+    if args.copy_out:
+        copy_manifest(written, args.copy_out)
+    print(json.dumps({"manifest": args.manifest_out, "copy": args.copy_out, "datasets": sorted(manifest["datasets"])}, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_datasets_watch_manifest(args: argparse.Namespace) -> int:
+    manifest = wait_for_downloads_and_write_manifest(
+        args.raw_root,
+        args.manifest_out,
+        copy_out=args.copy_out,
+        repo_root=args.repo_root,
+        datasets=parse_set(args.datasets),
+        modalities=parse_set(args.modalities),
+        sequences=parse_set(args.sequences),
+        poll_seconds=args.poll_seconds,
+        stable_checks=args.stable_checks,
+        timeout_seconds=args.timeout_seconds,
+    )
+    print(
+        json.dumps(
+            {
+                "manifest": args.manifest_out,
+                "copy": args.copy_out,
+                "datasets": sorted(manifest["datasets"]),
+                "watcher": manifest.get("watcher", {}),
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def cmd_rectify(args: argparse.Namespace) -> int:
     cfg = load_config(args.config, args.overrides)
     rows = rectify_dataset(
@@ -440,6 +518,7 @@ def cmd_rectify(args: argparse.Namespace) -> int:
         config=cfg,
         dataset=args.dataset,
         episodes=parse_set(args.episodes),
+        raw_manifest=args.raw_manifest,
     )
     emit(rows, as_json=True)
     return 0

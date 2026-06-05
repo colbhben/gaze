@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import RectifyConfig
-from .rectify import RawEpisode, make_timeline, rectify_annotations, rectify_depth, rectify_gaze
+from .rectify import RawEpisode, make_timeline, read_raw_records, rectify_annotations, rectify_depth, rectify_gaze
 from .table import read_table
 
 
@@ -162,7 +162,7 @@ def check_gaze(doc: dict[str, Any], episode_root: Path, raw: RawEpisode, cfg: Re
         result.errors.append("raw gaze exists but canonical gaze is missing")
         return result
     timeline = make_timeline(float(doc["duration_s"]), cfg.target_hz)
-    expected = rectify_gaze(read_table(raw_path), timeline)
+    expected = rectify_gaze(read_raw_records(raw_path), timeline)
     actual = read_table(canonical_path)
     compare_rows("gaze", expected, actual, cfg.validation.numeric_tolerance, result)
     for row in actual:
@@ -186,7 +186,7 @@ def check_annotations(doc: dict[str, Any], episode_root: Path, raw: RawEpisode, 
         result.ok = False
         result.errors.append("raw annotations exist but canonical annotations are missing")
         return result
-    expected, expected_intervals = rectify_annotations(read_table(raw_path), make_timeline(float(doc["duration_s"]), cfg.target_hz))
+    expected, expected_intervals = rectify_annotations(read_raw_records(raw_path), make_timeline(float(doc["duration_s"]), cfg.target_hz))
     actual = read_table(canonical_path)
     compare_rows("annotations", expected, actual, 0.0, result, exact_columns={"label", "text"})
     interval_path = table_path(episode_root, doc, "annotation_intervals")
@@ -210,7 +210,7 @@ def check_depth(doc: dict[str, Any], episode_root: Path, raw: RawEpisode, cfg: R
         result.ok = False
         result.errors.append("raw depth exists but canonical depth is missing")
         return result
-    expected = rectify_depth(read_table(raw_path), make_timeline(float(doc["duration_s"]), cfg.target_hz))
+    expected = rectify_depth(read_raw_records(raw_path), make_timeline(float(doc["duration_s"]), cfg.target_hz))
     actual = read_table(canonical_path)
     compare_rows("depth", expected, actual, cfg.validation.numeric_tolerance, result)
     for row in actual:

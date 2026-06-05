@@ -15,6 +15,7 @@ to be resumable and checksum-verified when provider manifests include hashes.
 . .venv/bin/activate
 gaze doctor
 gaze datasets plan --modalities video,gaze,annotation
+gaze datasets watch-manifest --raw-root /path/to/raw --manifest-out /path/to/raw_manifest.json
 gaze rectify --raw-root /path/to/raw --canonical-root /path/to/canonical
 gaze validate alignment --canonical-root /path/to/canonical
 gaze split create --canonical-root /path/to/canonical --name default
@@ -51,6 +52,8 @@ Command reference:
 | `gaze datasets plan` | Estimates selected dataset assets before downloading. |
 | `gaze datasets verify-links` | Checks documentation and sampled manifest URLs. |
 | `gaze datasets fetch` | Downloads selected raw assets to a local raw root. |
+| `gaze datasets inspect-manifest` | Traverses downloaded raw datasets and writes an inferred raw/canonical format manifest. |
+| `gaze datasets watch-manifest` | Waits for selected downloads to finish, then writes the inferred raw/canonical format manifest. |
 | `gaze rectify` | Converts raw episodes into the canonical layout. |
 | `gaze validate alignment` | Validates canonical outputs and optional raw-source alignment. |
 | `gaze split create` | Creates deterministic train/holdout manifests. |
@@ -85,6 +88,34 @@ Dataset download options:
 | `--sample-per-dataset` | `--sample-per-dataset 10` | Number of manifest links to sample per selected dataset for `verify-links`. |
 | `--timeout` | `--timeout 30` | HTTP timeout in seconds for `verify-links`. |
 
+Raw manifest and watcher options:
+
+| Option | How to invoke | Meaning |
+| --- | --- | --- |
+| `--raw-root` | `--raw-root ./raw` | Raw dataset root to inspect or watch. |
+| `--manifest-out` | `--manifest-out .gaze-cache/raw_manifest.json` | JSON manifest that records observed raw structure, data formats, inferred FPS/timestamps, gaze/annotation encodings, and the canonical output layout. |
+| `--copy-out` | `--copy-out /Users/you/gaze/.gaze-cache/raw_manifest.json` | Optional second local filesystem path to copy the manifest to after writing. |
+| `--poll-seconds` | `--poll-seconds 60` | Seconds between watch completion checks. |
+| `--stable-checks` | `--stable-checks 2` | Number of consecutive complete checks before the watcher traverses the tree. |
+| `--timeout-seconds` | `--timeout-seconds 86400` | Optional maximum watch duration before failing. |
+
+The `sumedhso-L40S` helper wraps the watcher with machine-local defaults:
+
+```sh
+DATASETS=aea,hot3d MODALITIES=video,gaze,annotation \
+  bash scripts/watch_sumedhso_l40s.sh
+```
+
+By default it watches `.gaze-cache/raw`, writes
+`.gaze-cache/sumedhso-L40S/raw_dataset_manifest.json`, and copies that JSON to
+`.gaze-cache/raw_dataset_manifest.json` on the machine running the helper. Set
+`LOCAL_MANIFEST_COPY` to another path, or to an `scp` destination such as
+`user@local-host:/Users/you/gaze/.gaze-cache/raw_dataset_manifest.json`, when
+the watcher runs on `sumedhso-L40S` and the manifest should also land on a
+separate local machine. Override `RAW_ROOT`, `MANIFEST_OUT`, `POLL_SECONDS`,
+`STABLE_CHECKS`, `DATASETS`, `MODALITIES`, or `SEQUENCES` in the environment as
+needed.
+
 Rectification and validation options:
 
 | Option | How to invoke | Meaning |
@@ -94,6 +125,7 @@ Rectification and validation options:
 | `--dataset` | `--dataset aea` | Rectifies only one dataset slug under the raw root. |
 | `--episodes` | `--episodes ep1,ep2` | Rectifies only the listed episode ids. |
 | `--config` | `--config configs/rectify.local.json` | Loads a JSON rectification config instead of the built-in defaults. |
+| `--raw-manifest` | `--raw-manifest .gaze-cache/raw_manifest.json` | Uses the watcher/inspector manifest to discover raw dataset episodes when provider folders do not contain `episode.json` fixture descriptors. |
 | `--set` | `--set target_hz=5 --set video.width=392` | Overrides one config value. Repeat the flag for multiple overrides. Dotted keys address nested config groups. |
 
 Common `--set` keys include `profile_name`, `target_hz`, `video.fps`,
