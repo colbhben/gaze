@@ -45,6 +45,14 @@ DATASET_FORMAT_HINTS: dict[str, dict[str, Any]] = {
         "gaze": {"typical_fps": "provider metadata or inferred from timestamps", "encoding": "head/eye related streams when exported from provider files"},
         "annotations": {"format": "narration CSV files including atomic action, motion narration, and activity summarization"},
     },
+    "adt": {
+        "provider": "Aria Digital Twin",
+        "expected_raw": "Project Aria RGB/VRS recordings with MPS eye-gaze and SLAM files plus scene ground truth, segmentation, depth, and synthetic assets.",
+        "video": {"typical_fps": "provider metadata or VRS stream metadata", "encoding": "Preview RGB MP4 and main VRS recordings"},
+        "gaze": {"typical_fps": "inferred from MPS eye-gaze CSV timestamps", "encoding": "MPS eye-gaze CSV"},
+        "annotations": {"format": "main ground-truth zip contents from provider manifest"},
+        "depth": {"format": "provider depth zip contents"},
+    },
     "holoassist": {
         "provider": "HoloAssist",
         "expected_raw": "HoloLens video, eye-gaze, depth, and JSON annotations.",

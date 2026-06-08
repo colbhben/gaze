@@ -16,6 +16,9 @@ env/
 build/
 dist/
 
+# Temp scripts
+scripts/
+
 # Local dataset/download roots
 datasets/
 data/

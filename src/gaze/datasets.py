@@ -9,16 +9,17 @@ from typing import Any
 
 MODALITY_ASSET_KEYS: dict[str, tuple[str, ...]] = {
     "video": ("video_main_rgb", "main_vrs", "takes", "video"),
-    "gaze": ("mps_eye_gaze", "take_eye_gaze", "eyes", "gaze"),
+    "gaze": ("mps_eye_gaze", "take_eye_gaze", "eyes", "gaze", "recording_head", "recording_observer"),
     "annotation": (
         "annotations",
         "annotation",
         "ground_truth",
+        "main_groundtruth",
         "narration_atomic_action_csv",
         "narration_activity_summarization_csv",
         "narration_motion_narration_csv",
     ),
-    "depth": ("ahat_depth", "take_point_cloud", "mps_slam_points", "semidense_observations"),
+    "depth": ("ahat_depth", "take_point_cloud", "mps_slam_points", "semidense_observations", "depth"),
     "pose": ("hand_data", "mps_slam_trajectories"),
 }
 
@@ -30,6 +31,10 @@ DATASET_ALIASES = {
     "hot3d": "hot3d",
     "hot3daria": "hot3d",
     "nymeria": "nymeria",
+    "adt": "adt",
+    "ariadigitaltwin": "adt",
+    "aria_digital_twin": "adt",
+    "aria digital twin": "adt",
     "holoassist": "holoassist",
     "egtea": "egtea",
     "egtea gaze+": "egtea",

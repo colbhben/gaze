@@ -167,6 +167,7 @@ S3 workflow options:
 | `--include-unknown-size` | `--include-unknown-size` | Allows assets without known byte sizes into a download batch. |
 | `--keep-cache` | `--keep-cache` | Retains local cache files after successful upload or processing. |
 | `--dataset-workers` | `--dataset-workers aea=48,hot3d=36` | Overrides ranged-download worker counts for specific datasets. |
+| `--asset-workers` | `--asset-workers 4` | Runs multiple download/upload asset pipelines concurrently. |
 | `--stream-uploads` | `--stream-uploads` | Lets `aws s3 cp` stream upload progress directly to the terminal. |
 | `--partitions` | `--partitions toy:ep1,toy:ep2` | Required for `s3 process-serial`; each entry is `dataset:partition_id`. |
 | `--local-cache-root` | `--local-cache-root .gaze-cache` | Overrides the local cache root from the S3 config for `process-serial`. |
@@ -278,6 +279,29 @@ gaze s3 backup-raw \
 Use `--dry-run` first to inspect the planned local downloads and AWS uploads without
 downloading or uploading. Use `--max-download-bytes`, `--reserve-bytes`, and
 `--storage-fraction` to tune the local fitting logic.
+Use `--asset-workers` to download/upload multiple assets concurrently; this is
+separate from `--workers`, which controls ranged download workers within one
+large asset.
+
+For the current target raw set, use the dedicated entry point. It downloads
+AEA, Hot3D, Aria Digital Twin, and Nymeria `recording_head`/`recording_observer`
+assets to `~/gaze-target-download-work/raw` by default and backs them up under
+the same `unprocessed/{dataset}/{partition}/{asset_key}/{filename}` S3 layout:
+
+```sh
+scripts/download_target_datasets.sh
+```
+
+Equivalent CLI form:
+
+```sh
+gaze s3 backup-target-raw \
+  --raw-root ~/gaze-target-download-work/raw \
+  --asset-workers 4 \
+  --workers 8 \
+  --progress \
+  --stream-uploads
+```
 
 ### B. Serial Process And Processed Backup
 

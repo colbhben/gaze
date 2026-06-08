@@ -39,7 +39,7 @@ Subcommand help:
 
 DATASET_FILTER_HELP = """Dataset filters:
   --datasets limits work to dataset slugs such as aea, hot3d, nymeria,
-    holoassist, egtea, or ego-exo4d. Omit it to include every cataloged dataset.
+    adt, holoassist, egtea, or ego-exo4d. Omit it to include every cataloged dataset.
   --modalities limits assets by normalized modality: video, gaze, annotation,
     depth, pose, or other. Omit it to include all modalities.
   --sequences limits assets to exact sequence ids from provider manifests.
@@ -61,6 +61,10 @@ S3_CONFIG_HELP = """S3 config:
   local cache budget, profile name, and optional AWS profile/region settings.
   Copy configs/s3.example.json to configs/s3.json before customizing it.
 """
+
+TARGET_RAW_ROOT = Path.home() / "gaze-target-download-work" / "raw"
+TARGET_DATASET_SLUGS = {"aea", "hot3d", "adt"}
+TARGET_NYMERIA_ASSET_KEYS = {"recording_head", "recording_observer"}
 
 
 class GazeArgumentParser(argparse.ArgumentParser):
@@ -168,6 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.add_argument("--dry-run", action="store_true", help="Plan matching downloads and output the report without writing files.")
     fetch.add_argument("--manifest-out", metavar="PATH", help="Write the selected asset manifest to this JSON file before fetching.")
     fetch.add_argument("--workers", metavar="N", type=int, default=1, help="Per-asset ranged-download worker count when the source supports byte ranges; default: 1.")
+    fetch.add_argument("--asset-workers", metavar="N", type=int, default=1, help="Number of assets to download concurrently; default: 1.")
     fetch.add_argument("--download-timeout", metavar="SECONDS", type=float, default=120.0, help="HTTP timeout in seconds for each download request; default: 120.0.")
     fetch.add_argument("--progress", action="store_true", help="Print periodic download progress to stderr while fetching.")
     fetch.set_defaults(func=cmd_datasets_fetch)
@@ -338,12 +343,46 @@ def build_parser() -> argparse.ArgumentParser:
     backup_raw.add_argument("--include-unknown-size", action="store_true", help="Allow assets without known byte sizes into the local batch; otherwise they are skipped for disk safety.")
     backup_raw.add_argument("--keep-cache", action="store_true", help="Keep local downloaded files after successful upload instead of deleting them.")
     backup_raw.add_argument("--workers", metavar="N", type=int, default=1, help="Default per-asset ranged-download worker count; default: 1.")
+    backup_raw.add_argument("--asset-workers", metavar="N", type=int, default=1, help="Number of assets to download/upload concurrently; default: 1.")
     backup_raw.add_argument("--dataset-workers", metavar="SLUG=N[,SLUG=N...]", help="Per-dataset worker overrides, for example aea=48,hot3d=36.")
+    backup_raw.add_argument("--skip-existing-s3", action="store_true", help="Skip assets already present at the configured S3 unprocessed URI with the expected size.")
     backup_raw.add_argument("--download-timeout", metavar="SECONDS", type=float, default=120.0, help="HTTP timeout in seconds for each download request; default: 120.0.")
     backup_raw.add_argument("--progress", action="store_true", help="Print periodic download progress to stderr while fetching raw assets.")
     backup_raw.add_argument("--stream-uploads", action="store_true", help="Let aws s3 cp stream upload progress directly to the terminal.")
     backup_raw.add_argument("--dry-run", action="store_true", help="Show the planned download/upload report without downloading, uploading, or deleting files.")
     backup_raw.set_defaults(func=cmd_s3_backup_raw)
+
+    backup_target_raw = s3_sub.add_parser(
+        "backup-target-raw",
+        help="Download the target raw dataset set locally and back it up to S3.",
+        description=(
+            "Download AEA, Hot3D, Aria Digital Twin, and Nymeria recording_head/recording_observer "
+            "assets into ~/gaze-target-download-work/raw by default, then upload them to the configured "
+            "unprocessed S3 layout. Local files are kept by default."
+        ),
+        epilog=S3_CONFIG_HELP
+        + "\nExample:\n  gaze s3 backup-target-raw --asset-workers 4 --workers 8 --progress --stream-uploads",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    add_s3_config_arg(backup_target_raw)
+    backup_target_raw.add_argument("--repo-root", metavar="PATH", default=".", help="Repository root containing DATASETS.md and download_links; default: current directory.")
+    backup_target_raw.add_argument("--raw-root", metavar="PATH", default=str(TARGET_RAW_ROOT), help=f"Local raw root; default: {TARGET_RAW_ROOT}.")
+    backup_target_raw.add_argument("--manifest-name", metavar="NAME", default="target-datasets", help="Name for the uploaded download manifest; default: target-datasets.")
+    backup_target_raw.add_argument("--max-download-bytes", metavar="BYTES", type=int, help="Optional maximum bytes to download in one local batch.")
+    backup_target_raw.add_argument("--reserve-bytes", metavar="BYTES", type=int, help="Minimum local free-space reserve to leave unused after choosing a batch.")
+    backup_target_raw.add_argument("--storage-fraction", metavar="FLOAT", type=float, help="Maximum fraction of currently free local space to use for one batch.")
+    backup_target_raw.add_argument("--include-unknown-size", action="store_true", help="Allow assets without known byte sizes into the local batch; otherwise they are skipped for disk safety.")
+    backup_target_raw.add_argument("--clean-cache", action="store_true", help="Delete local files after successful upload. By default this command keeps ~/gaze-target-download-work/raw.")
+    backup_target_raw.add_argument("--workers", metavar="N", type=int, default=1, help="Default per-asset ranged-download worker count; default: 1.")
+    backup_target_raw.add_argument("--asset-workers", metavar="N", type=int, default=1, help="Number of assets to download/upload concurrently; default: 1.")
+    backup_target_raw.add_argument("--dataset-workers", metavar="SLUG=N[,SLUG=N...]", help="Per-dataset worker overrides, for example aea=48,hot3d=36,adt=24.")
+    backup_target_raw.add_argument("--skip-datasets", metavar="SLUG[,SLUG...]", help="Omit target datasets already known to be complete, for example aea.")
+    backup_target_raw.add_argument("--no-skip-existing-s3", action="store_true", help="Do not preflight S3 to skip assets already present in the unprocessed layout.")
+    backup_target_raw.add_argument("--download-timeout", metavar="SECONDS", type=float, default=120.0, help="HTTP timeout in seconds for each download request; default: 120.0.")
+    backup_target_raw.add_argument("--progress", action="store_true", help="Print periodic download progress to stderr while fetching raw assets.")
+    backup_target_raw.add_argument("--stream-uploads", action="store_true", help="Let aws s3 cp stream upload progress directly to the terminal.")
+    backup_target_raw.add_argument("--dry-run", action="store_true", help="Show the planned target download/upload report without downloading, uploading, or deleting files.")
+    backup_target_raw.set_defaults(func=cmd_s3_backup_target_raw)
 
     process_serial = s3_sub.add_parser(
         "process-serial",
@@ -460,6 +499,7 @@ def cmd_datasets_fetch(args: argparse.Namespace) -> int:
         args.raw_root,
         dry_run=args.dry_run,
         workers=args.workers,
+        asset_workers=args.asset_workers,
         timeout_s=args.download_timeout,
         progress_callback=make_progress_printer() if args.progress else None,
     )
@@ -597,11 +637,58 @@ def cmd_s3_backup_raw(args: argparse.Namespace) -> int:
         include_unknown_size=args.include_unknown_size,
         clean_after_upload=not args.keep_cache,
         workers=args.workers,
+        asset_workers=args.asset_workers,
         dataset_workers=parse_dataset_workers(args.dataset_workers),
         download_timeout_s=args.download_timeout,
         progress_callback=make_progress_printer() if args.progress else None,
         stream_uploads=args.stream_uploads,
+        skip_existing_s3=args.skip_existing_s3,
     )
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0 if all("error" not in operation.get("fetch", {}) for operation in report["operations"]) else 1
+
+
+def cmd_s3_backup_target_raw(args: argparse.Namespace) -> int:
+    cfg = load_s3_config(args.s3_config)
+    catalog = load_catalog(args.repo_root)
+    skipped_datasets = parse_set(args.skip_datasets) or set()
+    target_assets = [
+        asset
+        for asset in catalog.manifest_assets()
+        if asset.dataset not in skipped_datasets
+        and (
+            asset.dataset in TARGET_DATASET_SLUGS
+            or (asset.dataset == "nymeria" and asset.asset_key in TARGET_NYMERIA_ASSET_KEYS)
+        )
+    ]
+    report = serial_download_backup(
+        args.repo_root,
+        cfg,
+        args.raw_root,
+        dry_run=args.dry_run,
+        manifest_name=args.manifest_name,
+        max_download_bytes=args.max_download_bytes,
+        reserve_bytes=args.reserve_bytes,
+        storage_fraction=args.storage_fraction,
+        include_unknown_size=args.include_unknown_size,
+        clean_after_upload=args.clean_cache,
+        workers=args.workers,
+        asset_workers=args.asset_workers,
+        dataset_workers=parse_dataset_workers(args.dataset_workers),
+        download_timeout_s=args.download_timeout,
+        progress_callback=make_progress_printer() if args.progress else None,
+        stream_uploads=args.stream_uploads,
+        assets_override=target_assets,
+        skip_existing_s3=not args.no_skip_existing_s3,
+        interleave_datasets=True,
+    )
+    report["target_selection"] = {
+        "full_datasets": sorted(TARGET_DATASET_SLUGS),
+        "nymeria_asset_keys": sorted(TARGET_NYMERIA_ASSET_KEYS),
+        "skipped_datasets": sorted(skipped_datasets),
+        "raw_root": str(args.raw_root),
+        "local_cache_cleaned": bool(args.clean_cache),
+    }
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0 if all("error" not in operation.get("fetch", {}) for operation in report["operations"]) else 1
 

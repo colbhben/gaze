@@ -18,6 +18,7 @@ class CatalogTests(unittest.TestCase):
         self.assertIn("aea", docs)
         self.assertIn("hot3d", docs)
         self.assertIn("nymeria", docs)
+        self.assertIn("adt", docs)
         self.assertTrue(docs["aea"].manifest_paths)
 
         catalog = load_catalog(REPO_ROOT)
@@ -26,6 +27,13 @@ class CatalogTests(unittest.TestCase):
         self.assertTrue(any(asset.modality == "gaze" for asset in assets))
         self.assertTrue(any(asset.modality == "annotation" for asset in assets))
         self.assertTrue(any(asset.modality == "pose" for asset in assets))
+
+        adt_assets = catalog.manifest_assets("adt")
+        self.assertTrue(any(asset.modality == "gaze" for asset in adt_assets))
+        self.assertTrue(any(asset.asset_key == "main_groundtruth" for asset in adt_assets))
+
+        nymeria_gaze = filter_assets(catalog.manifest_assets("nymeria"), modalities={"gaze"})
+        self.assertEqual({asset.asset_key for asset in nymeria_gaze}, {"recording_head", "recording_observer"})
 
     def test_download_plan_filters_and_estimates(self) -> None:
         catalog = load_catalog(REPO_ROOT)
@@ -52,6 +60,9 @@ class CatalogTests(unittest.TestCase):
 
             threaded = fetch_assets(assets, Path(tmp) / "raw", dry_run=True, workers=8)
             self.assertEqual(threaded[0]["workers"], 8)
+
+            parallel = fetch_assets(assets, Path(tmp) / "raw", dry_run=True, asset_workers=4)
+            self.assertEqual(parallel[0]["asset_workers"], 4)
 
     def test_pose_modality_selects_pose_assets(self) -> None:
         catalog = load_catalog(REPO_ROOT)

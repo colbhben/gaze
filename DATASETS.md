@@ -41,6 +41,11 @@ download_links/Hot3DAria_download_urls.json
 https://github.com/facebookresearch/nymeria_dataset
 download_links/Nymeria_download_urls.json
 
+# Aria Digital Twin
+## Instructions
+https://www.projectaria.com/datasets/adt/
+download_links/ADT_download_urls.json
+
 # AEA
 ## Instructions
 https://facebookresearch.github.io/projectaria_tools/docs/open_datasets/aria_everyday_activities_dataset/aea_download_dataset

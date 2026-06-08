@@ -96,12 +96,14 @@ def fetch_assets(
     raw_root: str | Path,
     dry_run: bool = False,
     workers: int = 1,
+    asset_workers: int = 1,
     timeout_s: float = 120.0,
     progress_callback: ProgressCallback | None = None,
 ) -> list[dict]:
     root = Path(raw_root)
-    results = []
-    for asset in assets:
+    asset_workers = max(1, asset_workers)
+
+    def fetch_one(asset: Asset) -> dict:
         target = target_path_for_asset(root, asset)
         worker_count = max(1, workers)
         item = {
@@ -111,25 +113,23 @@ def fetch_assets(
             "target": str(target),
             "dry_run": dry_run,
             "workers": worker_count,
+            "asset_workers": asset_workers,
             "downloaded": False,
             "verified": False,
             "directory": asset.extra.get("download_kind") == "egoexo_manifest",
         }
         if dry_run:
-            results.append(item)
-            continue
+            return item
         if asset.extra.get("download_kind") == "egoexo_manifest":
             try:
                 item.update(download_egoexo_manifest_asset(asset, target, timeout_s=timeout_s, progress_callback=progress_callback))
                 item["verified"] = True
             except Exception as exc:
                 item["error"] = str(exc)
-            results.append(item)
-            continue
+            return item
         if not asset.url:
             item["error"] = "asset has no URL; use the dataset provider instructions"
-            results.append(item)
-            continue
+            return item
         target.parent.mkdir(parents=True, exist_ok=True)
         try:
             download_result = download_file(
@@ -157,8 +157,17 @@ def fetch_assets(
                 item["verified"] = True
         except Exception as exc:
             item["error"] = str(exc)
-        results.append(item)
-    return results
+        return item
+
+    if asset_workers == 1 or len(assets) <= 1:
+        return [fetch_one(asset) for asset in assets]
+
+    results: list[dict | None] = [None] * len(assets)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(asset_workers, len(assets))) as executor:
+        future_to_index = {executor.submit(fetch_one, asset): index for index, asset in enumerate(assets)}
+        for future in concurrent.futures.as_completed(future_to_index):
+            results[future_to_index[future]] = future.result()
+    return [item for item in results if item is not None]
 
 
 def target_path_for_asset(root: Path, asset: Asset) -> Path:
