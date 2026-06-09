@@ -254,6 +254,21 @@ def modality_for_asset_key(key: str) -> str:
     return "other"
 
 
+def plan_downloads(
+    catalog: DatasetCatalog,
+    datasets: set[str] | None = None,
+    modalities: set[str] | None = None,
+    sequences: set[str] | None = None,
+) -> list[Asset]:
+    return filter_assets(catalog.manifest_assets(), datasets=datasets, modalities=modalities, sequences=sequences)
+
+
+def target_path_for_asset(root: Path, asset: Asset) -> Path:
+    if asset.extra.get("download_kind") == "egoexo_manifest":
+        return root / asset.dataset / asset.sequence_id / asset.asset_key
+    return root / asset.dataset / asset.sequence_id / asset.filename
+
+
 def filter_assets(
     assets: list[Asset],
     datasets: set[str] | None = None,

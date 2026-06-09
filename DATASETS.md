@@ -64,3 +64,9 @@ https://www.dropbox.com/s/2aryvztw044w9ih/gaze_data.zip
 
 ## Annotations
 https://www.dropbox.com/s/ksro6eqa6v59859/action_annotation.zip
+
+# EgoMe
+
+# EgoExoLearn
+
+# HD-EPIC

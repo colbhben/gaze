@@ -12,8 +12,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from .datasets import DatasetCatalog, load_catalog
-from .download import plan_downloads, target_path_for_asset
+from .datasets import DatasetCatalog, load_catalog, plan_downloads, target_path_for_asset
 
 
 VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".vrs"}

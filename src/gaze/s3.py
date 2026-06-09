@@ -1,29 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
-import bz2
-import concurrent.futures
-import gzip
+from dataclasses import dataclass
 import json
-import lzma
 from pathlib import Path
-import posixpath
 import shutil
 import subprocess
-import tarfile
-import tempfile
 from typing import Any, Callable
-import zipfile
 
 from .config import RectifyConfig, load_config
-from .datasets import load_catalog
-from .download import fetch_assets, plan_downloads, write_download_manifest
 from .rectify import rectify_dataset
-from .table import read_table, write_table
+from .table import write_table
 
 
 Runner = Callable[[list[str]], subprocess.CompletedProcess]
-ProgressCallback = Callable[[dict[str, Any]], None]
 
 
 @dataclass
@@ -34,11 +23,8 @@ class S3Config:
     mount_root: str = "/nfs"
     unprocessed_prefix: str = "unprocessed"
     processed_prefix: str = "processed"
-    manifests_prefix: str = "manifests"
     splits_prefix: str = "splits"
     local_cache_root: str = ".gaze-cache"
-    local_storage_reserve_bytes: int = 10_000_000_000
-    local_storage_max_fraction: float = 0.9
     profile_name: str = "default-10hz"
     aws_profile: str | None = None
     aws_region: str | None = None
@@ -56,9 +42,6 @@ class S3Config:
 
     def processed_manifest_uri(self, profile: str | None = None) -> str:
         return join_s3_uri(self.processed_uri(profile), "manifest.jsonl")
-
-    def download_manifest_uri(self, name: str) -> str:
-        return join_s3_uri(self.base_uri(), self.manifests_prefix, "downloads", f"{name}.json")
 
     def split_uri(self, name: str) -> str:
         return join_s3_uri(self.base_uri(), self.splits_prefix, f"{name}.s3.json")
@@ -167,247 +150,10 @@ def upload_dir(cfg: S3Config, source: str | Path, target_uri: str, dry_run: bool
     return run_or_report(aws_sync_args(cfg, source, target_uri), dry_run=dry_run, runner=runner)
 
 
-def s3_uri_for_asset(cfg: S3Config, asset: Any) -> str:
-    if asset.extra.get("download_kind") == "egoexo_manifest":
-        return cfg.unprocessed_uri(asset.dataset, asset.sequence_id, asset.asset_key)
-    return join_s3_uri(cfg.unprocessed_uri(asset.dataset, asset.sequence_id, asset.asset_key), asset.filename)
-
-
-def list_existing_s3_objects(cfg: S3Config, datasets: set[str], runner: Runner | None = None) -> dict[str, int]:
-    return list_s3_objects(cfg, [cfg.unprocessed_uri(dataset) + "/" for dataset in sorted(datasets)], runner=runner)
-
-
-def list_s3_objects(cfg: S3Config, prefixes: list[str], runner: Runner | None = None) -> dict[str, int]:
-    objects: dict[str, int] = {}
-    command_runner = runner
-    if command_runner is None:
-        command_runner = lambda command: subprocess.run(command, check=True, text=True, capture_output=True)
-    for prefix in prefixes:
-        completed = command_runner(aws_base_args(cfg) + ["ls", prefix, "--recursive"])
-        for line in completed.stdout.splitlines():
-            parts = line.split(maxsplit=3)
-            if len(parts) != 4:
-                continue
-            try:
-                size = int(parts[2])
-            except ValueError:
-                continue
-            objects[parts[3]] = size
-    return objects
-
-
-def asset_exists_in_s3(cfg: S3Config, asset: Any, existing_objects: dict[str, int]) -> bool:
-    uri = s3_uri_for_asset(cfg, asset)
-    _, key = split_s3_uri(uri)
-    size = existing_objects.get(key)
-    if size is None:
-        return False
-    return asset.size_bytes is None or size == asset.size_bytes
-
-
 def access_dir(cfg: S3Config, source: str | Path, target: str | Path, dry_run: bool = False, runner: Runner | None = None) -> dict[str, Any]:
     if cfg.access_mode == "file_mount":
         return sync_file_mount(cfg, source, target, dry_run=dry_run)
     return run_or_report(aws_sync_args(cfg, source, target), dry_run=dry_run, runner=runner)
-
-
-def expand_archives_on_s3(
-    cfg: S3Config,
-    cache_root: str | Path | None = None,
-    datasets: set[str] | None = None,
-    dry_run: bool = False,
-    runner: Runner | None = None,
-    max_archives: int | None = None,
-) -> dict[str, Any]:
-    prefixes = [cfg.unprocessed_uri(dataset) + "/" for dataset in sorted(datasets)] if datasets else [cfg.unprocessed_uri() + "/"]
-    existing_objects = list_s3_objects(cfg, prefixes, runner=runner)
-    archives = [key for key in sorted(existing_objects) if is_archive_key(key)]
-    if max_archives is not None:
-        archives = archives[:max_archives]
-    cache = Path(cache_root or Path(cfg.local_cache_root) / "archive-expansion")
-    ensure_not_nfs_path(cfg, cache)
-    operations = [
-        expand_s3_archive(cfg, archive_key, existing_objects, cache, dry_run=dry_run, runner=runner)
-        for archive_key in archives
-    ]
-    return {
-        "layout_version": 1,
-        "unprocessed_prefix": cfg.unprocessed_uri(),
-        "datasets": sorted(datasets) if datasets else None,
-        "archives_considered": len(archives),
-        "expanded_archives": sum(1 for operation in operations if operation["uploaded_files"] or operation["skipped_existing_files"]),
-        "uploaded_files": sum(operation["uploaded_files"] for operation in operations),
-        "skipped_existing_files": sum(operation["skipped_existing_files"] for operation in operations),
-        "operations": operations,
-    }
-
-
-def expand_s3_archive(
-    cfg: S3Config,
-    archive_key: str,
-    existing_objects: dict[str, int],
-    cache_root: Path,
-    dry_run: bool = False,
-    runner: Runner | None = None,
-) -> dict[str, Any]:
-    bucket, _ = split_s3_uri(cfg.bucket_uri)
-    archive_uri = f"s3://{bucket}/{archive_key}"
-    parent_key = archive_key.rsplit("/", 1)[0] if "/" in archive_key else ""
-    operation: dict[str, Any] = {
-        "archive_key": archive_key,
-        "archive_uri": archive_uri,
-        "source": None,
-        "download": None,
-        "members": 0,
-        "uploaded_files": 0,
-        "skipped_existing_files": 0,
-        "uploads": [],
-        "skips": [],
-        "errors": [],
-        "dry_run": dry_run,
-    }
-    source_path = archive_source_path(cfg, archive_uri, cache_root, dry_run=dry_run, runner=runner, operation=operation)
-    if source_path is None:
-        return operation
-    archive_stage = cache_root / "expanded" / safe_cache_name(archive_key)
-    if not dry_run:
-        archive_stage.mkdir(parents=True, exist_ok=True)
-    try:
-        for member in iter_archive_members(source_path):
-            operation["members"] += 1
-            target_key = join_s3_key(parent_key, member["name"])
-            expected_size = member.get("size")
-            existing_size = existing_objects.get(target_key)
-            if existing_size is not None and (expected_size is None or existing_size == expected_size):
-                operation["skipped_existing_files"] += 1
-                operation["skips"].append({"key": target_key, "reason": "already present", "size_bytes": existing_size})
-                continue
-            target_uri = f"s3://{bucket}/{target_key}"
-            if dry_run:
-                operation["uploads"].append({"source_member": member["name"], "target_uri": target_uri, "dry_run": True})
-                continue
-            staged = archive_stage / member["name"]
-            staged.parent.mkdir(parents=True, exist_ok=True)
-            member["extract"](staged)
-            upload_result = upload_file(cfg, staged, target_uri, dry_run=False, runner=runner)
-            operation["uploads"].append({"source_member": member["name"], "target_uri": target_uri, "upload": upload_result})
-            operation["uploaded_files"] += 1
-            existing_objects[target_key] = staged.stat().st_size
-            staged.unlink(missing_ok=True)
-    except Exception as exc:
-        operation["errors"].append(str(exc))
-    finally:
-        if not dry_run:
-            shutil.rmtree(archive_stage, ignore_errors=True)
-    return operation
-
-
-def archive_source_path(
-    cfg: S3Config,
-    archive_uri: str,
-    cache_root: Path,
-    dry_run: bool,
-    runner: Runner | None,
-    operation: dict[str, Any],
-) -> Path | None:
-    if cfg.access_mode == "file_mount":
-        mounted = mount_path_for_uri(cfg, archive_uri)
-        if mounted.exists():
-            operation["source"] = {"transport": "file_mount", "path": str(mounted)}
-            return mounted
-    local_archive = cache_root / "archives" / safe_cache_name(split_s3_uri(archive_uri)[1])
-    operation["source"] = {"transport": "awscli", "path": str(local_archive)}
-    if dry_run:
-        return None
-    local_archive.parent.mkdir(parents=True, exist_ok=True)
-    operation["download"] = run_or_report(aws_cp_args(cfg, archive_uri, local_archive), dry_run=False, runner=runner)
-    return local_archive
-
-
-def iter_archive_members(path: Path):
-    if zipfile.is_zipfile(path):
-        with zipfile.ZipFile(path) as archive:
-            for info in archive.infolist():
-                if info.is_dir():
-                    continue
-                name = safe_member_name(info.filename)
-                if name is None:
-                    continue
-
-                def extract_zip(target: Path, archive=archive, info=info) -> None:
-                    with archive.open(info) as source, target.open("wb") as output:
-                        shutil.copyfileobj(source, output)
-
-                yield {"name": name, "size": info.file_size, "extract": extract_zip}
-        return
-    if tarfile.is_tarfile(path):
-        with tarfile.open(path) as archive:
-            for info in archive.getmembers():
-                if not info.isfile():
-                    continue
-                name = safe_member_name(info.name)
-                if name is None:
-                    continue
-
-                def extract_tar(target: Path, archive=archive, info=info) -> None:
-                    source = archive.extractfile(info)
-                    if source is None:
-                        raise ValueError(f"unable to extract {info.name}")
-                    with source, target.open("wb") as output:
-                        shutil.copyfileobj(source, output)
-
-                yield {"name": name, "size": info.size, "extract": extract_tar}
-        return
-    single_name = single_file_archive_member_name(path)
-    if single_name is None:
-        return
-
-    def extract_single(target: Path) -> None:
-        opener = opener_for_compressed_file(path)
-        with opener(path, "rb") as source, target.open("wb") as output:
-            shutil.copyfileobj(source, output)
-
-    yield {"name": single_name, "size": None, "extract": extract_single}
-
-
-def is_archive_key(key: str) -> bool:
-    lowered = key.lower()
-    return lowered.endswith((".zip", ".tar", ".tar.gz", ".tgz", ".gz", ".bz2", ".xz"))
-
-
-def safe_member_name(name: str) -> str | None:
-    normalized = posixpath.normpath(name.replace("\\", "/"))
-    if normalized in {"", "."} or normalized.startswith("../") or normalized.startswith("/"):
-        return None
-    return normalized
-
-
-def safe_cache_name(key: str) -> str:
-    return key.replace("/", "__").replace(":", "_")
-
-
-def join_s3_key(parent: str, member: str) -> str:
-    return f"{parent.strip('/')}/{member.strip('/')}" if parent else member.strip("/")
-
-
-def single_file_archive_member_name(path: Path) -> str | None:
-    name = path.name
-    lowered = name.lower()
-    for suffix in (".gz", ".bz2", ".xz"):
-        if lowered.endswith(suffix) and not lowered.endswith(".tar" + suffix):
-            return name[: -len(suffix)]
-    return None
-
-
-def opener_for_compressed_file(path: Path):
-    lowered = path.name.lower()
-    if lowered.endswith(".gz"):
-        return gzip.open
-    if lowered.endswith(".bz2"):
-        return bz2.open
-    if lowered.endswith(".xz"):
-        return lzma.open
-    raise ValueError(f"unsupported compressed file: {path}")
 
 
 def copy_file_mount(cfg: S3Config, source: str | Path, target: str | Path, dry_run: bool = False) -> dict[str, Any]:
@@ -461,126 +207,6 @@ def sync_file_mount(cfg: S3Config, source: str | Path, target: str | Path, dry_r
         files_copied += 1
     item["files_copied"] = files_copied
     return item
-
-
-def serial_download_backup(
-    repo_root: str | Path,
-    cfg: S3Config,
-    raw_root: str | Path,
-    datasets: set[str] | None = None,
-    modalities: set[str] | None = None,
-    sequences: set[str] | None = None,
-    dry_run: bool = False,
-    runner: Runner | None = None,
-    manifest_name: str = "latest",
-    max_download_bytes: int | None = None,
-    reserve_bytes: int | None = None,
-    storage_fraction: float | None = None,
-    include_unknown_size: bool = False,
-    clean_after_upload: bool = True,
-    workers: int = 1,
-    dataset_workers: dict[str, int] | None = None,
-    download_timeout_s: float = 120.0,
-    progress_callback: ProgressCallback | None = None,
-    stream_uploads: bool = False,
-    asset_workers: int = 1,
-    assets_override: list[Any] | None = None,
-    skip_existing_s3: bool = False,
-    interleave_datasets: bool = False,
-) -> dict[str, Any]:
-    if assets_override is None:
-        catalog = load_catalog(repo_root)
-        assets = plan_downloads(catalog, datasets=datasets, modalities=modalities, sequences=sequences)
-    else:
-        assets = assets_override
-    existing_s3_objects: dict[str, int] = {}
-    skipped_existing_s3 = []
-    if skip_existing_s3 and assets:
-        existing_s3_objects = list_existing_s3_objects(cfg, {asset.dataset for asset in assets}, runner=runner)
-        remaining_assets = []
-        for asset in assets:
-            if asset_exists_in_s3(cfg, asset, existing_s3_objects):
-                skipped_existing_s3.append(asset)
-            else:
-                remaining_assets.append(asset)
-        assets = remaining_assets
-    raw_root = Path(raw_root)
-    ensure_not_nfs_path(cfg, raw_root)
-    storage = storage_budget(
-        raw_root,
-        reserve_bytes=cfg.local_storage_reserve_bytes if reserve_bytes is None else reserve_bytes,
-        storage_fraction=cfg.local_storage_max_fraction if storage_fraction is None else storage_fraction,
-        max_download_bytes=max_download_bytes,
-    )
-    selection = select_assets_for_storage(assets, storage["budget_bytes"], include_unknown_size=include_unknown_size)
-    assets = selection["selected"]
-    if interleave_datasets:
-        assets = interleave_assets_by_dataset(assets)
-    download_manifest = raw_root / "download_manifest.json"
-    if not dry_run:
-        write_download_manifest(assets, download_manifest)
-    operations: list[dict[str, Any] | None] = [None] * len(assets)
-    upload_runner = runner
-    if stream_uploads and upload_runner is None:
-        upload_runner = lambda command: subprocess.run(command, check=True, text=True)
-
-    def process_asset(index: int, asset: Any) -> dict[str, Any]:
-        worker_count = (dataset_workers or {}).get(asset.dataset, workers)
-        fetch_result = fetch_assets(
-            [asset],
-            raw_root,
-            dry_run=dry_run,
-            workers=worker_count,
-            asset_workers=1,
-            timeout_s=download_timeout_s,
-            progress_callback=progress_callback,
-        )[0]
-        target = Path(fetch_result["target"])
-        if fetch_result.get("error"):
-            s3_target = cfg.unprocessed_uri(asset.dataset, asset.sequence_id, asset.asset_key)
-            return {"asset": asdict(asset), "fetch": fetch_result, "upload": {"skipped": True, "reason": "fetch failed"}, "s3_uri": s3_target}
-        if fetch_result.get("directory"):
-            s3_target = cfg.unprocessed_uri(asset.dataset, asset.sequence_id, asset.asset_key)
-            upload_result = upload_dir(cfg, target, s3_target, dry_run=dry_run, runner=upload_runner)
-            if clean_after_upload and not dry_run and upload_result.get("returncode") == 0 and target.exists():
-                shutil.rmtree(target, ignore_errors=True)
-        else:
-            s3_target = join_s3_uri(cfg.unprocessed_uri(asset.dataset, asset.sequence_id, asset.asset_key), asset.filename)
-            upload_result = upload_file(cfg, target, s3_target, dry_run=dry_run, runner=upload_runner)
-            if clean_after_upload and not dry_run and upload_result.get("returncode") == 0 and target.exists():
-                target.unlink()
-        return {"asset": asdict(asset), "fetch": fetch_result, "upload": upload_result, "s3_uri": s3_target}
-
-    asset_workers = max(1, asset_workers)
-    if asset_workers == 1 or len(assets) <= 1:
-        for index, asset in enumerate(assets):
-            operations[index] = process_asset(index, asset)
-    else:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(asset_workers, len(assets))) as executor:
-            future_to_index = {executor.submit(process_asset, index, asset): index for index, asset in enumerate(assets)}
-            for future in concurrent.futures.as_completed(future_to_index):
-                operations[future_to_index[future]] = future.result()
-    manifest_upload = None
-    if dry_run:
-        manifest_upload = {"s3_uri": cfg.download_manifest_uri(manifest_name), "dry_run": True}
-    else:
-        manifest_upload = upload_file(cfg, download_manifest, cfg.download_manifest_uri(manifest_name), dry_run=False, runner=runner)
-    return {
-        "layout_version": 1,
-        "storage": storage,
-        "selection": {
-            "selected_assets": len(selection["selected"]),
-            "selected_bytes": selection["selected_bytes"],
-            "skipped_assets": [asdict(asset) for asset in selection["skipped"]],
-            "skipped_existing_s3_assets": [asdict(asset) for asset in skipped_existing_s3],
-            "skip_existing_s3": skip_existing_s3,
-            "interleave_datasets": interleave_datasets,
-        },
-        "unprocessed_prefix": cfg.unprocessed_uri(),
-        "manifest_uri": cfg.download_manifest_uri(manifest_name),
-        "operations": [operation for operation in operations if operation is not None],
-        "manifest_upload": manifest_upload,
-    }
 
 
 def serial_process_backup(
@@ -712,66 +338,6 @@ def ensure_not_nfs_path(cfg: S3Config, path: str | Path) -> None:
     mount = Path(cfg.mount_root).resolve(strict=False)
     if resolved == mount or mount in resolved.parents:
         raise ValueError(f"local working root must not be under the NFS mount {cfg.mount_root}: {path}")
-
-
-def storage_budget(
-    root: str | Path,
-    reserve_bytes: int,
-    storage_fraction: float,
-    max_download_bytes: int | None = None,
-) -> dict[str, Any]:
-    path = Path(root)
-    path.mkdir(parents=True, exist_ok=True)
-    usage = shutil.disk_usage(path)
-    fraction_budget = int(usage.free * storage_fraction)
-    reserve_budget = max(0, usage.free - reserve_bytes)
-    budget = min(fraction_budget, reserve_budget)
-    if max_download_bytes is not None:
-        budget = min(budget, max_download_bytes)
-    return {
-        "root": str(path),
-        "total_bytes": usage.total,
-        "used_bytes": usage.used,
-        "free_bytes": usage.free,
-        "reserve_bytes": reserve_bytes,
-        "storage_fraction": storage_fraction,
-        "budget_bytes": max(0, budget),
-    }
-
-
-def select_assets_for_storage(assets: list, budget_bytes: int, include_unknown_size: bool = False) -> dict[str, Any]:
-    known = [asset for asset in assets if asset.size_bytes is not None]
-    unknown = [asset for asset in assets if asset.size_bytes is None]
-    ordered = sorted(known, key=lambda asset: asset.size_bytes or 0, reverse=True)
-    selected = []
-    skipped = []
-    used = 0
-    for asset in ordered:
-        size = int(asset.size_bytes or 0)
-        if used + size <= budget_bytes:
-            selected.append(asset)
-            used += size
-        else:
-            skipped.append(asset)
-    if include_unknown_size:
-        selected.extend(unknown)
-    else:
-        skipped.extend(unknown)
-    return {"selected": selected, "skipped": skipped, "selected_bytes": used}
-
-
-def interleave_assets_by_dataset(assets: list) -> list:
-    buckets: dict[str, list] = {}
-    for asset in assets:
-        buckets.setdefault(asset.dataset, []).append(asset)
-    interleaved = []
-    while buckets:
-        for dataset in list(buckets):
-            bucket = buckets[dataset]
-            interleaved.append(bucket.pop(0))
-            if not bucket:
-                del buckets[dataset]
-    return interleaved
 
 
 def parse_partitions(value: str) -> list[tuple[str, str]]:

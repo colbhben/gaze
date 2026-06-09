@@ -1,12 +1,14 @@
 # Gaze Dataset Pipeline
 
-This repository contains a hardware-agnostic CLI for planning, downloading,
-rectifying, validating, splitting, and viewing heterogeneous video/gaze
-datasets listed in `DATASETS.md`.
+This repository contains a hardware-agnostic CLI for inspecting, rectifying,
+validating, splitting, and viewing heterogeneous video/gaze datasets listed in
+`DATASETS.md`.
 
-The setup command never downloads full datasets by default. Dataset downloads
-are explicit, selectable by dataset, modality, and sequence, and are designed
-to be resumable and checksum-verified when provider manifests include hashes.
+Downloading and unpacking the raw datasets is out of scope for this tool. You
+obtain the raw assets yourself (see the provider instructions and
+`download_links/`) and upload them to the `/nfs`-mounted S3 bucket in the
+`unprocessed/{dataset}/{partition}/{asset_key}/{filename}` layout. From there
+this CLI inspects, rectifies, validates, splits, processes, and serves them.
 
 ## Quick Start
 
@@ -14,7 +16,6 @@ to be resumable and checksum-verified when provider manifests include hashes.
 ./scripts/setup.sh
 . .venv/bin/activate
 gaze doctor
-gaze datasets plan --modalities video,gaze,annotation
 gaze datasets watch-manifest --raw-root /path/to/raw --manifest-out /path/to/raw_manifest.json
 gaze rectify --raw-root /path/to/raw --canonical-root /path/to/canonical
 gaze validate alignment --canonical-root /path/to/canonical
@@ -28,19 +29,18 @@ Run `gaze -h` to see every available top-level command. Run any command with
 `-h` to see the options for that specific workflow:
 
 ```sh
-gaze datasets fetch -h
+gaze datasets inspect-manifest -h
 gaze rectify -h
-gaze s3 backup-raw -h
+gaze s3 process-serial -h
 ```
 
 Command words are positional: put them after `gaze` in order, for example
-`gaze datasets fetch` or `gaze s3 backup-raw`. Options are invoked with long
-flags. Flags that take values use a space before the value, for example
-`--canonical-root ./canonical`. Boolean flags are present or absent, for
-example `--dry-run` or `--progress`. Comma-separated filters do not need spaces:
+`gaze datasets inspect-manifest` or `gaze s3 process-serial`. Options are
+invoked with long flags. Flags that take values use a space before the value,
+for example `--canonical-root ./canonical`. Boolean flags are present or absent,
+for example `--dry-run`. Comma-separated filters do not need spaces:
 
 ```sh
-gaze datasets plan --datasets aea,hot3d --modalities video,gaze
 gaze rectify --raw-root ./raw --canonical-root ./canonical --episodes ep1,ep2
 ```
 
@@ -49,9 +49,6 @@ Command reference:
 | Command | Meaning |
 | --- | --- |
 | `gaze doctor` | Checks local runtime dependencies and optional features. |
-| `gaze datasets plan` | Estimates selected dataset assets before downloading. |
-| `gaze datasets verify-links` | Checks documentation and sampled manifest URLs. |
-| `gaze datasets fetch` | Downloads selected raw assets to a local raw root. |
 | `gaze datasets inspect-manifest` | Traverses downloaded raw datasets and writes an inferred raw/canonical format manifest. |
 | `gaze datasets watch-manifest` | Waits for selected downloads to finish, then writes the inferred raw/canonical format manifest. |
 | `gaze rectify` | Converts raw episodes into the canonical layout. |
@@ -60,7 +57,6 @@ Command reference:
 | `gaze serve` | Starts the local API and browser viewer. |
 | `gaze view` | Starts the viewer and opens it in a browser. |
 | `gaze s3 layout` | Shows the configured static S3 layout. |
-| `gaze s3 backup-raw` | Downloads selected raw assets and backs them up to S3. |
 | `gaze s3 process-serial` | Pulls raw partitions from S3, rectifies them, and uploads processed episodes. |
 | `gaze s3 create-pull-manifest` | Creates a static S3 pull manifest from a local split. |
 | `gaze s3 pull-processed` | Downloads processed episodes from a static S3 pull manifest. |
@@ -73,20 +69,9 @@ Common dataset-selection options:
 | `--datasets` | `--datasets aea,hot3d` | Limits work to dataset slugs. Known slugs include `aea`, `hot3d`, `nymeria`, `holoassist`, `egtea`, and `ego-exo4d`. Omit it to include all cataloged datasets. |
 | `--modalities` | `--modalities video,gaze,annotation` | Limits work to normalized modalities. Available values are `video`, `gaze`, `annotation`, `depth`, `pose`, and `other`. |
 | `--sequences` | `--sequences loc1_script1_seq1_rec1,ep2` | Limits work to exact provider sequence ids from manifests. |
-| `--json` | `--json` | Emits JSON instead of the default human-readable table. |
 
-Dataset download options:
-
-| Option | How to invoke | Meaning |
-| --- | --- | --- |
-| `--raw-root` | `--raw-root ./raw` | Local destination for downloaded raw assets. Required for `datasets fetch`; defaults to `.gaze-cache/raw` for `s3 backup-raw`. |
-| `--dry-run` | `--dry-run` | Shows the planned work without downloading, uploading, deleting, or copying files. |
-| `--manifest-out` | `--manifest-out selected-assets.json` | Writes the selected asset manifest before fetching. |
-| `--workers` | `--workers 8` | Per-asset ranged-download worker count when a source supports byte ranges. |
-| `--download-timeout` | `--download-timeout 300` | HTTP timeout in seconds for download requests. |
-| `--progress` | `--progress` | Prints periodic download progress to stderr. |
-| `--sample-per-dataset` | `--sample-per-dataset 10` | Number of manifest links to sample per selected dataset for `verify-links`. |
-| `--timeout` | `--timeout 30` | HTTP timeout in seconds for `verify-links`. |
+These filters select which cataloged assets `datasets inspect-manifest` and
+`datasets watch-manifest` expect under the raw root.
 
 Raw manifest and watcher options:
 
@@ -160,15 +145,7 @@ S3 workflow options:
 | Option | How to invoke | Meaning |
 | --- | --- | --- |
 | `--s3-config` | `--s3-config configs/s3.json` | User S3 config JSON. Defaults to `configs/s3.json`. |
-| `--manifest-name` | `--manifest-name aea-v1` | Name for the raw download manifest under `manifests/downloads`. |
-| `--max-download-bytes` | `--max-download-bytes 50000000000` | Maximum bytes to download in one local batch. |
-| `--reserve-bytes` | `--reserve-bytes 10000000000` | Minimum local free-space reserve to keep unused. |
-| `--storage-fraction` | `--storage-fraction 0.75` | Maximum fraction of currently free local space to use for one batch. |
-| `--include-unknown-size` | `--include-unknown-size` | Allows assets without known byte sizes into a download batch. |
-| `--keep-cache` | `--keep-cache` | Retains local cache files after successful upload or processing. |
-| `--dataset-workers` | `--dataset-workers aea=48,hot3d=36` | Overrides ranged-download worker counts for specific datasets. |
-| `--asset-workers` | `--asset-workers 4` | Runs multiple download/upload asset pipelines concurrently. |
-| `--stream-uploads` | `--stream-uploads` | Lets `aws s3 cp` stream upload progress directly to the terminal. |
+| `--keep-cache` | `--keep-cache` | Retains local per-partition cache directories after successful processing. |
 | `--partitions` | `--partitions toy:ep1,toy:ep2` | Required for `s3 process-serial`; each entry is `dataset:partition_id`. |
 | `--local-cache-root` | `--local-cache-root .gaze-cache` | Overrides the local cache root from the S3 config for `process-serial`. |
 | `--split-path` | `--split-path ./canonical/splits/demo.json` | Local split manifest produced by `gaze split create`. |
@@ -251,7 +228,6 @@ s3://far-research-internal/colbhben/gaze/
   unprocessed/{dataset}/{partition}/{asset_key}/{filename}
   processed/{profile}/{dataset}/{episode_id}/...
   processed/{profile}/manifest.jsonl
-  manifests/downloads/{name}.json
   splits/{name}.s3.json
 ```
 
@@ -260,48 +236,21 @@ or mount. The default `"upload_mode": "awscli"` uses `aws s3 cp/sync` for
 uploads, while `"access_mode": "file_mount"` maps `s3://far-research-internal`
 paths to `/nfs`.
 
-### A. Serial Download And Raw Backup
+### A. Provide The Raw Data
 
-This detects free space on `--raw-root`, rejects roots under `/nfs`, selects
-the largest set of known-size assets that fit the local storage budget, then
-downloads to the local root and uploads each asset under `unprocessed/` with
-`aws s3 cp`:
+Downloading and unpacking the raw datasets is not handled by this tool. Obtain
+the raw assets yourself using the provider instructions and link files under
+`download_links/`, then upload them to the configured `unprocessed/` layout so
+the rest of the pipeline can read them:
 
-```sh
-gaze s3 backup-raw \
-  --s3-config configs/s3.json \
-  --raw-root .gaze-cache/raw \
-  --datasets aea \
-  --modalities video,gaze,annotation \
-  --manifest-name aea-v1
+```text
+s3://far-research-internal/colbhben/gaze/unprocessed/{dataset}/{partition}/{asset_key}/{filename}
 ```
 
-Use `--dry-run` first to inspect the planned local downloads and AWS uploads without
-downloading or uploading. Use `--max-download-bytes`, `--reserve-bytes`, and
-`--storage-fraction` to tune the local fitting logic.
-Use `--asset-workers` to download/upload multiple assets concurrently; this is
-separate from `--workers`, which controls ranged download workers within one
-large asset.
-
-For the current target raw set, use the dedicated entry point. It downloads
-AEA, Hot3D, Aria Digital Twin, and Nymeria `recording_head`/`recording_observer`
-assets to `~/gaze-target-download-work/raw` by default and backs them up under
-the same `unprocessed/{dataset}/{partition}/{asset_key}/{filename}` S3 layout:
-
-```sh
-scripts/download_target_datasets.sh
-```
-
-Equivalent CLI form:
-
-```sh
-gaze s3 backup-target-raw \
-  --raw-root ~/gaze-target-download-work/raw \
-  --asset-workers 4 \
-  --workers 8 \
-  --progress \
-  --stream-uploads
-```
+Archives should be unpacked before upload; the pipeline reads individual files
+from the `unprocessed/` layout, not archive members. Once the raw data is in
+place (and visible through the `/nfs` mount), continue with the processing steps
+below.
 
 ### B. Serial Process And Processed Backup
 
