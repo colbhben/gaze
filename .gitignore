@@ -60,3 +60,9 @@ docs/
 
 # Priviliged
 download_links/ego-exo4d.txt
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/

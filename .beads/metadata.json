@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "gaze",
+  "project_id": "41f25eed-51ec-4358-9b5a-01bcd8de03f8"
+}
