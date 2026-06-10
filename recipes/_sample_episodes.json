@@ -1,0 +1,12 @@
+{
+  "comment": "Concrete fully-paired sample episodes (one per dataset) for extraction + overlay validation (gaze-8yc.3). Chosen small where possible. All confirmed present on /nfs.",
+  "samples": {
+    "ego-exo4d": { "episode_id": "cmu_bike01_2", "note": "has eye_gaze dir + atomic/expert; RGB *_214-1.mp4" },
+    "egoexolearn": { "episode_id": "bee93bfc-ac78-11ee-819f-80615f12b59e", "note": "ego uid with video+npy gaze+fine anno" },
+    "egome": { "episode_id": "JYS4-O8_1-20240731_User1_240731101915", "note": "smallest User1 ego (~1.3MB mp4)" },
+    "egtea": { "episode_id": "OP01-R01-PastaSalad-1002316-1004005-F024051-F024101", "session": "OP01-R01-PastaSalad", "note": "clip with session gaze + action row" },
+    "holoassist": { "episode_id": "R0027-12-GoPro", "note": "has cam_info intrinsics + video + Eyes_sync + 3 anno channels (known good)" },
+    "nymeria": { "episode_id": "20230607_s1_barbara_wheeler_act1_nkg6zo", "note": "smallest preview mp4 (604MB); projection validated on this take" },
+    "hd-epic": { "episode_id": "P01-20240202-110250", "participant": "P01", "note": "first P01 take; narration pkl + general gaze" }
+  }
+}
