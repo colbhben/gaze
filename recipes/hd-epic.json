@@ -5,7 +5,10 @@
   "episode": {
     "enumerate": "video_glob",
     "glob": "Videos/P*/*.mp4",
-    "id_from": { "rule": "filename_stem", "strip_suffix": ".mp4" },
+    "id_from": {
+      "rule": "filename_stem",
+      "strip_suffix": ".mp4"
+    },
     "id_sanitize": false,
     "filter": {
       "comment": "Episode = take = ego mp4 (e.g. P01-20240202-110250); 156 takes across P01-P09. take id = mp4 basename = video_id in the narrations = gaze-dir stem inside mps_<takeid>_vrs."
@@ -28,25 +31,52 @@
       "reader": "csv",
       "coordinate_space": "cpf_angular",
       "header": true,
-      "columns": { "left_yaw": "left_yaw_rads_cpf", "right_yaw": "right_yaw_rads_cpf", "pitch": "pitch_rads_cpf", "depth": "depth_m" },
-      "time": { "source": "tracking_timestamp_us", "units": "us", "epoch": "absolute" },
+      "columns": {
+        "left_yaw": "left_yaw_rads_cpf",
+        "right_yaw": "right_yaw_rads_cpf",
+        "pitch": "pitch_rads_cpf",
+        "depth": "depth_m"
+      },
+      "time": {
+        "source": "tracking_timestamp_us",
+        "units": "us",
+        "epoch": "absolute"
+      },
       "extra_channels": [
-        "left_yaw_low_rads_cpf", "right_yaw_low_rads_cpf", "pitch_low_rads_cpf",
-        "left_yaw_high_rads_cpf", "right_yaw_high_rads_cpf", "pitch_high_rads_cpf",
-        "tx_left_eye_cpf", "ty_left_eye_cpf", "tz_left_eye_cpf",
-        "tx_right_eye_cpf", "ty_right_eye_cpf", "tz_right_eye_cpf", "session_uid"
+        "left_yaw_low_rads_cpf",
+        "right_yaw_low_rads_cpf",
+        "pitch_low_rads_cpf",
+        "left_yaw_high_rads_cpf",
+        "right_yaw_high_rads_cpf",
+        "pitch_high_rads_cpf",
+        "tx_left_eye_cpf",
+        "ty_left_eye_cpf",
+        "tz_left_eye_cpf",
+        "tx_right_eye_cpf",
+        "ty_right_eye_cpf",
+        "tz_right_eye_cpf",
+        "session_uid"
       ],
       "projection": {
         "feasible": true,
         "method": "projectaria_cpf",
-        "needs": ["SLAM-and-Gaze/{participant}/SLAM/multi/vrs_to_multi_slam.json", "SLAM-and-Gaze/{participant}/SLAM/multi/{slam_index}/slam/online_calibration.jsonl"],
-        "calibration": { "file": "SLAM-and-Gaze/{participant}/SLAM/multi/{slam_index}/slam/online_calibration.jsonl", "format": "aria_online_calib" },
+        "needs": [
+          "SLAM-and-Gaze/{participant}/SLAM/multi/vrs_to_multi_slam.json",
+          "SLAM-and-Gaze/{participant}/SLAM/multi/{slam_index}/slam/online_calibration.jsonl"
+        ],
+        "calibration": {
+          "file": "SLAM-and-Gaze/{participant}/SLAM/multi/{slam_index}/slam/online_calibration.jsonl",
+          "format": "aria_online_calib"
+        },
         "params": {
           "lib": "projectaria_tools",
           "fn": "get_gaze_vector_reprojection(eye_gaze, 'camera-rgb', device_calibration, rgb_cam, depth_m=<per-sample>, make_upright=true)",
           "camera_label": "camera-rgb",
           "camera_model": "FISHEYE624",
-          "native_dims": [2880, 2880],
+          "native_dims": [
+            2880,
+            2880
+          ],
           "make_upright": true,
           "scale_to_mp4": "multiply output px by mp4_width/2880 (ffprobe mp4 W per take)",
           "device_cad": "DeviceCadExtrinsics(Gen1, 'DVT-S', 'camera-slam-left'); cameras from online_calibration.jsonl CameraCalibrations[].",
@@ -69,9 +99,21 @@
       },
       "reader": "pandas_pickle",
       "kind": "interval",
-      "time": { "start": "start_timestamp", "end": "end_timestamp", "units": "s", "epoch": "video_zero" },
-      "text": { "primary": "narration" },
-      "extras": ["main_actions", "verbs", "nouns", "pairs"],
+      "time": {
+        "start": "start_timestamp",
+        "end": "end_timestamp",
+        "units": "s",
+        "epoch": "video_zero"
+      },
+      "text": {
+        "primary": "narration"
+      },
+      "extras": [
+        "main_actions",
+        "verbs",
+        "nouns",
+        "pairs"
+      ],
       "join": {
         "by": "row_field",
         "key_field": "video_id",
@@ -83,9 +125,34 @@
       }
     }
   ],
+  "epoch_sync": {
+    "common_clock": "video_zero_seconds",
+    "anchor": {
+      "rule": "mp4_to_vrs_csv",
+      "detail": "Videos/<P##>/<takeid>_mp4_to_vrs_time_ns.csv gives exact per-frame mp4<->device(vrs) ns; use it for the anchor. Fallback: first_gaze_sample (gaze t0=50.44, span 396.2s == video 396.3s)."
+    },
+    "gaze": {
+      "transform": "subtract_first_gaze",
+      "from": "gaze[0].tracking_timestamp_us/1e6",
+      "note": "or mp4_to_vrs_csv for exact"
+    },
+    "annotations": {
+      "transform": "as_is",
+      "note": "HD_EPIC narration start/end_timestamp are already video-zero seconds (7.4-394.7 within video 396.3)"
+    },
+    "video": {
+      "transform": "as_is"
+    },
+    "verified": "gaze rebased span 396.2s vs video 396.27s; anno 7.44-394.72 already video-zero"
+  },
   "metadata": {
     "prefer_shipped": {
-      "video": { "file": "Videos/frames.txt", "fields": { "frame_count": "{episode_id}" } }
+      "video": {
+        "file": "Videos/frames.txt",
+        "fields": {
+          "frame_count": "{episode_id}"
+        }
+      }
     },
     "sample_only": false,
     "notes": "frames.txt gives per-mp4 frame count (duration.txt named in readme is absent). fps inferred ~30 (Aria RGB) but not on-disk-confirmed; ffprobe at metadata time. HD_EPIC_{verb,noun}_classes.csv map class ids -> canonical key+category (not required for text channel). The .pkl is the ONLY copy of narrations (no CSV sibling) -> pandas required to read it."

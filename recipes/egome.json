@@ -5,7 +5,10 @@
   "episode": {
     "enumerate": "video_glob",
     "glob": "Video/*_ego.mp4",
-    "id_from": { "rule": "filename_stem", "strip_suffix": "_ego.mp4" },
+    "id_from": {
+      "rule": "filename_stem",
+      "strip_suffix": "_ego.mp4"
+    },
     "id_sanitize": false,
     "filter": {
       "include_regex": "_ego\\.mp4$",
@@ -28,20 +31,46 @@
     "gaze_format": {
       "reader": "csv",
       "coordinate_space": "pixel_2d",
-      "frame_dims": [1280, 960],
+      "frame_dims": [
+        1280,
+        960
+      ],
       "header": true,
-      "columns": { "x": "Gaze Point X[px]", "y": "Gaze Point Y[px]" },
-      "time": { "source": "Video Time[HH:mm:ss.ms]", "units": "hms_decimal", "epoch": "video_zero" },
-      "validity": { "column": "Gaze Point X[px]", "valid_when": ">=0", "invalid_placeholder": [-1.0, -1.0] },
+      "columns": {
+        "x": "Gaze Point X[px]",
+        "y": "Gaze Point Y[px]"
+      },
+      "time": {
+        "source": "Video Time[HH:mm:ss.ms]",
+        "units": "hms_decimal",
+        "epoch": "video_zero"
+      },
+      "validity": {
+        "column": "Gaze Point X[px]",
+        "valid_when": ">=0",
+        "invalid_placeholder": [
+          -1.0,
+          -1.0
+        ]
+      },
       "extra_channels": [
-        "Gaze Point Left X[px]", "Gaze Point Left Y[px]", "Gaze Point Right X[px]", "Gaze Point Right Y[px]",
-        "Pupil Diameter Left[mm]", "Pupil Diameter Right[mm]", "Validity Left", "Validity Right",
-        "Quat Data", "Gyro", "Accel[g]", "Mag"
+        "Gaze Point Left X[px]",
+        "Gaze Point Left Y[px]",
+        "Gaze Point Right X[px]",
+        "Gaze Point Right Y[px]",
+        "Pupil Diameter Left[mm]",
+        "Pupil Diameter Right[mm]",
+        "Validity Left",
+        "Validity Right",
+        "Quat Data",
+        "Gyro",
+        "Accel[g]",
+        "Mag"
       ],
       "projection": {
         "feasible": true,
         "method": "normalize_by_dims",
-        "notes": "70-column Tobii-style eye-tracker + IMU export. 2D gaze = 'Gaze Point X[px]'/'Gaze Point Y[px]' in absolute pixels (invalid sentinel -1.0). RESOLVED: gaze pixel space == ego video frame == 1280x960 (ffprobe of 4 takes across sessions: all 1280x960; binocular gaze X hard-bounded <1260, Y only 0.16% past 960 — the signature of gaze-space==frame; my earlier 'not 1280x960' was from noisier per-EYE columns, not primary gaze). frame_dims=[1280,960] is constant; a per-episode ffprobe assertion (warn on mismatch) is cheap insurance. VIDEO fps VARIES per take (~28.09-29.85, r_frame_rate==avg_frame_rate, odd ratios like 2881/100) -> ffprobe per-episode; do NOT hardcode fps. The ~125 Hz is only the Tobii gaze sample rate (irrelevant to the frame timeline). 'Video Time[HH:mm:ss.ms]' = decimal HH:MM:SS.mmm starting at 0 = video start, shares the annotation clock. Pupil Position cols are normalized [0,1] (sentinel -1.0), carry NO frame-size info. IMU bundled as semicolon-delimited subfields."
+        "notes": "70-column Tobii-style eye-tracker + IMU export. 2D gaze = 'Gaze Point X[px]'/'Gaze Point Y[px]' in absolute pixels (invalid sentinel -1.0). RESOLVED: gaze pixel space == ego video frame == 1280x960 (ffprobe of 4 takes across sessions: all 1280x960; binocular gaze X hard-bounded <1260, Y only 0.16% past 960 \u2014 the signature of gaze-space==frame; my earlier 'not 1280x960' was from noisier per-EYE columns, not primary gaze). frame_dims=[1280,960] is constant; a per-episode ffprobe assertion (warn on mismatch) is cheap insurance. VIDEO fps VARIES per take (~28.09-29.85, r_frame_rate==avg_frame_rate, odd ratios like 2881/100) -> ffprobe per-episode; do NOT hardcode fps. The ~125 Hz is only the Tobii gaze sample rate (irrelevant to the frame timeline). 'Video Time[HH:mm:ss.ms]' = decimal HH:MM:SS.mmm starting at 0 = video start, shares the annotation clock. Pupil Position cols are normalized [0,1] (sentinel -1.0), carry NO frame-size info. IMU bundled as semicolon-delimited subfields."
       }
     }
   },
@@ -55,8 +84,15 @@
       },
       "reader": "json_by_key",
       "kind": "interval",
-      "time": { "whole_episode": true, "units": "s", "epoch": "video_zero" },
-      "text": { "primary": "Coarse-level", "strip_prefix_regex": "^[A-Z]:" },
+      "time": {
+        "whole_episode": true,
+        "units": "s",
+        "epoch": "video_zero"
+      },
+      "text": {
+        "primary": "Coarse-level",
+        "strip_prefix_regex": "^[A-Z]:"
+      },
       "join": {
         "by": "key",
         "key_field": "episode_id",
@@ -74,9 +110,19 @@
       },
       "reader": "json_by_key",
       "kind": "interval",
-      "time": { "start": "Step timestamp.0", "end": "Step timestamp.1", "units": "s", "epoch": "video_zero" },
-      "text": { "primary": "Step discription", "strip_prefix_regex": "^[A-Z]:" },
-      "extras": ["Step order"],
+      "time": {
+        "start": "Step timestamp.0",
+        "end": "Step timestamp.1",
+        "units": "s",
+        "epoch": "video_zero"
+      },
+      "text": {
+        "primary": "Step discription",
+        "strip_prefix_regex": "^[A-Z]:"
+      },
+      "extras": [
+        "Step order"
+      ],
       "join": {
         "by": "key",
         "key_field": "episode_id",
@@ -86,9 +132,32 @@
       }
     }
   ],
+  "epoch_sync": {
+    "common_clock": "video_zero_seconds",
+    "anchor": {
+      "rule": "video_zero",
+      "detail": "Video Time[HH:mm:ss.ms] starts at 0 = video start; annotation Step timestamp + Duration in same video-zero seconds"
+    },
+    "gaze": {
+      "transform": "as_is",
+      "note": "use Video Time column (video-zero), not Recording Time Stamp"
+    },
+    "annotations": {
+      "transform": "as_is"
+    },
+    "video": {
+      "transform": "as_is"
+    },
+    "verified": "gaze 0-7.07, anno 0-7.34, video 7.34"
+  },
   "metadata": {
     "prefer_shipped": {
-      "video": { "file": "Annotation/total.json", "fields": { "duration_s": "annotations.{episode_id}_ego.mp4.Duration" } }
+      "video": {
+        "file": "Annotation/total.json",
+        "fields": {
+          "duration_s": "annotations.{episode_id}_ego.mp4.Duration"
+        }
+      }
     },
     "video_metadata_rule": {
       "resolution": "1280x960 constant (ffprobe-confirmed; gaze pixel space == this frame).",

@@ -25,12 +25,50 @@
       "minItems": 1,
       "items": { "$ref": "#/$defs/annotation_channel" }
     },
+    "epoch_sync": { "$ref": "#/$defs/epoch_sync" },
     "metadata": { "$ref": "#/$defs/metadata" },
     "overrides": { "type": "object" },
     "provenance": { "$ref": "#/$defs/provenance" }
   },
 
   "$defs": {
+    "epoch_sync": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How to put video frames, gaze samples, and each annotation channel onto ONE common 'video-zero seconds' clock for overlay/alignment. anchor defines what t=0 means; per-channel rules say how each source's native time maps onto it.",
+      "required": ["common_clock", "anchor"],
+      "properties": {
+        "common_clock": { "const": "video_zero_seconds" },
+        "anchor": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "What device/recording time corresponds to video frame 0.",
+          "properties": {
+            "rule": { "enum": ["video_zero", "first_gaze_sample", "clip_start", "mp4_to_vrs_csv", "annotation_zero"] },
+            "detail": { "type": "string" }
+          },
+          "required": ["rule"]
+        },
+        "gaze": { "$ref": "#/$defs/epoch_channel" },
+        "annotations": { "$ref": "#/$defs/epoch_channel" },
+        "video": { "$ref": "#/$defs/epoch_channel" },
+        "verified": { "type": "string", "description": "evidence the reconciliation lands within the video duration" }
+      }
+    },
+
+    "epoch_channel": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Transform from a channel's native seconds to the common video-zero clock.",
+      "properties": {
+        "transform": { "enum": ["as_is", "subtract_first_gaze", "subtract_const", "subtract_clip_start", "frame_index_over_fps", "mp4_to_vrs_csv"] },
+        "const_s": { "type": "number" },
+        "from": { "type": "string", "description": "where the offset/value comes from (e.g. clip filename start_ms, gaze[0].tracking_timestamp_us)" },
+        "note": { "type": "string" }
+      },
+      "required": ["transform"]
+    },
+
     "select_block": {
       "type": "object",
       "required": ["select"],

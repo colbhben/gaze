@@ -4,7 +4,10 @@
   "root": "egoexolearn",
   "episode": {
     "enumerate": "annotation_keys",
-    "id_from": { "rule": "literal", "group": "video_uid" },
+    "id_from": {
+      "rule": "literal",
+      "group": "video_uid"
+    },
     "id_sanitize": false,
     "filter": {
       "include_regex": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
@@ -27,10 +30,27 @@
     "gaze_format": {
       "reader": "npy",
       "coordinate_space": "normalized_2d",
-      "columns": { "x": 0, "y": 1 },
-      "time": { "source": "frame_index", "units": "frame_index", "fps": 30, "epoch": "video_zero" },
-      "validity": { "column": 2, "valid_when": "==1", "invalid_placeholder": [0.5, 0.5] },
-      "extra_channels": [2],
+      "columns": {
+        "x": 0,
+        "y": 1
+      },
+      "time": {
+        "source": "frame_index",
+        "units": "frame_index",
+        "fps": 30,
+        "epoch": "video_zero"
+      },
+      "validity": {
+        "column": 2,
+        "valid_when": "==1",
+        "invalid_placeholder": [
+          0.5,
+          0.5
+        ]
+      },
+      "extra_channels": [
+        2
+      ],
       "projection": {
         "feasible": true,
         "method": "normalize_by_dims",
@@ -48,18 +68,50 @@
       },
       "reader": "csv",
       "kind": "interval",
-      "time": { "start": "start_sec", "end": "end_sec", "units": "s", "epoch": "video_zero" },
-      "text": { "primary": "narration_en" },
-      "extras": ["annotation_id", "scene", "narration_en_hand_prompt", "narration_en_no_hand_prompt"],
+      "time": {
+        "start": "start_sec",
+        "end": "end_sec",
+        "units": "s",
+        "epoch": "video_zero"
+      },
+      "text": {
+        "primary": "narration_en"
+      },
+      "extras": [
+        "annotation_id",
+        "scene",
+        "narration_en_hand_prompt",
+        "narration_en_no_hand_prompt"
+      ],
       "join": {
         "by": "row_field",
         "key_field": "video_uid",
         "comment": "Rows whose video_uid == episode id. view=='ego' selects egocentric; subset gives split. Stems are identical UUIDs across video/gaze/CSV (no transform)."
       },
-      "filter": { "keep_where": "view=='ego'" },
+      "filter": {
+        "keep_where": "view=='ego'"
+      },
       "split_field": "subset"
     }
   ],
+  "epoch_sync": {
+    "common_clock": "video_zero_seconds",
+    "anchor": {
+      "rule": "video_zero",
+      "detail": "gaze time = frame/30 from 0; annotations start_sec/end_sec from 0"
+    },
+    "gaze": {
+      "transform": "as_is",
+      "note": "t = frame_index/30, video-zero by construction"
+    },
+    "annotations": {
+      "transform": "as_is"
+    },
+    "video": {
+      "transform": "as_is"
+    },
+    "verified": "gaze 0-658, anno 10-655, video 665 \u2014 all video-zero"
+  },
   "metadata": {
     "sample_only": false,
     "notes": "No general metadata file. fps for gaze is fixed 30 by construction. Video fps/dims via ffprobe. Other annotation files present but unused: fine_annotation_trainval_en.csv (subset), fine_annotation_test.csv (test id list), coarse_annotations.tar.gz, narration_{noun,verb}_taxonomy.csv."

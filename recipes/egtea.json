@@ -5,7 +5,10 @@
   "episode": {
     "enumerate": "video_glob",
     "glob": "video/cropped_clips/*/*.mp4",
-    "id_from": { "rule": "filename_stem", "strip_suffix": ".mp4" },
+    "id_from": {
+      "rule": "filename_stem",
+      "strip_suffix": ".mp4"
+    },
     "id_sanitize": false,
     "filter": {
       "comment": "Episode = one cropped CLIP (~15484). Clip filename = <SESSION>-<startMs>-<endMs>-F<startFrame>-F<endFrame>.mp4. SESSION (e.g. OP01-R01-PastaSalad) is the parent dir and the gaze key; the F<start>-F<end> range slices the session gaze. fps=24, frame 1280x960."
@@ -27,12 +30,27 @@
     "gaze_format": {
       "reader": "begaze_txt",
       "coordinate_space": "pixel_2d",
-      "frame_dims": [1280, 960],
+      "frame_dims": [
+        1280,
+        960
+      ],
       "header": false,
       "delimiter": "\t",
-      "columns": { "x": 3, "y": 4, "frame": 5, "type": 6 },
-      "time": { "source": 5, "units": "frame_index", "fps": 24, "epoch": "recording_zero" },
-      "extra_channels": [6],
+      "columns": {
+        "x": 3,
+        "y": 4,
+        "frame": 5,
+        "type": 6
+      },
+      "time": {
+        "source": 5,
+        "units": "frame_index",
+        "fps": 24,
+        "epoch": "recording_zero"
+      },
+      "extra_channels": [
+        6
+      ],
       "projection": {
         "feasible": true,
         "method": "normalize_by_dims",
@@ -43,15 +61,35 @@
           "version": "3.1",
           "match": "## Version: BeGaze 3.1",
           "reader": "begaze_txt",
-          "columns": { "x": 3, "y": 4, "frame": 5, "type": 6 },
-          "time": { "source": 5, "units": "frame_index", "fps": 24, "epoch": "recording_zero" }
+          "columns": {
+            "x": 3,
+            "y": 4,
+            "frame": 5,
+            "type": 6
+          },
+          "time": {
+            "source": 5,
+            "units": "frame_index",
+            "fps": 24,
+            "epoch": "recording_zero"
+          }
         },
         {
           "version": "3.4",
           "match": "## Version: BeGaze 3.4",
           "reader": "begaze_txt",
-          "columns": { "x": 5, "y": 6, "frame": -2, "type": -1 },
-          "time": { "source": -2, "units": "timecode_hmsf", "fps": 24, "epoch": "recording_zero" }
+          "columns": {
+            "x": 5,
+            "y": 6,
+            "frame": -2,
+            "type": -1
+          },
+          "time": {
+            "source": -2,
+            "units": "timecode_hmsf",
+            "fps": 24,
+            "epoch": "recording_zero"
+          }
         }
       ]
     }
@@ -66,8 +104,15 @@
       },
       "reader": "csv",
       "kind": "interval",
-      "time": { "start": "Starting Time (ms)", "end": "Ending Time (ms)", "units": "ms", "epoch": "recording_zero" },
-      "text": { "primary": "Action Label" },
+      "time": {
+        "start": "Starting Time (ms)",
+        "end": "Ending Time (ms)",
+        "units": "ms",
+        "epoch": "recording_zero"
+      },
+      "text": {
+        "primary": "Action Label"
+      },
       "join": {
         "by": "row_field",
         "key_field": "Clip Prefix",
@@ -75,6 +120,26 @@
       }
     }
   ],
+  "epoch_sync": {
+    "common_clock": "video_zero_seconds",
+    "anchor": {
+      "rule": "clip_start",
+      "detail": "clip is a trimmed segment; t=0 is the clip's first frame. Gaze already sliced+rebased to clip-relative; annotation ms are session-absolute and must subtract the clip start."
+    },
+    "gaze": {
+      "transform": "as_is",
+      "note": "gaze reader already slices session gaze to the clip frame range and rebases to [0, clip_dur]"
+    },
+    "annotations": {
+      "transform": "subtract_clip_start",
+      "from": "clip filename start_ms/1000 (== row Starting Time(ms)/1000)",
+      "note": "anno_clip_s = (Starting/Ending Time ms - start_ms)/1000"
+    },
+    "video": {
+      "transform": "as_is"
+    },
+    "verified": "gaze 0-2.0; anno 1002.316-1004.005 ms -> minus 1002.316 = 0-1.689s, within video 2.125s"
+  },
   "metadata": {
     "sample_only": false,
     "notes": "No metadata file; readme says source 1280x960 @ 24 fps. gaze_readme.md at gaze/gaze_data/gaze_readme.md; action readme at annotations/action_annotation_readme.md. Splits: annotations/train_split{1,2,3}.txt + test_split{1,2,3}.txt (VideoName=full clip stem incl frame range). Bundled gaze_io_sample.py (Python2) is the reference parser."

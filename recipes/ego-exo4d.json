@@ -5,7 +5,10 @@
   "episode": {
     "enumerate": "take_dir",
     "glob": "takes/takes/*",
-    "id_from": { "rule": "path_component", "level": -1 },
+    "id_from": {
+      "rule": "path_component",
+      "level": -1
+    },
     "id_sanitize": false,
     "bridge": {
       "file": "takes.json",
@@ -17,7 +20,10 @@
   },
   "video": {
     "select": {
-      "from_metadata": { "file": "takes.json", "field": "frame_aligned_videos.*.rgb.relative_path" },
+      "from_metadata": {
+        "file": "takes.json",
+        "field": "frame_aligned_videos.*.rgb.relative_path"
+      },
       "path_template": "takes/takes/{take_name}/frame_aligned_videos/",
       "glob": "takes/takes/{take_name}/frame_aligned_videos/*214-1.mp4",
       "pick": "invariant_suffix",
@@ -28,17 +34,31 @@
   "gaze": {
     "select": {
       "path_template": "take_eye_gaze/takes/{take_name}/eye_gaze/",
-      "prefer": ["personalized_eye_gaze_2d.csv", "general_eye_gaze_2d.csv"],
+      "prefer": [
+        "personalized_eye_gaze_2d.csv",
+        "general_eye_gaze_2d.csv"
+      ],
       "pick": "first_existing",
       "missing": "warn"
     },
     "gaze_format": {
       "reader": "csv",
       "coordinate_space": "pixel_2d",
-      "frame_dims": [1408, 1408],
+      "frame_dims": [
+        1408,
+        1408
+      ],
       "header": true,
-      "columns": { "x": "x", "y": "y", "frame": "frame_num" },
-      "time": { "source": "tracking_timestamp_us", "units": "us", "epoch": "absolute" },
+      "columns": {
+        "x": "x",
+        "y": "y",
+        "frame": "frame_num"
+      },
+      "time": {
+        "source": "tracking_timestamp_us",
+        "units": "us",
+        "epoch": "absolute"
+      },
       "projection": {
         "feasible": true,
         "method": "already_2d",
@@ -50,48 +70,103 @@
     {
       "name": "atomic",
       "select": {
-        "prefer": ["annotations_atomic_descriptions/annotations/atomic_descriptions_train.json", "annotations_atomic_descriptions/annotations/atomic_descriptions_val.json"],
+        "prefer": [
+          "annotations_atomic_descriptions/annotations/atomic_descriptions_train.json",
+          "annotations_atomic_descriptions/annotations/atomic_descriptions_val.json"
+        ],
         "pick": "first_existing",
         "missing": "warn"
       },
       "reader": "json_by_key",
       "kind": "point",
-      "time": { "point": "timestamp", "units": "s", "epoch": "video_zero" },
-      "text": { "primary": "text" },
-      "extras": ["subject", "ego_visible", "unsure"],
+      "time": {
+        "point": "timestamp",
+        "units": "s",
+        "epoch": "video_zero"
+      },
+      "text": {
+        "primary": "text"
+      },
+      "extras": [
+        "subject",
+        "ego_visible",
+        "unsure"
+      ],
       "join": {
         "by": "key",
         "key_field": "take_uid",
         "select_path": "annotations.{take_uid}",
         "comment": "annotations[take_uid] = list of passes; each pass has descriptions[] of {text, timestamp, subject, ego_visible, unsure}. Drop passes where rejected==true (empty descriptions). Flatten passes -> point events. Intersect keys with takes.json take_uids (atomic file holds uids not downloaded here)."
       },
-      "filter": { "drop_where": "rejected==true" },
+      "filter": {
+        "drop_where": "rejected==true"
+      },
       "split_field": "split"
     },
     {
       "name": "expert",
       "select": {
-        "prefer": ["annotations_expert_commentary/annotations/expert_commentary_train.json", "annotations_expert_commentary/annotations/expert_commentary_val.json"],
+        "prefer": [
+          "annotations_expert_commentary/annotations/expert_commentary_train.json",
+          "annotations_expert_commentary/annotations/expert_commentary_val.json"
+        ],
         "pick": "first_existing",
         "missing": "warn"
       },
       "reader": "json_by_key",
       "kind": "interval",
-      "time": { "start": "video_time", "end_from": "start+duration_approx", "units": "s", "epoch": "video_zero" },
-      "text": { "primary": "text" },
-      "extras": ["task_name", "duration_approx"],
+      "time": {
+        "start": "video_time",
+        "end_from": "start+duration_approx",
+        "units": "s",
+        "epoch": "video_zero"
+      },
+      "text": {
+        "primary": "text"
+      },
+      "extras": [
+        "task_name",
+        "duration_approx"
+      ],
       "join": {
         "by": "key",
         "key_field": "take_uid",
         "select_path": "annotations.{take_uid}",
         "comment": "annotations[take_uid] = list of expert entries; each has task_name (entry-level) + commentary_data[] of {text, video_time, duration_approx, error}. Drop items where error==true. Treat video_time as start; end = video_time + duration_approx (duration_approx preserved as extra)."
       },
-      "filter": { "drop_where": "error==true" }
+      "filter": {
+        "drop_where": "error==true"
+      }
     }
   ],
+  "epoch_sync": {
+    "common_clock": "video_zero_seconds",
+    "anchor": {
+      "rule": "first_gaze_sample",
+      "detail": "gaze t_s is absolute device us/1e6; t0=first gaze sample == video frame 0 (span 110.78s ~= video 110.93s)"
+    },
+    "gaze": {
+      "transform": "subtract_first_gaze",
+      "from": "gaze[0].tracking_timestamp_us/1e6",
+      "note": "gaze 10Hz; or use frame_num if present"
+    },
+    "annotations": {
+      "transform": "as_is",
+      "note": "atomic timestamp + expert video_time are already video-zero seconds"
+    },
+    "video": {
+      "transform": "as_is"
+    },
+    "verified": "gaze span 110.78s vs video 110.93s; anno atomic 2.6-107.6, expert 2.1-141 (expert runs past video end, preserved)"
+  },
   "metadata": {
     "prefer_shipped": {
-      "video": { "file": "takes.json", "fields": { "duration_s": "duration_sec" } }
+      "video": {
+        "file": "takes.json",
+        "fields": {
+          "duration_s": "duration_sec"
+        }
+      }
     },
     "notes": "Split (train/val/test) is in annotations_*/annotations/splits.json -> take_uid_to_split, NOT in takes.json. test takes have no annotation files (will be dropped by emit policy: no annotation)."
   },
