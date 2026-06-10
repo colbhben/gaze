@@ -411,6 +411,40 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
     smoke.add_argument("--dry-run", action="store_true", help="With --upload, show the upload plan without copying.")
     smoke.set_defaults(func=cmd_curate_smoke)
 
+    build_training = curate_sub.add_parser(
+        "build-training-manifest",
+        help="Build a Qwen3-VL gaze training manifest (clips + normalized gaze targets + annotations).",
+        description=(
+            "For each sample episode: resample gaze to the profile fps with linear interpolation, "
+            "project + normalize it to [0,1] on the padded square frame (plus the 0-1000 bin form), "
+            "build sliding-window clips, attach the active annotation span (active_interval), and "
+            "materialize a per-episode resampled mp4. Writes manifest.jsonl + schema.json + a report."
+        ),
+        epilog=(
+            "Design defaults (flag for review): causal past-context clips, 5 Hz, 16 frames, stride 8, "
+            "392x392 pad. Out-of-frame anchors are kept with target_valid=False; only missing anchors drop.\n"
+            "Examples:\n"
+            "  gaze curate build-training-manifest\n"
+            "  gaze curate build-training-manifest --datasets nymeria,egome --num-frames 8 --stride 4"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    build_training.add_argument("--profile", metavar="NAME", default="qwen3-vl-gaze-5hz-392px", help="Canonical profile name; default: qwen3-vl-gaze-5hz-392px.")
+    build_training.add_argument("--fps", metavar="HZ", type=float, default=5.0, help="Resample fps / clip sampling grid; default: 5.")
+    build_training.add_argument("--num-frames", metavar="N", type=int, default=16, help="Frames per clip; default: 16 (=3.2s @5Hz).")
+    build_training.add_argument("--stride", metavar="N", type=int, default=8, help="Anchor hop in frames between clips; default: 8.")
+    build_training.add_argument("--resolution", metavar="PX", type=int, default=392, help="Square padded video side in pixels; default: 392.")
+    build_training.add_argument("--temporality", choices=["causal", "centered", "future"], default="causal", help="Clip window vs anchor. causal=past-context (default), centered, future (offline-only).")
+    build_training.add_argument("--window-seconds", metavar="N", type=float, default=30.0, help="Max source seconds to trim+resample per episode (keeps remote work light); default: 30.")
+    build_training.add_argument("--out-root", metavar="PATH", default="/tmp/gaze_training_manifest", help="Output root; default: /tmp/gaze_training_manifest.")
+    build_training.add_argument("--datasets", metavar="SLUG[,SLUG...]", help="Only build these dataset slugs. Omit for all sample datasets.")
+    build_training.add_argument("--episode", metavar="ID", help="Override the episode id (use with a single --datasets slug).")
+    build_training.add_argument("--sample", metavar="PATH", help="Alternate sample-episodes JSON (defaults to recipes/_sample_episodes.json).")
+    build_training.add_argument("--ssh-host", metavar="HOST", default="sumedhso-L40S", help="Remote data host; default: sumedhso-L40S.")
+    build_training.add_argument("--local-root", metavar="PATH", help="Read source from a local mount instead of ssh.")
+    build_training.add_argument("--no-reuse-bundle", action="store_true", help="Re-extract from source instead of reusing /tmp/gaze_extract/<slug>_full.json.")
+    build_training.set_defaults(func=cmd_curate_build_training)
+
 
 def add_dataset_common(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument("--repo-root", metavar="PATH", default=".", help="Repository root containing DATASETS.md and download_links; default: current directory.")
@@ -674,6 +708,48 @@ def cmd_curate_smoke(args: argparse.Namespace) -> int:
     print(json.dumps(result, indent=2, sort_keys=True))
     if args.upload and not args.dry_run and result["upload"].get("returncode") not in (0, None):
         return 1
+    return 0
+
+
+def cmd_curate_build_training(args: argparse.Namespace) -> int:
+    from .training import build_training_manifest
+
+    episodes = None
+    if args.episode:
+        sel = parse_set(args.datasets)
+        if not sel or len(sel) != 1:
+            print("error: --episode requires exactly one --datasets slug", file=sys.stderr)
+            return 1
+        episodes = {next(iter(sel)): args.episode}
+
+    sample_extra = None
+    if args.sample:
+        data = json.loads(Path(args.sample).read_text(encoding="utf-8"))
+        sample_extra = {
+            slug: {k: v for k, v in entry.items() if k not in ("note", "episode_id")}
+            for slug, entry in (data.get("samples") or {}).items()
+        }
+        episodes = episodes or {}
+        for slug, entry in (data.get("samples") or {}).items():
+            episodes.setdefault(slug, entry.get("episode_id"))
+
+    puller = _curate_puller(args)
+    report = build_training_manifest(
+        args.out_root,
+        datasets=parse_set(args.datasets) and sorted(parse_set(args.datasets)),
+        episodes=episodes,
+        sample_extra=sample_extra,
+        profile=args.profile,
+        fps=args.fps,
+        num_frames=args.num_frames,
+        stride=args.stride,
+        resolution=args.resolution,
+        temporality=args.temporality,
+        window_s=args.window_seconds,
+        puller=puller,
+        reuse_bundle=not args.no_reuse_bundle,
+    )
+    print(json.dumps(report, indent=2, sort_keys=True))
     return 0
 
 
