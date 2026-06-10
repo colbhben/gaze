@@ -28,11 +28,20 @@ from typing import Any
 
 
 INTERESTING_RUBRIC = (
-    "INTERESTING = the camera wearer is manipulating objects, cleaning, playing "
-    "board/table games, or otherwise interacting with objects in the scene. "
-    "Locomotion (walking/moving between areas) is ALSO acceptable as interesting. "
-    "NOT INTERESTING = purely conversational periods (talking with no object "
-    "interaction), or static/idle periods (standing/sitting still, looking around)."
+    "INTERESTING = the camera wearer is actively MANIPULATING objects with their "
+    "hands: picking up / putting down / handling / using objects, cleaning, "
+    "preparing food, playing board/table games, opening/closing or searching "
+    "through drawers-cabinets-appliances, assembling/operating tools. There must be "
+    "a hands-on object-manipulation component.\n"
+    "NOT INTERESTING (exclude even if other things happen in the span):\n"
+    "  - conversational periods (talking/gesturing to a peer with no hands-on manipulation),\n"
+    "  - static/idle periods (standing or sitting still, just looking around),\n"
+    "  - PURE locomotion with no manipulation (walking/moving between areas, even if "
+    "the person then sits or talks),\n"
+    "  - passive watching (e.g. watching TV, or using a remote merely to browse/watch).\n"
+    "A span that is mostly walking-then-talking, or sitting-and-chatting, or "
+    "searching-for-a-movie-on-TV is NOT interesting. Only mark interesting when there "
+    "is genuine hands-on manipulation of physical objects."
 )
 
 
