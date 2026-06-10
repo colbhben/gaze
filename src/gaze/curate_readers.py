@@ -20,6 +20,7 @@ readers that need them so the import path stays light.
 """
 from __future__ import annotations
 
+import fnmatch
 import json
 import math
 import re
@@ -40,6 +41,51 @@ from .curate import (
     to_seconds,
     _dotted_get,
 )
+
+
+# --------------------------------------------------------------------------- #
+# Dataset-level filters (recipe `dataset_filters` block).
+# Applied during episode selection (enumeration) and training-manifest builds.
+# --------------------------------------------------------------------------- #
+def dataset_filters(slug: str, recipe: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Return the recipe's `dataset_filters` block (or {} if absent)."""
+    rec = recipe if recipe is not None else load_recipe(slug)
+    return rec.get("dataset_filters") or {}
+
+
+def is_culled(slug: str, recipe: dict[str, Any] | None = None) -> bool:
+    """True if the dataset is excluded from all generation (recipe retained)."""
+    return bool(dataset_filters(slug, recipe).get("cull"))
+
+
+def episode_excluded(slug: str, episode_id: str, recipe: dict[str, Any] | None = None) -> bool:
+    """True if the episode id matches any `exclude_episode_globs` pattern."""
+    globs = dataset_filters(slug, recipe).get("exclude_episode_globs") or []
+    return any(fnmatch.fnmatch(episode_id, pat) for pat in globs)
+
+
+def filter_episode_ids(slug: str, episode_ids: list[str], recipe: dict[str, Any] | None = None) -> list[str]:
+    """Drop culled-dataset (all) and glob-excluded episode ids. Reusable by the
+    smoke driver and the full-dataset enumerator."""
+    rec = recipe if recipe is not None else load_recipe(slug)
+    if is_culled(slug, rec):
+        return []
+    return [e for e in episode_ids if not episode_excluded(slug, e, rec)]
+
+
+def max_gaze_gap_exceeded(gaze_times_video: list[float | None], valid_flags: list[bool], max_gap_s: float) -> tuple[bool, float]:
+    """True if the gap between any two consecutive VALID gaze samples exceeds
+    `max_gap_s`. Returns (exceeded, observed_max_gap_s). Times are the reconciled
+    video-clock gaze times; pair each with its validity flag."""
+    valids = sorted(
+        t for t, ok in zip(gaze_times_video, valid_flags) if t is not None and ok
+    )
+    max_gap = 0.0
+    for a, b in zip(valids, valids[1:]):
+        gap = b - a
+        if gap > max_gap:
+            max_gap = gap
+    return (max_gap > max_gap_s, max_gap)
 
 
 # --------------------------------------------------------------------------- #

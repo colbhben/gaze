@@ -193,6 +193,37 @@ class TestPredicates(unittest.TestCase):
         self.assertFalse(cr._eval_valid(-1.0, ">=0"))
 
 
+class TestDatasetFilters(unittest.TestCase):
+    def test_cull_from_recipe(self):
+        # egoexolearn is culled; ego-exo4d is not (real recipes)
+        self.assertTrue(cr.is_culled("egoexolearn"))
+        self.assertFalse(cr.is_culled("ego-exo4d"))
+
+    def test_exclude_globs(self):
+        self.assertTrue(cr.episode_excluded("ego-exo4d", "cmu_soccer_01_2"))
+        self.assertTrue(cr.episode_excluded("ego-exo4d", "nus_cpr_5"))
+        self.assertTrue(cr.episode_excluded("ego-exo4d", "upenn_0718_Violin_2_3"))  # mid-pattern glob
+        self.assertFalse(cr.episode_excluded("ego-exo4d", "cmu_bike01_2"))
+        self.assertFalse(cr.episode_excluded("ego-exo4d", "fair_cooking_05_2"))
+
+    def test_filter_episode_ids(self):
+        self.assertEqual(cr.filter_episode_ids("egoexolearn", ["a", "b"]), [])  # culled -> all dropped
+        self.assertEqual(
+            cr.filter_episode_ids("ego-exo4d", ["cmu_bike01_2", "nus_soccer_3", "fair_cooking_05_2"]),
+            ["cmu_bike01_2", "fair_cooking_05_2"],
+        )
+
+    def test_max_gaze_gap(self):
+        exceeded, mx = cr.max_gaze_gap_exceeded([0.0, 0.1, 0.5, 0.6], [True, True, True, True], 0.25)
+        self.assertTrue(exceeded)
+        self.assertAlmostEqual(mx, 0.4, places=6)
+        exceeded, mx = cr.max_gaze_gap_exceeded([0.0, 0.1, 0.2], [True, True, True], 0.25)
+        self.assertFalse(exceeded)
+        # invalid samples don't count toward the valid-to-valid gap
+        exceeded, mx = cr.max_gaze_gap_exceeded([0.0, 0.1, 0.5], [True, False, True], 0.25)
+        self.assertTrue(exceeded)  # valid 0.0 -> 0.5 gap = 0.5
+
+
 class TestPathHelpers(unittest.TestCase):
     def test_path_get_list_index(self):
         rec = {"Step timestamp": [1.5, 9.0]}

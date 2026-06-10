@@ -26,12 +26,35 @@
       "items": { "$ref": "#/$defs/annotation_channel" }
     },
     "epoch_sync": { "$ref": "#/$defs/epoch_sync" },
+    "dataset_filters": { "$ref": "#/$defs/dataset_filters" },
     "metadata": { "$ref": "#/$defs/metadata" },
     "overrides": { "type": "object" },
     "provenance": { "$ref": "#/$defs/provenance" }
   },
 
   "$defs": {
+    "dataset_filters": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Dataset-level data-quality / inclusion rules applied during episode enumeration and training-manifest generation.",
+      "properties": {
+        "cull": {
+          "type": "boolean",
+          "description": "If true, the dataset is excluded from ALL dataset generation (extraction/overlay/training). The recipe is retained for provenance. e.g. egoexolearn (eye-tracking too noisy)."
+        },
+        "exclude_episode_globs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "fnmatch glob patterns; any episode id matching one is excluded. e.g. ego-exo4d sports/music/CPR activities."
+        },
+        "max_gaze_valid_gap_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Cull an episode if the time gap between any two consecutive VALID gaze samples exceeds this many seconds. e.g. egome 0.25."
+        }
+      }
+    },
+
     "epoch_sync": {
       "type": "object",
       "additionalProperties": false,

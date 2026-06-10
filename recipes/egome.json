@@ -150,6 +150,9 @@
     },
     "verified": "gaze 0-7.07, anno 0-7.34, video 7.34"
   },
+  "dataset_filters": {
+    "max_gaze_valid_gap_s": 0.25
+  },
   "metadata": {
     "prefer_shipped": {
       "video": {

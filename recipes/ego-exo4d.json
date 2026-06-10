@@ -159,6 +159,14 @@
     },
     "verified": "gaze span 110.78s vs video 110.93s; anno atomic 2.6-107.6, expert 2.1-141 (expert runs past video end, preserved)"
   },
+  "dataset_filters": {
+    "exclude_episode_globs": [
+      "cmu_soccer*", "iiith_guitar*", "iiith_soccer*", "iiith_piano*", "indiana_music*",
+      "nus_cpr*", "nus_soccer*", "sfu_basketball*", "unc_basketball*", "unc_music*",
+      "unc_soccer*", "uniandes_basketball*", "uniandes_dance*", "upenn*Violin*",
+      "upenn*Dance*", "upenn*Piano*", "upenn*Guitar*", "utokyo_cpr*", "utokyo_soccer*"
+    ]
+  },
   "metadata": {
     "prefer_shipped": {
       "video": {

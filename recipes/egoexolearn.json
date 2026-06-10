@@ -112,6 +112,9 @@
     },
     "verified": "gaze 0-658, anno 10-655, video 665 \u2014 all video-zero"
   },
+  "dataset_filters": {
+    "cull": true
+  },
   "metadata": {
     "sample_only": false,
     "notes": "No general metadata file. fps for gaze is fixed 30 by construction. Video fps/dims via ffprobe. Other annotation files present but unused: fine_annotation_trainval_en.csv (subset), fine_annotation_test.csv (test id list), coarse_annotations.tar.gz, narration_{noun,verb}_taxonomy.csv."
