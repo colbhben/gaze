@@ -446,6 +446,41 @@ def _run(cmd: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True)
 
 
+def resample_segment_from_local(
+    full_src: Path,
+    out_path: Path,
+    *,
+    start_s: float,
+    seg_len: float,
+    fps: float,
+    side: int,
+) -> dict[str, Any]:
+    """Trim+resample one segment from an ALREADY-LOCAL full mp4 (no pull, no delete).
+
+    Single ffmpeg pass: seek to ``start_s``, take ``seg_len`` seconds, resample to
+    ``side``x``side`` aspect-preserving pad at ``fps``, h264. Used by the molmoact2
+    path which pulls the big source ONCE and trims every segment from it (vs the
+    per-segment re-pull the legacy window path did).
+    """
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    vf = (
+        f"fps={fps},"
+        f"scale={side}:{side}:force_original_aspect_ratio=decrease,"
+        f"pad={side}:{side}:(ow-iw)/2:(oh-ih)/2"
+    )
+    cmd = [
+        "ffmpeg", "-y", "-ss", f"{start_s:.3f}", "-i", str(full_src), "-t", f"{seg_len:.3f}",
+        "-vf", vf, "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+        "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(out_path),
+    ]
+    r = _run(cmd)
+    if r.returncode != 0 or not out_path.exists():
+        raise RuntimeError(f"segment resample failed: {r.stderr[-600:]}")
+    meta = ov._probe(out_path)
+    return {"path": str(out_path), "width": meta["width"], "height": meta["height"],
+            "fps": fps, "duration_s": meta.get("duration"), "start_s": start_s}
+
+
 def resample_episode_video(
     data: EpisodeData,
     puller: Puller,
@@ -911,15 +946,22 @@ def _build_molmoact_episode(
         times, xs, ys, inf, fps=fps, duration_s=grid_dur, max_gap_s=1.0,
     )
 
+    # Pull the full source mp4 ONCE, trim every segment from it locally, delete at end.
+    # (The legacy window path re-pulled per segment -> 25x downloads of a 369MB take.)
+    try:
+        full_src = puller.pull(data.video["path"])
+    except Exception as exc:  # noqa
+        return [], {"dataset": slug, "episode": episode_id, "error": f"pull: {exc}"}
+
     examples: list[dict[str, Any]] = []
     for k, seg in enumerate(segments):
         seg_start, seg_end = seg["start_s"], seg["end_s"]
         seg_len = seg_end - seg_start
         video_rel = f"videos/{slug}/{_safe(episode_id)}__seg{k}.mp4"
         try:
-            ov_meta = resample_episode_video(
-                data, puller, out_root / video_rel,
-                fps=fps, side=resolution, window_s=seg_len, start_s=seg_start,
+            resample_segment_from_local(
+                full_src, out_root / video_rel,
+                start_s=seg_start, seg_len=seg_len, fps=fps, side=resolution,
             )
         except Exception as exc:  # noqa
             examples.append({"dataset": slug, "episode_id": episode_id, "seg_index": k,
@@ -940,6 +982,13 @@ def _build_molmoact_episode(
             fps=fps, max_frames=max_frames, side=resolution,
             annotation_text=anno_text, prompt=prompt,
         ))
+
+    # Delete the big pulled source (keep small ones like egome/egtea harmlessly).
+    try:
+        if full_src.exists() and full_src.stat().st_size > 5_000_000:
+            full_src.unlink()
+    except OSError:
+        pass
 
     real = [e for e in examples if "error" not in e]
     rep = {
