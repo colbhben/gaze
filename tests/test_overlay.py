@@ -107,6 +107,25 @@ class TestNearestGaze(unittest.TestCase):
         self.assertEqual(nearest_gaze_index(times, 0.21), 2)
         self.assertEqual(nearest_gaze_index(times, 0.39), 4)
 
+    def test_valid_mask_excludes_invalid(self):
+        # invalid sample at the nearest index must not be selected (egome/egoexolearn
+        # placeholder/dropout rows): pick the nearest VALID neighbor instead.
+        times = [0.0, 1.0, 2.0, 3.0, 4.0]
+        mask = [True, True, False, True, True]
+        self.assertIn(nearest_gaze_index(times, 2.0, max_dt=5.0, valid_mask=mask), (1, 3))
+        # unmasked still picks the (invalid) nearest
+        self.assertEqual(nearest_gaze_index(times, 2.0, max_dt=5.0), 2)
+
+    def test_valid_mask_invalid_run_blanks(self):
+        # an invalid run longer than max_dt around t -> None (blank dot, not stale).
+        times = [0.0, 1.0, 2.0, 3.0, 4.0]
+        mask = [True, False, False, False, True]
+        self.assertIsNone(nearest_gaze_index(times, 2.0, max_dt=0.5, valid_mask=mask))
+
+    def test_valid_mask_all_invalid(self):
+        times = [0.0, 1.0, 2.0]
+        self.assertIsNone(nearest_gaze_index(times, 1.0, valid_mask=[False, False, False]))
+
 
 class TestActiveSegments(unittest.TestCase):
     def test_interval_covering(self):

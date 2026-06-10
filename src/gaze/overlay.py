@@ -101,6 +101,7 @@ def nearest_gaze_index(
     t: float,
     *,
     max_dt: float | None = None,
+    valid_mask: Sequence[bool] | None = None,
 ) -> int | None:
     """Index of the gaze sample whose video-clock time is nearest ``t``.
 
@@ -108,9 +109,20 @@ def nearest_gaze_index(
     clock (ascending, ``None`` entries skipped). Returns ``None`` when the table
     is empty or the nearest sample is farther than ``max_dt`` seconds away
     (so a frame with no nearby gaze draws no dot rather than a stale one).
+
+    When ``valid_mask`` is given, samples whose mask entry is falsey are
+    excluded entirely: invalid/dropout rows (e.g. egoexolearn's (0,0)/(0.5,0.5)
+    placeholders, or a Tobii tracking dropout) are never selected, and a frame
+    whose only nearby samples are invalid draws no dot rather than a stale or
+    center-snapped one. Combined with ``max_dt``, this means an invalid run
+    longer than ``max_dt`` correctly yields a blank gaze for those frames.
     """
-    # Build a parallel (time, index) list excluding Nones, assumed ascending.
-    cleaned = [(tv, i) for i, tv in enumerate(gaze_times_video) if tv is not None]
+    # Build a parallel (time, index) list excluding Nones (and invalids), ascending.
+    cleaned = [
+        (tv, i)
+        for i, tv in enumerate(gaze_times_video)
+        if tv is not None and (valid_mask is None or (i < len(valid_mask) and valid_mask[i]))
+    ]
     if not cleaned:
         return None
     times = [tv for tv, _ in cleaned]
@@ -679,6 +691,11 @@ def render_overlay(
     # Reconcile clocks once.
     gaze_times = reconciled_gaze_times(data)
     annos = reconciled_annotations(data)
+    # Parallel validity mask: invalid/dropout rows (placeholders, blinks, tracking
+    # loss) must never be selected for drawing -- otherwise the dot snaps to the
+    # (0,0)/(0.5,0.5) placeholder or shows stale gaze. Rows without an explicit
+    # 'valid' key default to valid (already-2D pixel datasets carry no flag).
+    gaze_valid = [bool(r.get("valid", True)) for r in data.gaze_rows]
 
     # Pick a window with annotation activity if not given.
     if start_s is None:
@@ -726,8 +743,13 @@ def render_overlay(
     for fi, fpath in enumerate(frame_files):
         # frame fi of the trimmed clip -> absolute video time
         t_video = start_s + frame_time(fi, decode_fps)
-        # nearest gaze sample (allow up to 1 gaze period of slack)
-        gi = nearest_gaze_index(gaze_times, t_video, max_dt=max(0.2, 2.0 / max(1.0, _gaze_hz(gaze_times))))
+        # nearest VALID gaze sample (allow up to 1 gaze period of slack); invalid
+        # rows are excluded so dropouts blank the dot instead of snapping/staling.
+        gi = nearest_gaze_index(
+            gaze_times, t_video,
+            max_dt=max(0.2, 2.0 / max(1.0, _gaze_hz(gaze_times))),
+            valid_mask=gaze_valid,
+        )
         gaze_px = None
         if gi is not None:
             proj = project_one(data.gaze_rows[gi], ctx)
