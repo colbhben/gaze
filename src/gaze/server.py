@@ -228,6 +228,7 @@ def viewer_html() -> str:
     let annotations = [];
     let mediaState = 'empty';
     let episodeDuration = 0;
+    let frameSide = 0;  // square pixel side for x_px/y_px gaze (e.g. 378); 0 = unknown
     let syntheticStart = performance.now();
     let loadToken = 0;
     async function json(url) { return (await fetch(url)).json(); }
@@ -237,7 +238,14 @@ def viewer_html() -> str:
       if (message) fallback.textContent = message;
       if (state === 'no-video') syntheticStart = performance.now();
     }
-    video.addEventListener('loadedmetadata', () => setMediaState('video'));
+    video.addEventListener('loadedmetadata', () => {
+      setMediaState('video');
+      // Match the stage to the video's aspect ratio so the overlay maps 1:1 (square
+      // molmoact2 clips, 4:3 egtea/egome, etc.) -- avoids letterbox + dot drift.
+      if (video.videoWidth && video.videoHeight) {
+        stage.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
+      }
+    });
     video.addEventListener('canplay', () => setMediaState('video'));
     video.addEventListener('error', () => setMediaState('no-video', 'No playable video for this episode'));
     video.addEventListener('timeupdate', updateCurrentAnnotation);
@@ -270,11 +278,13 @@ def viewer_html() -> str:
       video.pause();
       video.removeAttribute('src');
       video.load();
+      stage.style.aspectRatio = '';  // reset; re-set from intrinsic dims on loadedmetadata
       fallback.textContent = 'Loading episode...';
       setMediaState('loading');
       const ep = await json(`/api/episodes/${encodeURIComponent(id)}`);
       if (token !== loadToken) return;
-      episodeDuration = ep.duration_s || 0;
+      episodeDuration = ep.duration_s || (ep.metadata && ep.metadata.clip_end_time) || 0;
+      frameSide = Number(ep.resolution) || 0;  // for x_px/y_px gaze normalization
       if (ep.files.video) {
         setMediaState('loading', 'Loading video...');
         video.src = `/api/episodes/${encodeURIComponent(id)}/video`;
@@ -333,17 +343,49 @@ def viewer_html() -> str:
         return;
       }
       const row = gaze.reduce((best, item) => Math.abs(item.time_s - t) < Math.abs((best?.time_s || 999999) - t) ? item : best, null);
-      if (row && row.x_norm != null && row.y_norm != null) {
+      const norm = gazeNorm(row);  // {x,y} in [0,1] on the video frame, or null
+      if (norm) {
+        const r = videoContentRect();  // displayed video rect inside the stage (handles letterbox)
+        const cx = r.x + norm.x * r.w;
+        const cy = r.y + norm.y * r.h;
         ctx.fillStyle = '#ff4757';
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(row.x_norm * canvas.width, row.y_norm * canvas.height, 9, 0, Math.PI * 2);
+        ctx.arc(cx, cy, 9, 0, Math.PI * 2);
         ctx.fill();
+        ctx.stroke();
+        // small crosshair for precision
+        ctx.beginPath();
+        ctx.moveTo(cx - 16, cy); ctx.lineTo(cx + 16, cy);
+        ctx.moveTo(cx, cy - 16); ctx.lineTo(cx, cy + 16);
         ctx.stroke();
       }
       updateCurrentAnnotation();
       requestAnimationFrame(draw);
+    }
+    function gazeNorm(row) {
+      // Normalize a gaze row to [0,1] on the VIDEO FRAME, supporting both forms:
+      //   x_norm/y_norm (rectify/canonical) or x_px/y_px on a `frameSide` square (molmoact2).
+      if (!row) return null;
+      if (row.x_norm != null && row.y_norm != null) return { x: row.x_norm, y: row.y_norm };
+      if (row.x_px != null && row.y_px != null) {
+        const side = frameSide || (video.videoWidth && video.videoHeight ? Math.max(video.videoWidth, video.videoHeight) : 0);
+        if (side > 0) return { x: row.x_px / side, y: row.y_px / side };
+      }
+      return null;
+    }
+    function videoContentRect() {
+      // The rect (in canvas px) where the video content is actually drawn inside the
+      // stage, accounting for object-fit: contain letterboxing. Falls back to the full
+      // canvas when intrinsic video dims are unknown (e.g. no-video synthetic mode).
+      const vw = video.videoWidth, vh = video.videoHeight;
+      if (!vw || !vh || mediaState !== 'video') {
+        return { x: 0, y: 0, w: canvas.width, h: canvas.height };
+      }
+      const scale = Math.min(canvas.width / vw, canvas.height / vh);
+      const w = vw * scale, h = vh * scale;
+      return { x: (canvas.width - w) / 2, y: (canvas.height - h) / 2, w, h };
     }
     function formatTime(value) {
       const number = Number(value);
