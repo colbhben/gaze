@@ -439,6 +439,7 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
     build_training.add_argument("--merge-gap-s", metavar="S", type=float, default=1.0, help="(molmoact2) merge annotation spans separated by <= this gap. Default: 1.")
     build_training.add_argument("--min-clip-s", metavar="S", type=float, default=1.0, help="(molmoact2) drop segments shorter than this. Default: 1.")
     build_training.add_argument("--prompt", metavar="TEXT", default="Point to where the camera wearer is looking.", help="(molmoact2) gaze prompt text.")
+    build_training.add_argument("--workers", metavar="N", type=int, help="(molmoact2) parallel episodes; default: CPU count.")
     build_training.add_argument("--num-frames", metavar="N", type=int, default=16, help="(qwen) frames per clip; default: 16.")
     build_training.add_argument("--stride", metavar="N", type=int, default=8, help="(qwen) anchor hop in frames; default: 8.")
     build_training.add_argument("--resolution", metavar="PX", type=int, default=378, help="Square padded video side in pixels; default: 378 (MolmoAct2).")
@@ -856,6 +857,7 @@ def cmd_curate_build_training(args: argparse.Namespace) -> int:
         max_frames=args.max_frames,
         prompt=args.prompt,
         interesting_maps=interesting_maps,
+        workers=getattr(args, "workers", None),
         puller=puller,
         reuse_bundle=not args.no_reuse_bundle,
     )

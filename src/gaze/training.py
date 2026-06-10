@@ -766,6 +766,7 @@ def build_training_manifest(
     max_frames: int = ma.DEFAULT_MAX_FRAMES,
     prompt: str = ma.DEFAULT_PROMPT,
     interesting_maps: dict[str, dict[str, Any]] | None = None,
+    workers: int | None = None,
     puller: Puller | None = None,
     reuse_bundle: bool = True,
 ) -> dict[str, Any]:
@@ -813,28 +814,53 @@ def build_training_manifest(
         return cr.filter_episode_ids(slug, ids)
 
     if output_format == "molmoact2":
+        import concurrent.futures
+        import os
+
+        # Flat work list of (slug, episode_id), honoring cull + exclude globs.
+        jobs: list[tuple[str, str]] = []
         for slug in slugs:
             if cr.is_culled(slug):
                 rows_report.append({"dataset": slug, "culled": True})
                 continue
-            extra = {k: v for k, v in sample_map[slug].items() if k != "episode_id"}
             for episode_id in episodes_for(slug):
-                ex, rep = _build_molmoact_episode(
-                    slug, episode_id, extra, out_root, puller,
-                    fps=fps, resolution=resolution, max_frames=max_frames,
-                    max_clip_s=max_clip_s, merge_gap_s=merge_gap_s, min_clip_s=min_clip_s,
-                    prompt=prompt, reuse_bundle=reuse_bundle,
-                    interesting=interesting_maps.get(slug),
-                )
-                all_examples.extend(ex)
-                rows_report.append(rep)
+                jobs.append((slug, episode_id))
+
+        n_workers = max(1, workers if workers else (os.cpu_count() or 4))
+
+        def run_job(job: tuple[str, str]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+            slug, episode_id = job
+            extra = {k: v for k, v in sample_map[slug].items() if k != "episode_id"}
+            # Each episode gets its OWN Puller workdir so parallel pulls/trims never collide.
+            ep_puller = Puller(
+                ssh_host=puller.ssh_host, remote_root=puller.remote_root,
+                local_root=puller.local_root,
+                workdir=out_root / "_work" / _safe(f"{slug}__{episode_id}"),
+            )
+            return _build_molmoact_episode(
+                slug, episode_id, extra, out_root, ep_puller,
+                fps=fps, resolution=resolution, max_frames=max_frames,
+                max_clip_s=max_clip_s, merge_gap_s=merge_gap_s, min_clip_s=min_clip_s,
+                prompt=prompt, reuse_bundle=reuse_bundle,
+                interesting=interesting_maps.get(slug),
+            )
+
+        if n_workers == 1 or len(jobs) <= 1:
+            results = [run_job(j) for j in jobs]
+        else:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(n_workers, len(jobs))) as ex:
+                results = list(ex.map(run_job, jobs))
+        for examples, rep in results:
+            all_examples.extend(examples)
+            rows_report.append(rep)
+
         return _write_manifest_outputs(
             out_root, all_examples, rows_report,
             schema=ma.MOLMOACT_SCHEMA,
             report_meta={
                 "output_format": "molmoact2", "fps": fps, "resolution": resolution,
                 "max_frames": max_frames, "max_clip_s": max_clip_s,
-                "merge_gap_s": merge_gap_s, "min_clip_s": min_clip_s,
+                "merge_gap_s": merge_gap_s, "min_clip_s": min_clip_s, "workers": n_workers,
             },
         )
 
