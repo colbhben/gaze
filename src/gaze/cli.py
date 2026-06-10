@@ -455,6 +455,26 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
     build_training.add_argument("--no-reuse-bundle", action="store_true", help="Re-extract from source instead of reusing /tmp/gaze_extract/<slug>_full.json.")
     build_training.set_defaults(func=cmd_curate_build_training)
 
+    export_anno = curate_sub.add_parser(
+        "export-annotations",
+        help="Export a dataset's annotation spans (text+times) for interesting-region classification.",
+        description=(
+            "Flatten each episode's annotation channels into a JSONL of spans for LLM "
+            "classification (e.g. nymeria interesting-region filtering). One record per episode: "
+            "{take_id, spans:[{i,start_s,end_s,channel,text}]}. Feed to Claude (subagents for smoke; "
+            "scripts/classify_nymeria_regions.py on Bedrock for the full dataset) to produce the "
+            "filter map consumed by build-training-manifest --interesting-map."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    export_anno.add_argument("--dataset", metavar="SLUG", default="nymeria", help="Dataset slug; default: nymeria.")
+    export_anno.add_argument("--episodes-file", metavar="PATH", help="JSON {datasets:{slug:[ep,...]}}; omit to use the sample episode.")
+    export_anno.add_argument("--episode", metavar="ID", help="Single episode id (alternative to --episodes-file).")
+    export_anno.add_argument("--out", metavar="PATH", default="/tmp/gaze_anno_export.jsonl", help="Output JSONL; default: /tmp/gaze_anno_export.jsonl.")
+    export_anno.add_argument("--ssh-host", metavar="HOST", default="sumedhso-L40S", help="Remote data host; default: sumedhso-L40S.")
+    export_anno.add_argument("--local-root", metavar="PATH", help="Read source from a local mount instead of ssh.")
+    export_anno.set_defaults(func=cmd_curate_export_annotations)
+
 
 def add_dataset_common(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument("--repo-root", metavar="PATH", default=".", help="Repository root containing DATASETS.md and download_links; default: current directory.")
@@ -718,6 +738,45 @@ def cmd_curate_smoke(args: argparse.Namespace) -> int:
     print(json.dumps(result, indent=2, sort_keys=True))
     if args.upload and not args.dry_run and result["upload"].get("returncode") not in (0, None):
         return 1
+    return 0
+
+
+def cmd_curate_export_annotations(args: argparse.Namespace) -> int:
+    from .classify import export_annotation_spans
+    from .overlay import build_episode_data
+
+    slug = args.dataset
+    if args.episodes_file:
+        ef = json.loads(Path(args.episodes_file).read_text(encoding="utf-8"))
+        ids = (ef.get("datasets") or ef).get(slug, [])
+    elif args.episode:
+        ids = [args.episode]
+    else:
+        ids = [_sample_episode_id(slug)]
+    ids = [e for e in ids if e]
+    if not ids:
+        print(f"error: no episodes for {slug}", file=sys.stderr)
+        return 1
+
+    from .overlay import reconciled_annotations
+
+    puller = _curate_puller(args)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    n = 0
+    with out.open("w", encoding="utf-8") as fh:
+        for ep in ids:
+            try:
+                data = build_episode_data(slug, ep, puller, reuse=True)
+                # Export RECONCILED (video-zero) times so the interesting map is on the
+                # same clock the consume side (build-training-manifest) uses.
+                bundle = {"annotations": reconciled_annotations(data)}
+                rec = export_annotation_spans(bundle, ep)
+                fh.write(json.dumps(rec, sort_keys=True) + "\n")
+                n += 1
+            except Exception as exc:  # noqa
+                print(f"warn: {slug}:{ep} export failed: {exc}", file=sys.stderr)
+    print(json.dumps({"dataset": slug, "episodes_exported": n, "out": str(out)}, indent=2))
     return 0
 
 

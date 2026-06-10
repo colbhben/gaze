@@ -1,0 +1,3758 @@
+{
+  "20230607_s0_james_johnson_act0_e72nhq": {
+    "regions": [
+      {
+        "end_s": 413.3004289999999,
+        "interesting": true,
+        "reason": "walks, checks laundry machine",
+        "start_s": 383.30523300000004
+      },
+      {
+        "end_s": 443.2956240000003,
+        "interesting": true,
+        "reason": "checks laundry machine, walks",
+        "start_s": 413.3004289999999
+      },
+      {
+        "end_s": 473.29083400000036,
+        "interesting": true,
+        "reason": "checks sink items, drawers",
+        "start_s": 443.2956240000003
+      },
+      {
+        "end_s": 500.3531640000001,
+        "interesting": true,
+        "reason": "searches drawers, opens closet",
+        "start_s": 470.35797
+      },
+      {
+        "end_s": 530.3483740000001,
+        "interesting": true,
+        "reason": "closet, opens door, walks",
+        "start_s": 500.3531640000001
+      },
+      {
+        "end_s": 560.2769090000002,
+        "interesting": true,
+        "reason": "walking outside",
+        "start_s": 530.3483740000001
+      },
+      {
+        "end_s": 587.3392450000001,
+        "interesting": true,
+        "reason": "walks, tries door",
+        "start_s": 557.3440469999978
+      },
+      {
+        "end_s": 617.3344459999998,
+        "interesting": true,
+        "reason": "walking in yard",
+        "start_s": 587.3392450000001
+      },
+      {
+        "end_s": 647.2629969999998,
+        "interesting": true,
+        "reason": "walks, enters house",
+        "start_s": 617.3344459999998
+      },
+      {
+        "end_s": 674.3253200000026,
+        "interesting": true,
+        "reason": "walks, searches drawers",
+        "start_s": 644.3301310000015
+      },
+      {
+        "end_s": 704.3205229999976,
+        "interesting": true,
+        "reason": "searches bathroom, walks",
+        "start_s": 674.3253200000026
+      },
+      {
+        "end_s": 734.2490700000026,
+        "interesting": true,
+        "reason": "walks, drinks from tumbler",
+        "start_s": 704.3205229999976
+      },
+      {
+        "end_s": 761.3114100000003,
+        "interesting": true,
+        "reason": "puts tumbler down",
+        "start_s": 731.3162009999987
+      },
+      {
+        "end_s": 791.3066049999998,
+        "interesting": true,
+        "reason": "picks up objects",
+        "start_s": 761.3114100000003
+      },
+      {
+        "end_s": 821.3018090000005,
+        "interesting": true,
+        "reason": "handles toys, searches cabinet",
+        "start_s": 791.3066049999998
+      },
+      {
+        "end_s": 848.3641399999988,
+        "interesting": true,
+        "reason": "searches cabinets, microwave",
+        "start_s": 818.368939
+      },
+      {
+        "end_s": 878.3593410000003,
+        "interesting": true,
+        "reason": "searches cabinets, oven",
+        "start_s": 848.3641399999988
+      },
+      {
+        "end_s": 908.2878810000002,
+        "interesting": true,
+        "reason": "searches cabinet, fridge",
+        "start_s": 878.3593410000003
+      },
+      {
+        "end_s": 935.3502250000001,
+        "interesting": true,
+        "reason": "checks fridge, walks",
+        "start_s": 905.3550210000003
+      },
+      {
+        "end_s": 965.345421,
+        "interesting": false,
+        "reason": "sitting, talking only",
+        "start_s": 935.3502250000001
+      },
+      {
+        "end_s": 995.2739680000004,
+        "interesting": false,
+        "reason": "sitting, talking only",
+        "start_s": 965.345421
+      },
+      {
+        "end_s": 1022.3363010000003,
+        "interesting": true,
+        "reason": "picks up, plays ball",
+        "start_s": 992.3411020000003
+      },
+      {
+        "end_s": 1052.3315000000002,
+        "interesting": true,
+        "reason": "handles ball",
+        "start_s": 1022.3363010000003
+      },
+      {
+        "end_s": 1082.2600540000003,
+        "interesting": true,
+        "reason": "holds ball",
+        "start_s": 1052.3315000000002
+      },
+      {
+        "end_s": 1109.3223800000005,
+        "interesting": true,
+        "reason": "plays with ball",
+        "start_s": 1079.3271839999998
+      },
+      {
+        "end_s": 1139.3175870000005,
+        "interesting": true,
+        "reason": "plays with ball",
+        "start_s": 1109.3223800000005
+      },
+      {
+        "end_s": 1169.246123,
+        "interesting": true,
+        "reason": "plays then puts ball down",
+        "start_s": 1139.3175870000005
+      },
+      {
+        "end_s": 1196.3084600000002,
+        "interesting": false,
+        "reason": "sitting, gesturing only",
+        "start_s": 1166.3132590000005
+      },
+      {
+        "end_s": 1207.440012,
+        "interesting": true,
+        "reason": "stands, walks to door",
+        "start_s": 1196.3084600000002
+      },
+      {
+        "end_s": 388.3044289999998,
+        "interesting": true,
+        "reason": "walks to hallway",
+        "start_s": 383.30523300000004
+      },
+      {
+        "end_s": 393.3036310000016,
+        "interesting": true,
+        "reason": "opens laundry closet",
+        "start_s": 388.3044289999998
+      },
+      {
+        "end_s": 398.3028260000001,
+        "interesting": true,
+        "reason": "opens/closes closet",
+        "start_s": 393.3036310000016
+      },
+      {
+        "end_s": 403.3020260000003,
+        "interesting": true,
+        "reason": "opens closet door",
+        "start_s": 398.3028260000001
+      },
+      {
+        "end_s": 408.30122500000016,
+        "interesting": true,
+        "reason": "holds closet door",
+        "start_s": 403.3020260000003
+      },
+      {
+        "end_s": 413.3004289999999,
+        "interesting": true,
+        "reason": "opens washing machine lid",
+        "start_s": 408.30122500000016
+      },
+      {
+        "end_s": 418.2996280000016,
+        "interesting": true,
+        "reason": "closes lid, touches dryer",
+        "start_s": 413.3004289999999
+      },
+      {
+        "end_s": 423.29882799999996,
+        "interesting": true,
+        "reason": "opens/closes dryer door",
+        "start_s": 418.2996280000016
+      },
+      {
+        "end_s": 428.29802800000016,
+        "interesting": true,
+        "reason": "closes closet doors",
+        "start_s": 423.29882799999996
+      },
+      {
+        "end_s": 433.29723300000023,
+        "interesting": true,
+        "reason": "closes closet door",
+        "start_s": 428.29802800000016
+      },
+      {
+        "end_s": 438.2964350000002,
+        "interesting": true,
+        "reason": "closes door, walks",
+        "start_s": 433.29723300000023
+      },
+      {
+        "end_s": 443.2956240000003,
+        "interesting": true,
+        "reason": "walks, opens door",
+        "start_s": 438.2964350000002
+      },
+      {
+        "end_s": 448.2948299999998,
+        "interesting": true,
+        "reason": "touches door handle",
+        "start_s": 443.2956240000003
+      },
+      {
+        "end_s": 453.29402500000015,
+        "interesting": true,
+        "reason": "opens shower glass door",
+        "start_s": 448.2948299999998
+      },
+      {
+        "end_s": 458.2932289999999,
+        "interesting": true,
+        "reason": "closes glass door",
+        "start_s": 453.29402500000015
+      },
+      {
+        "end_s": 463.2924299999977,
+        "interesting": true,
+        "reason": "lifts soap, touches freshener",
+        "start_s": 458.2932289999999
+      },
+      {
+        "end_s": 468.2916350000005,
+        "interesting": true,
+        "reason": "opens drawer",
+        "start_s": 463.2924299999977
+      },
+      {
+        "end_s": 473.29083400000036,
+        "interesting": true,
+        "reason": "opens cabinet drawer",
+        "start_s": 468.2916350000005
+      },
+      {
+        "end_s": 475.3571660000025,
+        "interesting": true,
+        "reason": "opens/closes drawers",
+        "start_s": 470.35797
+      },
+      {
+        "end_s": 480.35636799999975,
+        "interesting": true,
+        "reason": "closes drawer, opens cabinet",
+        "start_s": 475.3571660000025
+      },
+      {
+        "end_s": 485.3555690000003,
+        "interesting": true,
+        "reason": "opens/closes cabinet",
+        "start_s": 480.35636799999975
+      },
+      {
+        "end_s": 490.35476199999994,
+        "interesting": true,
+        "reason": "closes cabinet, holds drawer",
+        "start_s": 485.3555690000003
+      },
+      {
+        "end_s": 495.353967,
+        "interesting": true,
+        "reason": "holds drawer, walks out",
+        "start_s": 490.35476199999994
+      },
+      {
+        "end_s": 500.3531640000001,
+        "interesting": true,
+        "reason": "walks, opens closet",
+        "start_s": 495.353967
+      },
+      {
+        "end_s": 505.3523690000002,
+        "interesting": true,
+        "reason": "closes closet door",
+        "start_s": 500.3531640000001
+      },
+      {
+        "end_s": 510.35157000000254,
+        "interesting": true,
+        "reason": "walks, turns",
+        "start_s": 505.3523690000002
+      },
+      {
+        "end_s": 515.3507650000001,
+        "interesting": true,
+        "reason": "unlocks, opens door",
+        "start_s": 510.35157000000254
+      },
+      {
+        "end_s": 520.3499689999999,
+        "interesting": true,
+        "reason": "holds doorknob, walks out",
+        "start_s": 515.3507650000001
+      },
+      {
+        "end_s": 525.3491709999998,
+        "interesting": true,
+        "reason": "walks down stairs",
+        "start_s": 520.3499689999999
+      },
+      {
+        "end_s": 530.3483740000001,
+        "interesting": false,
+        "reason": "standing, pointing/talking",
+        "start_s": 525.3491709999998
+      },
+      {
+        "end_s": 535.3475660000004,
+        "interesting": true,
+        "reason": "walks in side yard",
+        "start_s": 530.3483740000001
+      },
+      {
+        "end_s": 540.3467660000006,
+        "interesting": true,
+        "reason": "walking in side yard",
+        "start_s": 535.3475660000004
+      },
+      {
+        "end_s": 545.3459640000001,
+        "interesting": true,
+        "reason": "walks, turns toward yard",
+        "start_s": 540.3467660000006
+      },
+      {
+        "end_s": 550.3451670000004,
+        "interesting": true,
+        "reason": "walking in backyard",
+        "start_s": 545.3459640000001
+      },
+      {
+        "end_s": 555.3443749999988,
+        "interesting": true,
+        "reason": "walking in backyard",
+        "start_s": 550.3451670000004
+      },
+      {
+        "end_s": 560.2769090000002,
+        "interesting": true,
+        "reason": "walks down stairs",
+        "start_s": 555.3443749999988
+      },
+      {
+        "end_s": 562.3432439999988,
+        "interesting": true,
+        "reason": "descends stairs",
+        "start_s": 557.3440469999978
+      },
+      {
+        "end_s": 567.3424420000001,
+        "interesting": true,
+        "reason": "descends stairs",
+        "start_s": 562.3432439999988
+      },
+      {
+        "end_s": 572.3416450000004,
+        "interesting": true,
+        "reason": "opens door, ascends stairs",
+        "start_s": 567.3424420000001
+      },
+      {
+        "end_s": 577.340843,
+        "interesting": true,
+        "reason": "ascends stairs",
+        "start_s": 572.3416450000004
+      },
+      {
+        "end_s": 582.3400439999978,
+        "interesting": true,
+        "reason": "walks in backyard",
+        "start_s": 577.340843
+      },
+      {
+        "end_s": 587.3392450000001,
+        "interesting": true,
+        "reason": "descends stair, walks",
+        "start_s": 582.3400439999978
+      },
+      {
+        "end_s": 592.3384450000003,
+        "interesting": true,
+        "reason": "walks, turns",
+        "start_s": 587.3392450000001
+      },
+      {
+        "end_s": 597.3376479999997,
+        "interesting": true,
+        "reason": "walks in backyard",
+        "start_s": 592.3384450000003
+      },
+      {
+        "end_s": 602.336851,
+        "interesting": true,
+        "reason": "walking in backyard",
+        "start_s": 597.3376479999997
+      },
+      {
+        "end_s": 607.3360490000005,
+        "interesting": true,
+        "reason": "ascends stair, walks",
+        "start_s": 602.336851
+      },
+      {
+        "end_s": 612.3352479999976,
+        "interesting": true,
+        "reason": "walking in backyard",
+        "start_s": 607.3360490000005
+      },
+      {
+        "end_s": 617.3344459999998,
+        "interesting": true,
+        "reason": "walking in backyard",
+        "start_s": 612.3352479999976
+      },
+      {
+        "end_s": 622.3336470000004,
+        "interesting": true,
+        "reason": "walks, turns",
+        "start_s": 617.3344459999998
+      },
+      {
+        "end_s": 627.3328490000004,
+        "interesting": true,
+        "reason": "walking in backyard",
+        "start_s": 622.3336470000004
+      },
+      {
+        "end_s": 632.3320450000001,
+        "interesting": true,
+        "reason": "walking in backyard",
+        "start_s": 627.3328490000004
+      },
+      {
+        "end_s": 637.3312490000026,
+        "interesting": true,
+        "reason": "walks, turns",
+        "start_s": 632.3320450000001
+      },
+      {
+        "end_s": 642.3304429999998,
+        "interesting": true,
+        "reason": "walks, ascends stairs",
+        "start_s": 637.3312490000026
+      },
+      {
+        "end_s": 647.2629969999998,
+        "interesting": true,
+        "reason": "ascends stairs, enters bedroom",
+        "start_s": 642.3304429999998
+      },
+      {
+        "end_s": 649.3293229999999,
+        "interesting": true,
+        "reason": "walks into bedroom",
+        "start_s": 644.3301310000015
+      },
+      {
+        "end_s": 654.32852,
+        "interesting": true,
+        "reason": "walks, turns",
+        "start_s": 649.3293229999999
+      },
+      {
+        "end_s": 659.3277240000016,
+        "interesting": true,
+        "reason": "opens/closes drawer",
+        "start_s": 654.32852
+      },
+      {
+        "end_s": 664.326924,
+        "interesting": true,
+        "reason": "walks, opens drawer",
+        "start_s": 659.3277240000016
+      },
+      {
+        "end_s": 669.3261270000003,
+        "interesting": true,
+        "reason": "opens drawers",
+        "start_s": 664.326924
+      },
+      {
+        "end_s": 674.3253200000026,
+        "interesting": true,
+        "reason": "opens/closes drawer",
+        "start_s": 669.3261270000003
+      },
+      {
+        "end_s": 679.3245200000001,
+        "interesting": true,
+        "reason": "walks, exits bedroom",
+        "start_s": 674.3253200000026
+      },
+      {
+        "end_s": 684.3237270000027,
+        "interesting": true,
+        "reason": "enters bathroom, light switch",
+        "start_s": 679.3245200000001
+      },
+      {
+        "end_s": 689.3229310000015,
+        "interesting": true,
+        "reason": "opens/closes sliding door",
+        "start_s": 684.3237270000027
+      },
+      {
+        "end_s": 694.3221290000001,
+        "interesting": true,
+        "reason": "opens drawer",
+        "start_s": 689.3229310000015
+      },
+      {
+        "end_s": 699.3213290000003,
+        "interesting": true,
+        "reason": "opens drawers, cabinet",
+        "start_s": 694.3221290000001
+      },
+      {
+        "end_s": 704.3205229999976,
+        "interesting": true,
+        "reason": "closes cabinet, exits",
+        "start_s": 699.3213290000003
+      },
+      {
+        "end_s": 709.319735,
+        "interesting": true,
+        "reason": "walks toward kitchen",
+        "start_s": 704.3205229999976
+      },
+      {
+        "end_s": 714.318929,
+        "interesting": true,
+        "reason": "walks toward living area",
+        "start_s": 709.319735
+      },
+      {
+        "end_s": 719.3181249999998,
+        "interesting": true,
+        "reason": "walks, sits down",
+        "start_s": 714.318929
+      },
+      {
+        "end_s": 724.3173230000002,
+        "interesting": true,
+        "reason": "picks up cup, drinks",
+        "start_s": 719.3181249999998
+      },
+      {
+        "end_s": 729.3165259999987,
+        "interesting": true,
+        "reason": "drinking from cup",
+        "start_s": 724.3173230000002
+      },
+      {
+        "end_s": 734.2490700000026,
+        "interesting": true,
+        "reason": "puts cup down",
+        "start_s": 729.3165259999987
+      },
+      {
+        "end_s": 736.3154079999977,
+        "interesting": true,
+        "reason": "places tumbler down",
+        "start_s": 731.3162009999987
+      },
+      {
+        "end_s": 741.3146020000004,
+        "interesting": false,
+        "reason": "sitting, touches face",
+        "start_s": 736.3154079999977
+      },
+      {
+        "end_s": 746.3138049999998,
+        "interesting": false,
+        "reason": "sitting still",
+        "start_s": 741.3146020000004
+      },
+      {
+        "end_s": 751.3130090000004,
+        "interesting": false,
+        "reason": "sitting still",
+        "start_s": 746.3138049999998
+      },
+      {
+        "end_s": 756.3122320000002,
+        "interesting": false,
+        "reason": "sitting, talking/pointing",
+        "start_s": 751.3130090000004
+      },
+      {
+        "end_s": 761.3114100000003,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 756.3122320000002
+      },
+      {
+        "end_s": 766.3106070000003,
+        "interesting": false,
+        "reason": "sitting still",
+        "start_s": 761.3114100000003
+      },
+      {
+        "end_s": 771.3098090000003,
+        "interesting": true,
+        "reason": "grabs, plays ball",
+        "start_s": 766.3106070000003
+      },
+      {
+        "end_s": 776.3090009999987,
+        "interesting": true,
+        "reason": "plays with ball",
+        "start_s": 771.3098090000003
+      },
+      {
+        "end_s": 781.3082039999999,
+        "interesting": true,
+        "reason": "grabs ball, duck toys",
+        "start_s": 776.3090009999987
+      },
+      {
+        "end_s": 786.3074090000009,
+        "interesting": true,
+        "reason": "handles duck toys",
+        "start_s": 781.3082039999999
+      },
+      {
+        "end_s": 791.3066049999998,
+        "interesting": true,
+        "reason": "holds duck toys",
+        "start_s": 786.3074090000009
+      },
+      {
+        "end_s": 796.3058119999987,
+        "interesting": true,
+        "reason": "handles duck toys",
+        "start_s": 791.3066049999998
+      },
+      {
+        "end_s": 801.3050080000003,
+        "interesting": true,
+        "reason": "handles duck toys",
+        "start_s": 796.3058119999987
+      },
+      {
+        "end_s": 806.3042060000025,
+        "interesting": true,
+        "reason": "places toys, reaches pack",
+        "start_s": 801.3050080000003
+      },
+      {
+        "end_s": 811.3034029999999,
+        "interesting": true,
+        "reason": "grabs pack, stands, walks",
+        "start_s": 806.3042060000025
+      },
+      {
+        "end_s": 816.3026,
+        "interesting": true,
+        "reason": "walks, opens cabinet",
+        "start_s": 811.3034029999999
+      },
+      {
+        "end_s": 821.3018090000005,
+        "interesting": true,
+        "reason": "closes cabinet",
+        "start_s": 816.3026
+      },
+      {
+        "end_s": 823.368144,
+        "interesting": true,
+        "reason": "walks, opens cabinet",
+        "start_s": 818.368939
+      },
+      {
+        "end_s": 828.3673399999998,
+        "interesting": true,
+        "reason": "opens cabinet, microwave",
+        "start_s": 823.368144
+      },
+      {
+        "end_s": 833.3665439999977,
+        "interesting": true,
+        "reason": "opens microwave, cabinet",
+        "start_s": 828.3673399999998
+      },
+      {
+        "end_s": 838.3657380000004,
+        "interesting": true,
+        "reason": "opens/closes cabinet",
+        "start_s": 833.3665439999977
+      },
+      {
+        "end_s": 843.3649530000002,
+        "interesting": true,
+        "reason": "opens drawer",
+        "start_s": 838.3657380000004
+      },
+      {
+        "end_s": 848.3641399999988,
+        "interesting": true,
+        "reason": "closes drawer, opens cabinet",
+        "start_s": 843.3649530000002
+      },
+      {
+        "end_s": 853.3633399999999,
+        "interesting": true,
+        "reason": "opens oven",
+        "start_s": 848.3641399999988
+      },
+      {
+        "end_s": 858.3625419999998,
+        "interesting": true,
+        "reason": "closes oven, opens drawer",
+        "start_s": 853.3633399999999
+      },
+      {
+        "end_s": 863.3617400000003,
+        "interesting": true,
+        "reason": "opens drawers",
+        "start_s": 858.3625419999998
+      },
+      {
+        "end_s": 868.3609470000001,
+        "interesting": true,
+        "reason": "holds drawer",
+        "start_s": 863.3617400000003
+      },
+      {
+        "end_s": 873.360138,
+        "interesting": true,
+        "reason": "opens/closes drawers",
+        "start_s": 868.3609470000001
+      },
+      {
+        "end_s": 878.3593410000003,
+        "interesting": true,
+        "reason": "opens sink cabinet",
+        "start_s": 873.360138
+      },
+      {
+        "end_s": 883.3585419999999,
+        "interesting": true,
+        "reason": "closes sink cabinet",
+        "start_s": 878.3593410000003
+      },
+      {
+        "end_s": 888.357739,
+        "interesting": true,
+        "reason": "turns, walks",
+        "start_s": 883.3585419999999
+      },
+      {
+        "end_s": 893.3569429999998,
+        "interesting": true,
+        "reason": "opens/closes fridge",
+        "start_s": 888.357739
+      },
+      {
+        "end_s": 898.356143,
+        "interesting": true,
+        "reason": "opens/closes fridge",
+        "start_s": 893.3569429999998
+      },
+      {
+        "end_s": 903.3553400000001,
+        "interesting": true,
+        "reason": "opens fridge drawer",
+        "start_s": 898.356143
+      },
+      {
+        "end_s": 908.2878810000002,
+        "interesting": true,
+        "reason": "closes drawer, opens fridge",
+        "start_s": 903.3553400000001
+      },
+      {
+        "end_s": 910.354225,
+        "interesting": true,
+        "reason": "opens fridge doors",
+        "start_s": 905.3550210000003
+      },
+      {
+        "end_s": 915.3534200000004,
+        "interesting": true,
+        "reason": "closes fridge, walks",
+        "start_s": 910.354225
+      },
+      {
+        "end_s": 920.3526190000002,
+        "interesting": true,
+        "reason": "walks to living room",
+        "start_s": 915.3534200000004
+      },
+      {
+        "end_s": 925.3518260000001,
+        "interesting": true,
+        "reason": "stands, sits down",
+        "start_s": 920.3526190000002
+      },
+      {
+        "end_s": 930.3510139999999,
+        "interesting": false,
+        "reason": "sitting, gesturing/talking",
+        "start_s": 925.3518260000001
+      },
+      {
+        "end_s": 935.3502250000001,
+        "interesting": false,
+        "reason": "sitting, gesturing/talking",
+        "start_s": 930.3510139999999
+      },
+      {
+        "end_s": 940.3494220000002,
+        "interesting": false,
+        "reason": "sitting still",
+        "start_s": 935.3502250000001
+      },
+      {
+        "end_s": 945.3486210000001,
+        "interesting": false,
+        "reason": "sitting, gesturing/talking",
+        "start_s": 940.3494220000002
+      },
+      {
+        "end_s": 950.3478249999998,
+        "interesting": false,
+        "reason": "sitting, gesturing/talking",
+        "start_s": 945.3486210000001
+      },
+      {
+        "end_s": 955.3470239999997,
+        "interesting": false,
+        "reason": "sitting, gesturing/talking",
+        "start_s": 950.3478249999998
+      },
+      {
+        "end_s": 960.3462230000005,
+        "interesting": false,
+        "reason": "sitting, gesturing/talking",
+        "start_s": 955.3470239999997
+      },
+      {
+        "end_s": 965.345421,
+        "interesting": false,
+        "reason": "sitting, gesturing/talking",
+        "start_s": 960.3462230000005
+      },
+      {
+        "end_s": 970.3446220000005,
+        "interesting": false,
+        "reason": "sitting, gesturing/talking",
+        "start_s": 965.345421
+      },
+      {
+        "end_s": 975.3438160000005,
+        "interesting": false,
+        "reason": "sitting, gesturing/talking",
+        "start_s": 970.3446220000005
+      },
+      {
+        "end_s": 980.3430230000004,
+        "interesting": false,
+        "reason": "sitting, gesturing/talking",
+        "start_s": 975.3438160000005
+      },
+      {
+        "end_s": 985.3422170000003,
+        "interesting": false,
+        "reason": "sitting, gesturing/talking",
+        "start_s": 980.3430230000004
+      },
+      {
+        "end_s": 990.3414199999997,
+        "interesting": false,
+        "reason": "sitting, gesturing/talking",
+        "start_s": 985.3422170000003
+      },
+      {
+        "end_s": 997.3403020000005,
+        "interesting": true,
+        "reason": "picks up ball",
+        "start_s": 992.3411020000003
+      },
+      {
+        "end_s": 1002.3394950000002,
+        "interesting": true,
+        "reason": "rotates ball",
+        "start_s": 997.3403020000005
+      },
+      {
+        "end_s": 1007.3386989999999,
+        "interesting": true,
+        "reason": "rotates ball",
+        "start_s": 1002.3394950000002
+      },
+      {
+        "end_s": 1012.3379060000016,
+        "interesting": true,
+        "reason": "throws ball",
+        "start_s": 1007.3386989999999
+      },
+      {
+        "end_s": 1017.3371010000001,
+        "interesting": true,
+        "reason": "throws, puts down ball",
+        "start_s": 1012.3379060000016
+      },
+      {
+        "end_s": 1022.3363010000003,
+        "interesting": true,
+        "reason": "handles ball",
+        "start_s": 1017.3371010000001
+      },
+      {
+        "end_s": 1027.3355080000001,
+        "interesting": true,
+        "reason": "holds, drags ball",
+        "start_s": 1022.3363010000003
+      },
+      {
+        "end_s": 1032.3347009999998,
+        "interesting": true,
+        "reason": "plays with ball",
+        "start_s": 1027.3355080000001
+      },
+      {
+        "end_s": 1037.333904,
+        "interesting": true,
+        "reason": "handles ball",
+        "start_s": 1032.3347009999998
+      },
+      {
+        "end_s": 1042.3330990000004,
+        "interesting": true,
+        "reason": "holds ball",
+        "start_s": 1037.333904
+      },
+      {
+        "end_s": 1047.3323070000006,
+        "interesting": true,
+        "reason": "holds ball",
+        "start_s": 1042.3330990000004
+      },
+      {
+        "end_s": 1052.3315000000002,
+        "interesting": true,
+        "reason": "lifts ball",
+        "start_s": 1047.3323070000006
+      },
+      {
+        "end_s": 1057.3306979999998,
+        "interesting": true,
+        "reason": "holds ball",
+        "start_s": 1052.3315000000002
+      },
+      {
+        "end_s": 1062.3298960000002,
+        "interesting": true,
+        "reason": "plays with ball",
+        "start_s": 1057.3306979999998
+      },
+      {
+        "end_s": 1067.3291040000004,
+        "interesting": true,
+        "reason": "holds ball",
+        "start_s": 1062.3298960000002
+      },
+      {
+        "end_s": 1072.3283020000017,
+        "interesting": true,
+        "reason": "holds ball",
+        "start_s": 1067.3291040000004
+      },
+      {
+        "end_s": 1077.3275039999999,
+        "interesting": true,
+        "reason": "holds ball",
+        "start_s": 1072.3283020000017
+      },
+      {
+        "end_s": 1082.2600540000003,
+        "interesting": true,
+        "reason": "plays with ball",
+        "start_s": 1077.3275039999999
+      },
+      {
+        "end_s": 1084.3263820000002,
+        "interesting": true,
+        "reason": "passes ball between hands",
+        "start_s": 1079.3271840000007
+      },
+      {
+        "end_s": 1089.325586,
+        "interesting": true,
+        "reason": "passes, holds ball",
+        "start_s": 1084.3263820000002
+      },
+      {
+        "end_s": 1094.3247770000007,
+        "interesting": true,
+        "reason": "holds ball",
+        "start_s": 1089.325586
+      },
+      {
+        "end_s": 1099.323985,
+        "interesting": true,
+        "reason": "holds ball",
+        "start_s": 1094.3247770000007
+      },
+      {
+        "end_s": 1104.3231829999995,
+        "interesting": true,
+        "reason": "holds ball, gestures",
+        "start_s": 1099.323985
+      },
+      {
+        "end_s": 1109.3223799999996,
+        "interesting": true,
+        "reason": "holds ball",
+        "start_s": 1104.3231829999995
+      },
+      {
+        "end_s": 1114.3216000000002,
+        "interesting": true,
+        "reason": "holds ball",
+        "start_s": 1109.3223799999996
+      },
+      {
+        "end_s": 1119.3207819999998,
+        "interesting": true,
+        "reason": "holds ball",
+        "start_s": 1114.3216000000002
+      },
+      {
+        "end_s": 1124.319977,
+        "interesting": true,
+        "reason": "holds ball",
+        "start_s": 1119.3207819999998
+      },
+      {
+        "end_s": 1129.3191829999996,
+        "interesting": true,
+        "reason": "holds ball",
+        "start_s": 1124.319977
+      },
+      {
+        "end_s": 1134.318408,
+        "interesting": true,
+        "reason": "holds ball",
+        "start_s": 1129.3191829999996
+      },
+      {
+        "end_s": 1139.3175869999995,
+        "interesting": true,
+        "reason": "plays with ball",
+        "start_s": 1134.318408
+      },
+      {
+        "end_s": 1144.316785,
+        "interesting": true,
+        "reason": "plays, holds ball",
+        "start_s": 1139.3175869999995
+      },
+      {
+        "end_s": 1149.3159840000008,
+        "interesting": true,
+        "reason": "places ball on table",
+        "start_s": 1144.316785
+      },
+      {
+        "end_s": 1154.3151850000004,
+        "interesting": false,
+        "reason": "sitting, hands on lap",
+        "start_s": 1149.3159840000008
+      },
+      {
+        "end_s": 1159.3143770000006,
+        "interesting": false,
+        "reason": "sitting, gesturing/talking",
+        "start_s": 1154.3151850000004
+      },
+      {
+        "end_s": 1164.31358,
+        "interesting": false,
+        "reason": "sitting, gesturing/talking",
+        "start_s": 1159.3143770000006
+      },
+      {
+        "end_s": 1169.246123,
+        "interesting": false,
+        "reason": "sitting, gesturing/talking",
+        "start_s": 1164.31358
+      },
+      {
+        "end_s": 1171.3124660000003,
+        "interesting": false,
+        "reason": "sitting, listening",
+        "start_s": 1166.3132590000005
+      },
+      {
+        "end_s": 1176.3116650000002,
+        "interesting": false,
+        "reason": "sitting, gesturing/talking",
+        "start_s": 1171.3124660000003
+      },
+      {
+        "end_s": 1181.3108540000003,
+        "interesting": false,
+        "reason": "sitting, listening",
+        "start_s": 1176.3116650000002
+      },
+      {
+        "end_s": 1186.3100560000003,
+        "interesting": false,
+        "reason": "sitting, gesturing/talking",
+        "start_s": 1181.3108540000003
+      },
+      {
+        "end_s": 1191.3092660000002,
+        "interesting": false,
+        "reason": "sitting, gesturing/talking",
+        "start_s": 1186.3100560000003
+      },
+      {
+        "end_s": 1196.3084600000002,
+        "interesting": false,
+        "reason": "sitting, gesturing/talking",
+        "start_s": 1191.3092660000002
+      },
+      {
+        "end_s": 1199.3079870000001,
+        "interesting": true,
+        "reason": "stands, walks to door",
+        "start_s": 1196.3084600000002
+      },
+      {
+        "end_s": 1203.3073410000015,
+        "interesting": false,
+        "reason": "standing, turning",
+        "start_s": 1199.3079870000001
+      },
+      {
+        "end_s": 1207.440012,
+        "interesting": false,
+        "reason": "standing still",
+        "start_s": 1203.3073410000015
+      }
+    ]
+  },
+  "20230607_s0_james_johnson_act1_7xwm28": {
+    "regions": [
+      {
+        "end_s": 146.67643000000044,
+        "interesting": true,
+        "reason": "walks, grabs mug, loads coffee pod",
+        "start_s": 116.68123300000025
+      },
+      {
+        "end_s": 176.67162800000006,
+        "interesting": false,
+        "reason": "standing, talking, gesturing only",
+        "start_s": 146.67643000000044
+      },
+      {
+        "end_s": 206.60017100000005,
+        "interesting": false,
+        "reason": "standing idle, waiting",
+        "start_s": 176.67162800000006
+      },
+      {
+        "end_s": 233.66251199999897,
+        "interesting": true,
+        "reason": "removes capsule, opens drawer, handles mugs",
+        "start_s": 203.6673069999997
+      },
+      {
+        "end_s": 263.6577099999995,
+        "interesting": true,
+        "reason": "searches cabinets, opens tea packet",
+        "start_s": 233.66251199999897
+      },
+      {
+        "end_s": 293.5862500000003,
+        "interesting": true,
+        "reason": "stirs, pours sugar, handles tea bag",
+        "start_s": 263.6577099999995
+      },
+      {
+        "end_s": 320.6486070000001,
+        "interesting": true,
+        "reason": "pours sugar, stirs, closes cabinet",
+        "start_s": 290.65338900000006
+      },
+      {
+        "end_s": 350.6437850000002,
+        "interesting": true,
+        "reason": "walks, puts down cup, grabs tumbler",
+        "start_s": 320.6486070000001
+      },
+      {
+        "end_s": 380.5723369999996,
+        "interesting": true,
+        "reason": "drinks, picks up remote, sits down",
+        "start_s": 350.6437850000002
+      },
+      {
+        "end_s": 407.6346700000013,
+        "interesting": true,
+        "reason": "operates remote to open TV",
+        "start_s": 377.63947200000075
+      },
+      {
+        "end_s": 437.62986400000045,
+        "interesting": true,
+        "reason": "opens TV with remote",
+        "start_s": 407.6346700000013
+      },
+      {
+        "end_s": 467.5584080000008,
+        "interesting": true,
+        "reason": "navigates TV with remote",
+        "start_s": 437.62986400000045
+      },
+      {
+        "end_s": 494.62075600000026,
+        "interesting": true,
+        "reason": "navigates TV programs with remote",
+        "start_s": 464.62555500000053
+      },
+      {
+        "end_s": 524.6159530000004,
+        "interesting": true,
+        "reason": "navigates TV with remote, talks",
+        "start_s": 494.62075600000026
+      },
+      {
+        "end_s": 554.6111440000004,
+        "interesting": false,
+        "reason": "holds remote, talking only",
+        "start_s": 524.6159530000004
+      },
+      {
+        "end_s": 581.6734830000005,
+        "interesting": false,
+        "reason": "holds remote, talking only",
+        "start_s": 551.6782839999996
+      },
+      {
+        "end_s": 610.6688439999998,
+        "interesting": true,
+        "reason": "navigates TV with remote",
+        "start_s": 581.6734830000005
+      },
+      {
+        "end_s": 641.5972289999991,
+        "interesting": true,
+        "reason": "drinks from glass, holds remote",
+        "start_s": 610.6688439999998
+      },
+      {
+        "end_s": 668.6595679999991,
+        "interesting": true,
+        "reason": "drinks, puts tumbler down, navigates TV",
+        "start_s": 638.6643629999999
+      },
+      {
+        "end_s": 698.654767,
+        "interesting": false,
+        "reason": "holds remote, talking only",
+        "start_s": 668.6595679999991
+      },
+      {
+        "end_s": 728.5833050000001,
+        "interesting": false,
+        "reason": "holds remote, talking only",
+        "start_s": 698.654767
+      },
+      {
+        "end_s": 755.6456420000013,
+        "interesting": false,
+        "reason": "sitting, talking only",
+        "start_s": 725.6504409999998
+      },
+      {
+        "end_s": 785.6408420000007,
+        "interesting": false,
+        "reason": "sitting, talking only",
+        "start_s": 755.6456420000013
+      },
+      {
+        "end_s": 815.5693899999987,
+        "interesting": false,
+        "reason": "sitting, talking only",
+        "start_s": 785.6408420000007
+      },
+      {
+        "end_s": 842.6317280000003,
+        "interesting": true,
+        "reason": "adjusts head device with hands",
+        "start_s": 812.6365310000001
+      },
+      {
+        "end_s": 872.6269300000004,
+        "interesting": true,
+        "reason": "picks up tumbler and drinks",
+        "start_s": 842.6317280000003
+      },
+      {
+        "end_s": 902.5554740000007,
+        "interesting": true,
+        "reason": "drinks, navigates TV with remote",
+        "start_s": 872.6269300000004
+      },
+      {
+        "end_s": 929.6178060000002,
+        "interesting": true,
+        "reason": "navigates TV with remote",
+        "start_s": 899.6226069999993
+      },
+      {
+        "end_s": 959.6129999999994,
+        "interesting": true,
+        "reason": "navigates TV with remote",
+        "start_s": 929.6178060000002
+      },
+      {
+        "end_s": 978.8765960000001,
+        "interesting": true,
+        "reason": "stands, places tumbler, walks",
+        "start_s": 959.6129999999994
+      },
+      {
+        "end_s": 121.68043300000045,
+        "interesting": true,
+        "reason": "turns and walks in kitchen",
+        "start_s": 116.68123300000025
+      },
+      {
+        "end_s": 126.67962800000078,
+        "interesting": true,
+        "reason": "walks, opens cabinet, reaches for item",
+        "start_s": 121.68043300000045
+      },
+      {
+        "end_s": 131.67882800000007,
+        "interesting": true,
+        "reason": "grabs mug, closes cabinet, puts on counter",
+        "start_s": 126.67962800000078
+      },
+      {
+        "end_s": 116.68123300000025,
+        "interesting": true,
+        "reason": "opens coffee lid, grabs capsule",
+        "start_s": 131.67882800000007
+      },
+      {
+        "end_s": 141.67722700000013,
+        "interesting": true,
+        "reason": "loads capsule, closes lid, places mug",
+        "start_s": 136.6780319999998
+      },
+      {
+        "end_s": 146.67643000000044,
+        "interesting": true,
+        "reason": "turns on coffee machine",
+        "start_s": 141.67722700000013
+      },
+      {
+        "end_s": 151.67562599999746,
+        "interesting": false,
+        "reason": "standing, looking at machine",
+        "start_s": 146.67643000000044
+      },
+      {
+        "end_s": 156.67482599999948,
+        "interesting": false,
+        "reason": "standing, looking at machine",
+        "start_s": 151.67562599999746
+      },
+      {
+        "end_s": 161.67403900000045,
+        "interesting": false,
+        "reason": "standing, gestures, talking only",
+        "start_s": 156.67482599999948
+      },
+      {
+        "end_s": 166.67322899999908,
+        "interesting": false,
+        "reason": "standing, gesturing, looking",
+        "start_s": 161.67403900000045
+      },
+      {
+        "end_s": 171.67242899999746,
+        "interesting": false,
+        "reason": "standing, looking at machine",
+        "start_s": 166.67322899999908
+      },
+      {
+        "end_s": 176.67162800000006,
+        "interesting": false,
+        "reason": "standing, gesturing, talking only",
+        "start_s": 171.67242899999746
+      },
+      {
+        "end_s": 116.68123300000025,
+        "interesting": false,
+        "reason": "standing idle, looking",
+        "start_s": 176.67162800000006
+      },
+      {
+        "end_s": 116.68123300000025,
+        "interesting": false,
+        "reason": "standing, looking, talking only",
+        "start_s": 181.67082800000026
+      },
+      {
+        "end_s": 116.68123300000025,
+        "interesting": false,
+        "reason": "standing, looking, talking only",
+        "start_s": 186.67003300000033
+      },
+      {
+        "end_s": 121.68043300000045,
+        "interesting": false,
+        "reason": "standing, looking, talking only",
+        "start_s": 191.66922700000032
+      },
+      {
+        "end_s": 126.67962800000078,
+        "interesting": false,
+        "reason": "standing, looking, talking only",
+        "start_s": 196.6684269999996
+      },
+      {
+        "end_s": 131.612169,
+        "interesting": false,
+        "reason": "standing, looking, talking only",
+        "start_s": 201.66762599999947
+      },
+      {
+        "end_s": 208.6665069999999,
+        "interesting": false,
+        "reason": "standing idle, waiting",
+        "start_s": 203.6673069999997
+      },
+      {
+        "end_s": 213.6657060000025,
+        "interesting": true,
+        "reason": "opens top of coffee machine",
+        "start_s": 208.6665069999999
+      },
+      {
+        "end_s": 218.66490600000088,
+        "interesting": true,
+        "reason": "opens machine, pulls out capsule",
+        "start_s": 213.6657060000025
+      },
+      {
+        "end_s": 223.66410600000017,
+        "interesting": true,
+        "reason": "handles capsule, closes machine, picks mug",
+        "start_s": 218.66490600000088
+      },
+      {
+        "end_s": 228.66331400000036,
+        "interesting": true,
+        "reason": "walks, opens and closes drawer",
+        "start_s": 223.66410600000017
+      },
+      {
+        "end_s": 233.66251199999897,
+        "interesting": true,
+        "reason": "steps, puts mug down, picks up mug/spoon",
+        "start_s": 228.66331400000036
+      },
+      {
+        "end_s": 238.66170899999906,
+        "interesting": true,
+        "reason": "transfers spoon, handles mugs, opens cabinet",
+        "start_s": 233.66251199999897
+      },
+      {
+        "end_s": 243.66090799999984,
+        "interesting": true,
+        "reason": "opens and closes kitchen cabinets",
+        "start_s": 238.66170899999906
+      },
+      {
+        "end_s": 248.66011100000014,
+        "interesting": true,
+        "reason": "pulls box from cabinet, moves jar",
+        "start_s": 243.66090799999984
+      },
+      {
+        "end_s": 253.6593069999999,
+        "interesting": true,
+        "reason": "moves jar and sugar canister in cabinet",
+        "start_s": 248.66011100000014
+      },
+      {
+        "end_s": 258.6585100000002,
+        "interesting": true,
+        "reason": "reaches into cabinet shelves",
+        "start_s": 253.6593069999999
+      },
+      {
+        "end_s": 263.6577099999995,
+        "interesting": true,
+        "reason": "gets tea packet, opens it",
+        "start_s": 258.6585100000002
+      },
+      {
+        "end_s": 268.65690600000016,
+        "interesting": true,
+        "reason": "pulls tea bag, puts in mug, picks spoon",
+        "start_s": 263.6577099999995
+      },
+      {
+        "end_s": 273.65611100000024,
+        "interesting": true,
+        "reason": "soaks tea bag, stirs coffee with spoon",
+        "start_s": 268.65690600000016
+      },
+      {
+        "end_s": 278.6553060000024,
+        "interesting": true,
+        "reason": "holds tea bag and spoon while talking",
+        "start_s": 273.65611100000024
+      },
+      {
+        "end_s": 283.65450899999905,
+        "interesting": true,
+        "reason": "stirs coffee, puts spoon down",
+        "start_s": 278.6553060000024
+      },
+      {
+        "end_s": 288.65371099999993,
+        "interesting": true,
+        "reason": "takes sugar box from cabinet",
+        "start_s": 283.65450899999905
+      },
+      {
+        "end_s": 293.5862500000003,
+        "interesting": true,
+        "reason": "pours sugar into mug",
+        "start_s": 288.65371099999993
+      },
+      {
+        "end_s": 295.65258900000026,
+        "interesting": true,
+        "reason": "pours sugar, shakes box",
+        "start_s": 290.65338900000006
+      },
+      {
+        "end_s": 300.6517880000001,
+        "interesting": true,
+        "reason": "shakes box, stores it, mixes tea",
+        "start_s": 295.65258900000026
+      },
+      {
+        "end_s": 305.6509880000003,
+        "interesting": true,
+        "reason": "mixes tea with spoon",
+        "start_s": 300.6517880000001
+      },
+      {
+        "end_s": 310.65018699999746,
+        "interesting": true,
+        "reason": "mixes tea with spoon",
+        "start_s": 305.6509880000003
+      },
+      {
+        "end_s": 315.6493869999995,
+        "interesting": true,
+        "reason": "mixes tea, closes cabinet",
+        "start_s": 310.65018699999746
+      },
+      {
+        "end_s": 320.6486070000001,
+        "interesting": true,
+        "reason": "closes cabinet, picks up tea cup",
+        "start_s": 315.6493869999995
+      },
+      {
+        "end_s": 325.6477910000003,
+        "interesting": true,
+        "reason": "walks, puts tea cup down",
+        "start_s": 320.6486070000001
+      },
+      {
+        "end_s": 330.64698699999917,
+        "interesting": true,
+        "reason": "grabs sachet, turns, talks",
+        "start_s": 325.6477910000003
+      },
+      {
+        "end_s": 335.64619200000016,
+        "interesting": true,
+        "reason": "walks to sink, holds sachet",
+        "start_s": 330.64698699999917
+      },
+      {
+        "end_s": 340.6453899999997,
+        "interesting": true,
+        "reason": "puts sachet down, mixes tea",
+        "start_s": 335.64619200000016
+      },
+      {
+        "end_s": 345.64460099999997,
+        "interesting": true,
+        "reason": "mixes tea with spoon",
+        "start_s": 340.6453899999997
+      },
+      {
+        "end_s": 350.6437850000002,
+        "interesting": true,
+        "reason": "walks to living area, touches tumbler",
+        "start_s": 345.64460099999997
+      },
+      {
+        "end_s": 355.64299200000096,
+        "interesting": true,
+        "reason": "picks up tumbler and drinks",
+        "start_s": 350.6437850000002
+      },
+      {
+        "end_s": 360.6421879999998,
+        "interesting": true,
+        "reason": "holds tumbler, steps, turns",
+        "start_s": 355.64299200000096
+      },
+      {
+        "end_s": 365.6413909999992,
+        "interesting": true,
+        "reason": "drinks from tumbler",
+        "start_s": 360.6421879999998
+      },
+      {
+        "end_s": 370.6405909999994,
+        "interesting": true,
+        "reason": "puts tumbler down, reaches for remote",
+        "start_s": 365.6413909999992
+      },
+      {
+        "end_s": 375.63978999999927,
+        "interesting": true,
+        "reason": "picks up TV remote, turns",
+        "start_s": 370.6405909999994
+      },
+      {
+        "end_s": 380.5723369999996,
+        "interesting": true,
+        "reason": "operates remote, sits down",
+        "start_s": 375.63978999999927
+      },
+      {
+        "end_s": 382.6386700000003,
+        "interesting": true,
+        "reason": "fixes hair, holds remote, sits",
+        "start_s": 377.63947200000075
+      },
+      {
+        "end_s": 387.63787200000115,
+        "interesting": false,
+        "reason": "sitting, holding remote idle",
+        "start_s": 382.6386700000003
+      },
+      {
+        "end_s": 392.6370700000007,
+        "interesting": true,
+        "reason": "presses remote buttons to turn on TV",
+        "start_s": 387.63787200000115
+      },
+      {
+        "end_s": 397.63626900000054,
+        "interesting": false,
+        "reason": "sitting, holding remote idle",
+        "start_s": 392.6370700000007
+      },
+      {
+        "end_s": 402.63547199999994,
+        "interesting": false,
+        "reason": "sitting, holding remote, leans",
+        "start_s": 397.63626900000054
+      },
+      {
+        "end_s": 407.6346700000013,
+        "interesting": false,
+        "reason": "sitting, holds remote, points at TV",
+        "start_s": 402.63547199999994
+      },
+      {
+        "end_s": 412.6338689999993,
+        "interesting": true,
+        "reason": "presses remote to open TV",
+        "start_s": 407.6346700000013
+      },
+      {
+        "end_s": 417.6330739999994,
+        "interesting": true,
+        "reason": "presses remote to open TV",
+        "start_s": 412.6338689999993
+      },
+      {
+        "end_s": 422.6322660000005,
+        "interesting": false,
+        "reason": "sitting, holding remote idle",
+        "start_s": 417.6330739999994
+      },
+      {
+        "end_s": 427.63147000000026,
+        "interesting": true,
+        "reason": "presses remote to change channels",
+        "start_s": 422.6322660000005
+      },
+      {
+        "end_s": 432.63067200000114,
+        "interesting": true,
+        "reason": "presses remote to change channels",
+        "start_s": 427.63147000000026
+      },
+      {
+        "end_s": 437.62986400000045,
+        "interesting": true,
+        "reason": "presses remote to change channels",
+        "start_s": 432.63067200000114
+      },
+      {
+        "end_s": 442.6290690000005,
+        "interesting": true,
+        "reason": "presses remote to change channels",
+        "start_s": 437.62986400000045
+      },
+      {
+        "end_s": 447.6282680000004,
+        "interesting": true,
+        "reason": "presses remote to change channels",
+        "start_s": 442.6290690000005
+      },
+      {
+        "end_s": 452.62746100000004,
+        "interesting": false,
+        "reason": "sitting, holds remote, holds sofa",
+        "start_s": 447.6282680000004
+      },
+      {
+        "end_s": 457.626671,
+        "interesting": false,
+        "reason": "sitting, holding remote idle",
+        "start_s": 452.62746100000004
+      },
+      {
+        "end_s": 462.6258749999997,
+        "interesting": false,
+        "reason": "sitting, holding remote idle",
+        "start_s": 457.626671
+      },
+      {
+        "end_s": 467.5584080000008,
+        "interesting": false,
+        "reason": "sitting, holds remote, crosses legs",
+        "start_s": 462.6258749999997
+      },
+      {
+        "end_s": 469.62474699999984,
+        "interesting": false,
+        "reason": "sitting, holds remote, shifts posture",
+        "start_s": 464.62555500000053
+      },
+      {
+        "end_s": 474.6239509999996,
+        "interesting": false,
+        "reason": "sitting, holding remote, waiting",
+        "start_s": 469.62474699999984
+      },
+      {
+        "end_s": 479.6231489999991,
+        "interesting": false,
+        "reason": "sitting, holding remote, waiting",
+        "start_s": 474.6239509999996
+      },
+      {
+        "end_s": 484.62234999999964,
+        "interesting": true,
+        "reason": "selects on TV using remote",
+        "start_s": 479.6231489999991
+      },
+      {
+        "end_s": 489.62154399999963,
+        "interesting": true,
+        "reason": "selects on TV using remote",
+        "start_s": 484.62234999999964
+      },
+      {
+        "end_s": 494.62075600000026,
+        "interesting": false,
+        "reason": "sitting, holding remote, waiting",
+        "start_s": 489.62154399999963
+      },
+      {
+        "end_s": 499.61994500000037,
+        "interesting": true,
+        "reason": "browses TV using remote",
+        "start_s": 494.62075600000026
+      },
+      {
+        "end_s": 504.6191490000001,
+        "interesting": true,
+        "reason": "browses TV using remote, talks",
+        "start_s": 499.61994500000037
+      },
+      {
+        "end_s": 509.6183459999993,
+        "interesting": true,
+        "reason": "browses TV using remote, talks",
+        "start_s": 504.6191490000001
+      },
+      {
+        "end_s": 514.6175569999996,
+        "interesting": false,
+        "reason": "sitting, holds remote, scratches neck",
+        "start_s": 509.6183459999993
+      },
+      {
+        "end_s": 519.616750000001,
+        "interesting": false,
+        "reason": "sitting, gesturing, talking only",
+        "start_s": 514.6175569999996
+      },
+      {
+        "end_s": 524.6159530000004,
+        "interesting": false,
+        "reason": "sitting, gesturing, talking only",
+        "start_s": 519.616750000001
+      },
+      {
+        "end_s": 529.6151439999994,
+        "interesting": false,
+        "reason": "sitting, gesturing, talking only",
+        "start_s": 524.6159530000004
+      },
+      {
+        "end_s": 534.6143489999995,
+        "interesting": false,
+        "reason": "sitting, gesturing, talking only",
+        "start_s": 529.6151439999994
+      },
+      {
+        "end_s": 539.6135470000008,
+        "interesting": false,
+        "reason": "sitting, gesturing, talking only",
+        "start_s": 534.6143489999995
+      },
+      {
+        "end_s": 544.6127550000001,
+        "interesting": false,
+        "reason": "sitting, gesturing, talking only",
+        "start_s": 539.6135470000008
+      },
+      {
+        "end_s": 549.611954,
+        "interesting": false,
+        "reason": "sitting, gesturing, talking only",
+        "start_s": 544.6127550000001
+      },
+      {
+        "end_s": 554.6111440000004,
+        "interesting": false,
+        "reason": "sitting, gesturing, talking only",
+        "start_s": 549.611954
+      },
+      {
+        "end_s": 556.6774860000005,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 551.6782839999996
+      },
+      {
+        "end_s": 561.6766900000002,
+        "interesting": false,
+        "reason": "sitting, holds remote, looks at kitchen",
+        "start_s": 556.6774860000005
+      },
+      {
+        "end_s": 566.6758890000001,
+        "interesting": false,
+        "reason": "sitting, holding remote idle",
+        "start_s": 561.6766900000002
+      },
+      {
+        "end_s": 571.6750869999996,
+        "interesting": false,
+        "reason": "sitting, holding remote idle",
+        "start_s": 566.6758890000001
+      },
+      {
+        "end_s": 576.6742839999988,
+        "interesting": false,
+        "reason": "sitting, gesturing, talking only",
+        "start_s": 571.6750869999996
+      },
+      {
+        "end_s": 581.6734830000005,
+        "interesting": false,
+        "reason": "transfers remote between hands, talking",
+        "start_s": 576.6742839999988
+      },
+      {
+        "end_s": 586.6726909999998,
+        "interesting": false,
+        "reason": "sitting, gesturing, talking only",
+        "start_s": 581.6734830000005
+      },
+      {
+        "end_s": 591.6718899999996,
+        "interesting": false,
+        "reason": "sitting, gesturing, talking only",
+        "start_s": 586.6726909999998
+      },
+      {
+        "end_s": 596.6710860000003,
+        "interesting": false,
+        "reason": "sitting, holding remote idle",
+        "start_s": 591.6718899999996
+      },
+      {
+        "end_s": 601.6702819999991,
+        "interesting": false,
+        "reason": "sitting, holding remote idle",
+        "start_s": 596.6710860000003
+      },
+      {
+        "end_s": 606.6694869999992,
+        "interesting": false,
+        "reason": "sitting, holding remote idle",
+        "start_s": 601.6702819999991
+      },
+      {
+        "end_s": 611.6686860000009,
+        "interesting": true,
+        "reason": "reaches for tumbler on table",
+        "start_s": 606.6694869999992
+      },
+      {
+        "end_s": 616.667888,
+        "interesting": true,
+        "reason": "takes tumbler and drinks",
+        "start_s": 611.6686860000009
+      },
+      {
+        "end_s": 621.6670839999988,
+        "interesting": false,
+        "reason": "sitting, holding remote and tumbler",
+        "start_s": 616.667888
+      },
+      {
+        "end_s": 626.666283999999,
+        "interesting": true,
+        "reason": "sips from tumbler",
+        "start_s": 621.6670839999988
+      },
+      {
+        "end_s": 631.6654870000002,
+        "interesting": false,
+        "reason": "sitting, holding remote and tumbler",
+        "start_s": 626.666283999999
+      },
+      {
+        "end_s": 636.6646869999986,
+        "interesting": true,
+        "reason": "raises tumbler and drinks",
+        "start_s": 631.6654870000002
+      },
+      {
+        "end_s": 641.5972289999991,
+        "interesting": true,
+        "reason": "sips from tumbler",
+        "start_s": 636.6646869999986
+      },
+      {
+        "end_s": 643.6635679999999,
+        "interesting": false,
+        "reason": "sitting, holding tumbler, talking",
+        "start_s": 638.6643629999999
+      },
+      {
+        "end_s": 648.6627599999993,
+        "interesting": true,
+        "reason": "puts tumbler down, fixes head gear",
+        "start_s": 643.6635679999999
+      },
+      {
+        "end_s": 653.6619649999993,
+        "interesting": true,
+        "reason": "controls TV with remote",
+        "start_s": 648.6627599999993
+      },
+      {
+        "end_s": 658.6611619999985,
+        "interesting": true,
+        "reason": "controls TV with remote, touches face",
+        "start_s": 653.6619649999993
+      },
+      {
+        "end_s": 663.660362999999,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 658.6611619999985
+      },
+      {
+        "end_s": 668.6595679999991,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 663.660362999999
+      },
+      {
+        "end_s": 673.6587689999997,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 668.6595679999991
+      },
+      {
+        "end_s": 678.6579710000005,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 673.6587689999997
+      },
+      {
+        "end_s": 683.6571619999995,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 678.6579710000005
+      },
+      {
+        "end_s": 688.656363,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 683.6571619999995
+      },
+      {
+        "end_s": 693.6555659999995,
+        "interesting": false,
+        "reason": "passes remote between hands, talking",
+        "start_s": 688.656363
+      },
+      {
+        "end_s": 698.654767,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 693.6555659999995
+      },
+      {
+        "end_s": 698.654767,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 693.6555659999995
+      },
+      {
+        "end_s": 703.6539909999992,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 698.654767
+      },
+      {
+        "end_s": 708.6531640000012,
+        "interesting": false,
+        "reason": "sitting, holding remote, talking",
+        "start_s": 703.6539909999992
+      },
+      {
+        "end_s": 713.6523589999997,
+        "interesting": false,
+        "reason": "sitting, gesturing, talking only",
+        "start_s": 708.6531640000012
+      },
+      {
+        "end_s": 718.6515629999994,
+        "interesting": false,
+        "reason": "sitting, gesturing, talking only",
+        "start_s": 713.6523589999997
+      },
+      {
+        "end_s": 723.6507650000003,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 718.6515629999994
+      },
+      {
+        "end_s": 728.5833050000001,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 723.6507650000003
+      },
+      {
+        "end_s": 730.6496860000007,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 725.6504409999998
+      },
+      {
+        "end_s": 735.6488420000005,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 730.6496860000007
+      },
+      {
+        "end_s": 740.6480470000006,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 735.6488420000005
+      },
+      {
+        "end_s": 745.6472429999994,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 740.6480470000006
+      },
+      {
+        "end_s": 750.6464429999996,
+        "interesting": false,
+        "reason": "sitting, hands on lap, talking",
+        "start_s": 745.6472429999994
+      },
+      {
+        "end_s": 755.6456420000013,
+        "interesting": false,
+        "reason": "sitting, gesturing, talking only",
+        "start_s": 750.6464429999996
+      },
+      {
+        "end_s": 760.6448479999999,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 755.6456420000013
+      },
+      {
+        "end_s": 765.6440450000009,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 760.6448479999999
+      },
+      {
+        "end_s": 770.6432479999985,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 765.6440450000009
+      },
+      {
+        "end_s": 775.6424470000002,
+        "interesting": false,
+        "reason": "passes remote between hands, talking",
+        "start_s": 770.6432479999985
+      },
+      {
+        "end_s": 780.6416479999989,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 775.6424470000002
+      },
+      {
+        "end_s": 785.6408420000007,
+        "interesting": false,
+        "reason": "sitting, holding remote, gesturing",
+        "start_s": 780.6416479999989
+      },
+      {
+        "end_s": 790.6400410000006,
+        "interesting": true,
+        "reason": "puts remote down on table",
+        "start_s": 785.6408420000007
+      },
+      {
+        "end_s": 795.6392420000011,
+        "interesting": false,
+        "reason": "sitting, gesturing, talking only",
+        "start_s": 790.6400410000006
+      },
+      {
+        "end_s": 800.638445999999,
+        "interesting": false,
+        "reason": "sitting, hands on lap, talking",
+        "start_s": 795.6392420000011
+      },
+      {
+        "end_s": 805.6376459999992,
+        "interesting": false,
+        "reason": "sitting, gesturing, talking only",
+        "start_s": 800.638445999999
+      },
+      {
+        "end_s": 810.6368509999993,
+        "interesting": false,
+        "reason": "raises hands to head, talking",
+        "start_s": 805.6376459999992
+      },
+      {
+        "end_s": 815.5693899999987,
+        "interesting": false,
+        "reason": "hands on head then lap, talking",
+        "start_s": 810.6368509999993
+      },
+      {
+        "end_s": 817.63573,
+        "interesting": true,
+        "reason": "peer adjusts head equipment",
+        "start_s": 812.6365310000001
+      },
+      {
+        "end_s": 822.6349420000006,
+        "interesting": true,
+        "reason": "peer adjusts head equipment",
+        "start_s": 817.63573
+      },
+      {
+        "end_s": 827.634125999999,
+        "interesting": true,
+        "reason": "places hands on head equipment",
+        "start_s": 822.6349420000006
+      },
+      {
+        "end_s": 832.6333269999996,
+        "interesting": true,
+        "reason": "adjusts head equipment with hands",
+        "start_s": 827.634125999999
+      },
+      {
+        "end_s": 837.6325229999984,
+        "interesting": false,
+        "reason": "sitting, hands on lap, talking",
+        "start_s": 832.6333269999996
+      },
+      {
+        "end_s": 842.6317280000003,
+        "interesting": true,
+        "reason": "leans, reaches for tumbler",
+        "start_s": 837.6325229999984
+      },
+      {
+        "end_s": 847.6309519999995,
+        "interesting": true,
+        "reason": "picks up tumbler with both hands",
+        "start_s": 842.6317280000003
+      },
+      {
+        "end_s": 852.630126,
+        "interesting": true,
+        "reason": "raises tumbler and drinks",
+        "start_s": 847.6309519999995
+      },
+      {
+        "end_s": 857.62932,
+        "interesting": true,
+        "reason": "drinks from tumbler",
+        "start_s": 852.630126
+      },
+      {
+        "end_s": 862.6285280000011,
+        "interesting": true,
+        "reason": "drinks from tumbler",
+        "start_s": 857.62932
+      },
+      {
+        "end_s": 867.627731999999,
+        "interesting": false,
+        "reason": "leans back, holds tumbler, reacts",
+        "start_s": 862.6285280000011
+      },
+      {
+        "end_s": 872.6269300000004,
+        "interesting": true,
+        "reason": "drinks from tumbler",
+        "start_s": 867.627731999999
+      },
+      {
+        "end_s": 877.626123,
+        "interesting": true,
+        "reason": "drinks then lowers tumbler",
+        "start_s": 872.6269300000004
+      },
+      {
+        "end_s": 882.6253250000009,
+        "interesting": false,
+        "reason": "sitting, holding tumbler idle",
+        "start_s": 877.626123
+      },
+      {
+        "end_s": 887.6245250000011,
+        "interesting": true,
+        "reason": "picks up remote, operates TV",
+        "start_s": 882.6253250000009
+      },
+      {
+        "end_s": 892.6237209999999,
+        "interesting": true,
+        "reason": "operates TV with remote",
+        "start_s": 887.6245250000011
+      },
+      {
+        "end_s": 897.6229249999997,
+        "interesting": true,
+        "reason": "operates TV with remote",
+        "start_s": 892.6237209999999
+      },
+      {
+        "end_s": 902.5554740000007,
+        "interesting": true,
+        "reason": "operates TV with remote",
+        "start_s": 897.6229249999997
+      },
+      {
+        "end_s": 904.6218050000007,
+        "interesting": true,
+        "reason": "controls TV with remote",
+        "start_s": 899.6226069999993
+      },
+      {
+        "end_s": 909.6210069999997,
+        "interesting": true,
+        "reason": "controls TV with remote",
+        "start_s": 904.6218050000007
+      },
+      {
+        "end_s": 914.6202059999996,
+        "interesting": true,
+        "reason": "controls TV with remote",
+        "start_s": 909.6210069999997
+      },
+      {
+        "end_s": 919.6194149999992,
+        "interesting": true,
+        "reason": "controls TV with remote",
+        "start_s": 914.6202059999996
+      },
+      {
+        "end_s": 924.6186020000005,
+        "interesting": true,
+        "reason": "controls TV with remote",
+        "start_s": 919.6194149999992
+      },
+      {
+        "end_s": 929.6178060000002,
+        "interesting": true,
+        "reason": "controls TV with remote",
+        "start_s": 924.6186020000005
+      },
+      {
+        "end_s": 934.6170089999996,
+        "interesting": true,
+        "reason": "controls TV with remote",
+        "start_s": 929.6178060000002
+      },
+      {
+        "end_s": 939.6162039999999,
+        "interesting": true,
+        "reason": "controls TV with remote",
+        "start_s": 934.6170089999996
+      },
+      {
+        "end_s": 944.6154060000008,
+        "interesting": true,
+        "reason": "controls TV with remote",
+        "start_s": 939.6162039999999
+      },
+      {
+        "end_s": 949.6146069999995,
+        "interesting": true,
+        "reason": "controls TV with remote",
+        "start_s": 944.6154060000008
+      },
+      {
+        "end_s": 954.6138090000004,
+        "interesting": true,
+        "reason": "puts remote down on table",
+        "start_s": 949.6146069999995
+      },
+      {
+        "end_s": 959.6129999999994,
+        "interesting": false,
+        "reason": "sitting, holding tumbler idle",
+        "start_s": 954.6138090000004
+      },
+      {
+        "end_s": 964.6122130000003,
+        "interesting": false,
+        "reason": "sitting, holding tumbler idle",
+        "start_s": 959.6129999999994
+      },
+      {
+        "end_s": 969.6114030000008,
+        "interesting": false,
+        "reason": "sitting, holding tumbler idle",
+        "start_s": 964.6122130000003
+      },
+      {
+        "end_s": 974.6106330000002,
+        "interesting": true,
+        "reason": "drinks, stands up, walks to door",
+        "start_s": 969.6114030000008
+      },
+      {
+        "end_s": 978.8765960000001,
+        "interesting": true,
+        "reason": "turns around by the door",
+        "start_s": 974.6106330000002
+      }
+    ]
+  },
+  "20230607_s1_barbara_wheeler_act1_nkg6zo": {
+    "regions": [
+      {
+        "end_s": 128.44600600000012,
+        "interesting": true,
+        "reason": "turns, walks, fixes pillows",
+        "start_s": 98.45081199999913
+      },
+      {
+        "end_s": 158.44120700000167,
+        "interesting": true,
+        "reason": "walks, sits, grabs remote",
+        "start_s": 128.44600600000012
+      },
+      {
+        "end_s": 188.43641500000012,
+        "interesting": true,
+        "reason": "puts down/gets remote, controls tv",
+        "start_s": 158.44120700000167
+      },
+      {
+        "end_s": 215.49874500000078,
+        "interesting": true,
+        "reason": "using remote control",
+        "start_s": 185.50355000000127
+      },
+      {
+        "end_s": 245.49395000000004,
+        "interesting": true,
+        "reason": "uses and places remote",
+        "start_s": 215.49874500000078
+      },
+      {
+        "end_s": 275.42249300000003,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 245.49395000000004
+      },
+      {
+        "end_s": 302.4848260000017,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 272.4896340000014
+      },
+      {
+        "end_s": 332.4800230000001,
+        "interesting": true,
+        "reason": "grabs remote, scans channels",
+        "start_s": 302.4848260000017
+      },
+      {
+        "end_s": 362.4085730000006,
+        "interesting": true,
+        "reason": "scanning channels with remote",
+        "start_s": 332.4800230000001
+      },
+      {
+        "end_s": 389.4709030000031,
+        "interesting": true,
+        "reason": "navigates tv, puts down remote",
+        "start_s": 359.4757070000014
+      },
+      {
+        "end_s": 419.4661070000002,
+        "interesting": true,
+        "reason": "navigates tv with remote",
+        "start_s": 389.4709030000031
+      },
+      {
+        "end_s": 449.39465200000086,
+        "interesting": false,
+        "reason": "sitting, talking, watching",
+        "start_s": 419.4661070000002
+      },
+      {
+        "end_s": 476.45698900000025,
+        "interesting": true,
+        "reason": "holds his glasses",
+        "start_s": 446.46178399999917
+      },
+      {
+        "end_s": 506.45218300000124,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 476.45698900000025
+      },
+      {
+        "end_s": 536.447395000001,
+        "interesting": true,
+        "reason": "gets remote from table",
+        "start_s": 506.45218300000124
+      },
+      {
+        "end_s": 563.5097290000012,
+        "interesting": true,
+        "reason": "navigating tv with remote",
+        "start_s": 533.5145269999957
+      },
+      {
+        "end_s": 593.5049230000004,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 563.5097290000012
+      },
+      {
+        "end_s": 623.4334660000022,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 593.5049230000004
+      },
+      {
+        "end_s": 650.4958000000024,
+        "interesting": false,
+        "reason": "touches face, talking",
+        "start_s": 620.5006089999988
+      },
+      {
+        "end_s": 680.4910110000001,
+        "interesting": false,
+        "reason": "touches face, talking",
+        "start_s": 650.4958000000024
+      },
+      {
+        "end_s": 710.4195500000023,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 680.4910110000001
+      },
+      {
+        "end_s": 737.4818860000014,
+        "interesting": false,
+        "reason": "touches face, talking",
+        "start_s": 707.4866820000007
+      },
+      {
+        "end_s": 767.4770810000027,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 737.4818860000014
+      },
+      {
+        "end_s": 797.4056280000023,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 767.4770810000027
+      },
+      {
+        "end_s": 824.4679720000004,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 794.4727620000012
+      },
+      {
+        "end_s": 854.4631710000012,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 824.4679720000004
+      },
+      {
+        "end_s": 884.3917140000012,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 854.4631710000012
+      },
+      {
+        "end_s": 911.4540460000007,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 881.458861000001
+      },
+      {
+        "end_s": 941.4492470000005,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 911.4540460000007
+      },
+      {
+        "end_s": 971.4444460000013,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 941.4492470000005
+      },
+      {
+        "end_s": 993.8408660000023,
+        "interesting": true,
+        "reason": "stands up, walks, stretches",
+        "start_s": 968.5115860000005
+      },
+      {
+        "end_s": 103.45001199999933,
+        "interesting": false,
+        "reason": "standing idle in kitchen",
+        "start_s": 98.45081199999913
+      },
+      {
+        "end_s": 108.44921700000123,
+        "interesting": false,
+        "reason": "standing idle in kitchen",
+        "start_s": 103.45001199999933
+      },
+      {
+        "end_s": 113.44840899999872,
+        "interesting": true,
+        "reason": "turns, looking around",
+        "start_s": 108.44921700000123
+      },
+      {
+        "end_s": 118.44761300000027,
+        "interesting": true,
+        "reason": "walks, grabs pillow",
+        "start_s": 113.44840899999872
+      },
+      {
+        "end_s": 123.44681200000014,
+        "interesting": true,
+        "reason": "handles pillows, steps",
+        "start_s": 118.44761300000027
+      },
+      {
+        "end_s": 128.44600600000012,
+        "interesting": true,
+        "reason": "handles pillow, stands",
+        "start_s": 123.44681200000014
+      },
+      {
+        "end_s": 133.44521600000007,
+        "interesting": true,
+        "reason": "turns, walks, holds chair",
+        "start_s": 128.44600600000012
+      },
+      {
+        "end_s": 138.44441199999892,
+        "interesting": true,
+        "reason": "carries chair, moves it, sits",
+        "start_s": 133.44521600000007
+      },
+      {
+        "end_s": 143.44361199999912,
+        "interesting": false,
+        "reason": "sitting, gesturing, talking",
+        "start_s": 138.44441199999892
+      },
+      {
+        "end_s": 148.4428200000002,
+        "interesting": true,
+        "reason": "stands, holds chair",
+        "start_s": 143.44361199999912
+      },
+      {
+        "end_s": 153.442011000001,
+        "interesting": true,
+        "reason": "walks, sits, grabs remote",
+        "start_s": 148.4428200000002
+      },
+      {
+        "end_s": 158.44120700000167,
+        "interesting": true,
+        "reason": "presses remote, puts it down",
+        "start_s": 153.442011000001
+      },
+      {
+        "end_s": 163.4404080000004,
+        "interesting": false,
+        "reason": "sitting, hand gestures",
+        "start_s": 158.44120700000167
+      },
+      {
+        "end_s": 168.4396080000006,
+        "interesting": false,
+        "reason": "sitting, hand to chin",
+        "start_s": 163.4404080000004
+      },
+      {
+        "end_s": 173.438811,
+        "interesting": false,
+        "reason": "sitting, gesturing, talking",
+        "start_s": 168.4396080000006
+      },
+      {
+        "end_s": 178.43801000000167,
+        "interesting": true,
+        "reason": "grabs remote, presses button",
+        "start_s": 173.438811
+      },
+      {
+        "end_s": 183.43721500000174,
+        "interesting": true,
+        "reason": "holding remote, talking",
+        "start_s": 178.43801000000167
+      },
+      {
+        "end_s": 188.43641500000012,
+        "interesting": true,
+        "reason": "presses remote button",
+        "start_s": 183.43721500000174
+      },
+      {
+        "end_s": 190.5027510000018,
+        "interesting": true,
+        "reason": "using remote control",
+        "start_s": 185.50355000000127
+      },
+      {
+        "end_s": 195.50194499999998,
+        "interesting": true,
+        "reason": "using remote control",
+        "start_s": 190.5027510000018
+      },
+      {
+        "end_s": 200.50114600000052,
+        "interesting": true,
+        "reason": "using remote control",
+        "start_s": 195.50194499999998
+      },
+      {
+        "end_s": 205.5003480000014,
+        "interesting": true,
+        "reason": "holding remote control",
+        "start_s": 200.50114600000052
+      },
+      {
+        "end_s": 210.49955300000147,
+        "interesting": true,
+        "reason": "holding remote control",
+        "start_s": 205.5003480000014
+      },
+      {
+        "end_s": 215.49874500000078,
+        "interesting": true,
+        "reason": "holding remote control",
+        "start_s": 210.49955300000147
+      },
+      {
+        "end_s": 220.49794900000052,
+        "interesting": true,
+        "reason": "holding remote control",
+        "start_s": 215.49874500000078
+      },
+      {
+        "end_s": 225.49714800000038,
+        "interesting": true,
+        "reason": "holding remote control",
+        "start_s": 220.49794900000052
+      },
+      {
+        "end_s": 230.4963459999999,
+        "interesting": true,
+        "reason": "holding remote control",
+        "start_s": 225.49714800000038
+      },
+      {
+        "end_s": 235.49555200000032,
+        "interesting": true,
+        "reason": "holding remote, gesturing",
+        "start_s": 230.4963459999999
+      },
+      {
+        "end_s": 240.4947549999997,
+        "interesting": true,
+        "reason": "puts remote on table",
+        "start_s": 235.49555200000032
+      },
+      {
+        "end_s": 245.49395000000186,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 240.4947549999997
+      },
+      {
+        "end_s": 250.49314800000138,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 245.49395000000186
+      },
+      {
+        "end_s": 255.49234800000158,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 250.49314800000138
+      },
+      {
+        "end_s": 260.491551000001,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 255.49234800000158
+      },
+      {
+        "end_s": 265.4907490000005,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 260.491551000001
+      },
+      {
+        "end_s": 270.48994700000185,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 265.4907490000005
+      },
+      {
+        "end_s": 275.42249300000003,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 270.48994700000185
+      },
+      {
+        "end_s": 277.48882700000104,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 272.4896340000014
+      },
+      {
+        "end_s": 282.4880280000016,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 277.48882700000104
+      },
+      {
+        "end_s": 287.48722200000157,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 282.4880280000016
+      },
+      {
+        "end_s": 292.4864290000005,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 287.48722200000157
+      },
+      {
+        "end_s": 297.48563600000125,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 292.4864290000005
+      },
+      {
+        "end_s": 302.4848260000017,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 297.48563600000125
+      },
+      {
+        "end_s": 307.4840350000013,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 302.4848260000017
+      },
+      {
+        "end_s": 312.4832350000015,
+        "interesting": true,
+        "reason": "gets remote from table",
+        "start_s": 307.4840350000013
+      },
+      {
+        "end_s": 317.482428000003,
+        "interesting": true,
+        "reason": "transfers remote between hands",
+        "start_s": 312.4832350000015
+      },
+      {
+        "end_s": 322.48162800000136,
+        "interesting": true,
+        "reason": "holding remote, talking",
+        "start_s": 317.482428000003
+      },
+      {
+        "end_s": 327.48082200000135,
+        "interesting": true,
+        "reason": "controls remote",
+        "start_s": 322.48162800000136
+      },
+      {
+        "end_s": 332.4800230000001,
+        "interesting": true,
+        "reason": "controls remote",
+        "start_s": 327.48082200000135
+      },
+      {
+        "end_s": 337.47922500000277,
+        "interesting": true,
+        "reason": "controls remote",
+        "start_s": 332.4800230000001
+      },
+      {
+        "end_s": 342.47843399999874,
+        "interesting": true,
+        "reason": "holding remote",
+        "start_s": 337.47922500000277
+      },
+      {
+        "end_s": 347.4776290000009,
+        "interesting": true,
+        "reason": "holding remote",
+        "start_s": 342.47843399999874
+      },
+      {
+        "end_s": 352.47683600000164,
+        "interesting": true,
+        "reason": "controls remote",
+        "start_s": 347.4776290000009
+      },
+      {
+        "end_s": 357.47605600000315,
+        "interesting": true,
+        "reason": "holding remote, talking",
+        "start_s": 352.47683600000164
+      },
+      {
+        "end_s": 362.4085730000006,
+        "interesting": true,
+        "reason": "holding remote, talking",
+        "start_s": 357.47605600000315
+      },
+      {
+        "end_s": 364.4749119999997,
+        "interesting": true,
+        "reason": "presses remote control",
+        "start_s": 359.4757070000014
+      },
+      {
+        "end_s": 369.47410899999886,
+        "interesting": true,
+        "reason": "uses remote, puts it down",
+        "start_s": 364.4749119999997
+      },
+      {
+        "end_s": 374.4733120000001,
+        "interesting": true,
+        "reason": "puts/grabs remote from table",
+        "start_s": 369.47410899999886
+      },
+      {
+        "end_s": 379.4725100000014,
+        "interesting": true,
+        "reason": "grabs and uses remote",
+        "start_s": 374.4733120000001
+      },
+      {
+        "end_s": 384.47171600000183,
+        "interesting": true,
+        "reason": "uses remote control",
+        "start_s": 379.4725100000014
+      },
+      {
+        "end_s": 389.4709030000031,
+        "interesting": true,
+        "reason": "presses remote control",
+        "start_s": 384.47171600000183
+      },
+      {
+        "end_s": 394.4701079999995,
+        "interesting": true,
+        "reason": "uses remote, puts it down",
+        "start_s": 389.4709030000031
+      },
+      {
+        "end_s": 399.4693130000014,
+        "interesting": true,
+        "reason": "puts remote down, adjusts glasses",
+        "start_s": 394.4701079999995
+      },
+      {
+        "end_s": 404.46851100000094,
+        "interesting": true,
+        "reason": "grabs remote from table",
+        "start_s": 399.4693130000014
+      },
+      {
+        "end_s": 409.46771199999966,
+        "interesting": true,
+        "reason": "passes/puts down remote",
+        "start_s": 404.46851100000094
+      },
+      {
+        "end_s": 414.466913000002,
+        "interesting": false,
+        "reason": "chin on hand, talking",
+        "start_s": 409.46771199999966
+      },
+      {
+        "end_s": 419.466107000002,
+        "interesting": false,
+        "reason": "clasping hands, talking",
+        "start_s": 414.466913000002
+      },
+      {
+        "end_s": 424.4653100000014,
+        "interesting": false,
+        "reason": "hands clasped, talking",
+        "start_s": 419.466107000002
+      },
+      {
+        "end_s": 429.4645040000014,
+        "interesting": false,
+        "reason": "hands clasped, talking",
+        "start_s": 424.4653100000014
+      },
+      {
+        "end_s": 434.4637070000008,
+        "interesting": false,
+        "reason": "clapping hands, talking",
+        "start_s": 429.4645040000014
+      },
+      {
+        "end_s": 439.46290899999985,
+        "interesting": false,
+        "reason": "hands clasped, talking",
+        "start_s": 434.4637070000008
+      },
+      {
+        "end_s": 444.462104000002,
+        "interesting": false,
+        "reason": "hands clasped, talking",
+        "start_s": 439.46290899999985
+      },
+      {
+        "end_s": 449.39465200000086,
+        "interesting": false,
+        "reason": "hands on knees, talking",
+        "start_s": 444.462104000002
+      },
+      {
+        "end_s": 451.46098900000106,
+        "interesting": false,
+        "reason": "hands on knees, talking",
+        "start_s": 446.46178399999917
+      },
+      {
+        "end_s": 456.46018500000173,
+        "interesting": false,
+        "reason": "touches face, talking",
+        "start_s": 451.46098900000106
+      },
+      {
+        "end_s": 461.45938699999897,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 456.46018500000173
+      },
+      {
+        "end_s": 466.4585910000005,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 461.45938699999897
+      },
+      {
+        "end_s": 471.4577930000014,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 466.4585910000005
+      },
+      {
+        "end_s": 476.45698900000025,
+        "interesting": false,
+        "reason": "hand to chin, talking",
+        "start_s": 471.4577930000014
+      },
+      {
+        "end_s": 481.45619200000147,
+        "interesting": false,
+        "reason": "hand under chin, talking",
+        "start_s": 476.45698900000025
+      },
+      {
+        "end_s": 486.45538999999917,
+        "interesting": false,
+        "reason": "touches forehead, talking",
+        "start_s": 481.45619200000147
+      },
+      {
+        "end_s": 491.45459200000005,
+        "interesting": false,
+        "reason": "touches forehead, talking",
+        "start_s": 486.45538999999917
+      },
+      {
+        "end_s": 496.45379100000173,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 491.45459200000005
+      },
+      {
+        "end_s": 501.4530209999957,
+        "interesting": false,
+        "reason": "hand to chin, talking",
+        "start_s": 496.45379100000173
+      },
+      {
+        "end_s": 506.45218300000124,
+        "interesting": false,
+        "reason": "hand under chin, talking",
+        "start_s": 501.4530209999957
+      },
+      {
+        "end_s": 511.45139200000085,
+        "interesting": false,
+        "reason": "hand under chin, talking",
+        "start_s": 506.45218300000124
+      },
+      {
+        "end_s": 516.4505960000006,
+        "interesting": false,
+        "reason": "hand under chin, talking",
+        "start_s": 511.45139200000085
+      },
+      {
+        "end_s": 521.4497930000016,
+        "interesting": false,
+        "reason": "hand under chin, talking",
+        "start_s": 516.4505960000006
+      },
+      {
+        "end_s": 526.4489920000015,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 521.4497930000016
+      },
+      {
+        "end_s": 531.4481930000002,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 526.4489920000015
+      },
+      {
+        "end_s": 536.447395000001,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 531.4481930000002
+      },
+      {
+        "end_s": 538.5137310000027,
+        "interesting": true,
+        "reason": "holding remote control",
+        "start_s": 533.5145269999957
+      },
+      {
+        "end_s": 543.512920000001,
+        "interesting": true,
+        "reason": "holding remote control",
+        "start_s": 538.5137310000027
+      },
+      {
+        "end_s": 548.5121250000029,
+        "interesting": true,
+        "reason": "holding remote control",
+        "start_s": 543.512920000001
+      },
+      {
+        "end_s": 553.5113280000005,
+        "interesting": true,
+        "reason": "holding remote control",
+        "start_s": 548.5121250000029
+      },
+      {
+        "end_s": 558.5105210000002,
+        "interesting": true,
+        "reason": "holding remote control",
+        "start_s": 553.5113280000005
+      },
+      {
+        "end_s": 563.5097290000012,
+        "interesting": true,
+        "reason": "holding remote both hands",
+        "start_s": 558.5105210000002
+      },
+      {
+        "end_s": 568.5089290000014,
+        "interesting": true,
+        "reason": "puts remote on table",
+        "start_s": 563.5097290000012
+      },
+      {
+        "end_s": 573.5081240000018,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 568.5089290000014
+      },
+      {
+        "end_s": 578.507329,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 573.5081240000018
+      },
+      {
+        "end_s": 583.5065209999993,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 578.507329
+      },
+      {
+        "end_s": 588.5057250000027,
+        "interesting": false,
+        "reason": "hands clasped, talking",
+        "start_s": 583.5065209999993
+      },
+      {
+        "end_s": 593.5049230000004,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 588.5057250000027
+      },
+      {
+        "end_s": 598.5041300000012,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 593.5049230000004
+      },
+      {
+        "end_s": 603.5033310000017,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 598.5041300000012
+      },
+      {
+        "end_s": 608.5025270000006,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 603.5033310000017
+      },
+      {
+        "end_s": 613.5017270000008,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 608.5025270000006
+      },
+      {
+        "end_s": 618.5009280000013,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 613.5017270000008
+      },
+      {
+        "end_s": 623.4334660000004,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 618.5009280000013
+      },
+      {
+        "end_s": 625.4998109999997,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 620.5006089999988
+      },
+      {
+        "end_s": 630.4990020000005,
+        "interesting": false,
+        "reason": "touches face, talking",
+        "start_s": 625.4998109999997
+      },
+      {
+        "end_s": 635.4982080000009,
+        "interesting": false,
+        "reason": "touches face, talking",
+        "start_s": 630.4990020000005
+      },
+      {
+        "end_s": 640.4974080000011,
+        "interesting": false,
+        "reason": "touches face, talking",
+        "start_s": 635.4982080000009
+      },
+      {
+        "end_s": 645.4966010000007,
+        "interesting": false,
+        "reason": "touches face, gesturing",
+        "start_s": 640.4974080000011
+      },
+      {
+        "end_s": 650.4958000000024,
+        "interesting": false,
+        "reason": "gesturing, touches face",
+        "start_s": 645.4966010000007
+      },
+      {
+        "end_s": 655.4950079999999,
+        "interesting": false,
+        "reason": "touches face, gesturing",
+        "start_s": 650.4958000000024
+      },
+      {
+        "end_s": 660.4942089999986,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 655.4950079999999
+      },
+      {
+        "end_s": 665.4934070000018,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 660.4942089999986
+      },
+      {
+        "end_s": 670.4926040000009,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 665.4934070000018
+      },
+      {
+        "end_s": 675.4918100000014,
+        "interesting": false,
+        "reason": "listening, idle",
+        "start_s": 670.4926040000009
+      },
+      {
+        "end_s": 680.4910110000001,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 675.4918100000014
+      },
+      {
+        "end_s": 685.4902080000011,
+        "interesting": false,
+        "reason": "clasps hands, talking",
+        "start_s": 680.4910110000001
+      },
+      {
+        "end_s": 690.4894080000013,
+        "interesting": false,
+        "reason": "soft clap, talking",
+        "start_s": 685.4902080000011
+      },
+      {
+        "end_s": 695.4886050000005,
+        "interesting": false,
+        "reason": "hands clasped, listening",
+        "start_s": 690.4894080000013
+      },
+      {
+        "end_s": 700.4878100000024,
+        "interesting": false,
+        "reason": "hands clasped, talking",
+        "start_s": 695.4886050000005
+      },
+      {
+        "end_s": 705.487003000002,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 700.4878100000024
+      },
+      {
+        "end_s": 710.4195500000023,
+        "interesting": false,
+        "reason": "listening, idle",
+        "start_s": 705.487003000002
+      },
+      {
+        "end_s": 712.4858839999997,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 707.4866820000007
+      },
+      {
+        "end_s": 717.4850880000013,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 712.4858839999997
+      },
+      {
+        "end_s": 722.4842910000025,
+        "interesting": false,
+        "reason": "mimes driving, no object",
+        "start_s": 717.4850880000013
+      },
+      {
+        "end_s": 727.4835119999989,
+        "interesting": false,
+        "reason": "touches face, talking",
+        "start_s": 722.4842910000025
+      },
+      {
+        "end_s": 732.482677,
+        "interesting": false,
+        "reason": "hands on knees, talking",
+        "start_s": 727.4835119999989
+      },
+      {
+        "end_s": 737.4818860000014,
+        "interesting": false,
+        "reason": "hands on knees, talking",
+        "start_s": 732.482677
+      },
+      {
+        "end_s": 742.4810880000023,
+        "interesting": false,
+        "reason": "hands on knees, talking",
+        "start_s": 737.4818860000014
+      },
+      {
+        "end_s": 747.4802970000019,
+        "interesting": false,
+        "reason": "hands on knees, talking",
+        "start_s": 742.4810880000023
+      },
+      {
+        "end_s": 752.4794890000012,
+        "interesting": false,
+        "reason": "taps own knee, talking",
+        "start_s": 747.4802970000019
+      },
+      {
+        "end_s": 757.4786850000019,
+        "interesting": false,
+        "reason": "hands on knees, talking",
+        "start_s": 752.4794890000012
+      },
+      {
+        "end_s": 762.4778889999998,
+        "interesting": false,
+        "reason": "hands on knees, talking",
+        "start_s": 757.4786850000019
+      },
+      {
+        "end_s": 767.4770810000027,
+        "interesting": false,
+        "reason": "leans, holds own hand",
+        "start_s": 762.4778889999998
+      },
+      {
+        "end_s": 772.4762890000002,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 767.4770810000027
+      },
+      {
+        "end_s": 777.4755220000025,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 772.4762890000002
+      },
+      {
+        "end_s": 782.3413739999996,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 777.4755220000025
+      },
+      {
+        "end_s": 787.4738780000025,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 782.4746830000004
+      },
+      {
+        "end_s": 792.473086,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 787.4738780000025
+      },
+      {
+        "end_s": 797.4056280000023,
+        "interesting": false,
+        "reason": "swings body, talking",
+        "start_s": 792.473086
+      },
+      {
+        "end_s": 799.4719730000015,
+        "interesting": false,
+        "reason": "claps hands, talking",
+        "start_s": 794.4727620000012
+      },
+      {
+        "end_s": 804.4711730000017,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 799.4719730000015
+      },
+      {
+        "end_s": 809.4703680000002,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 804.4711730000017
+      },
+      {
+        "end_s": 814.4695640000009,
+        "interesting": false,
+        "reason": "claps hands, talking",
+        "start_s": 809.4703680000002
+      },
+      {
+        "end_s": 819.4687720000002,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 814.4695640000009
+      },
+      {
+        "end_s": 824.4679720000004,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 819.4687720000002
+      },
+      {
+        "end_s": 829.4671660000004,
+        "interesting": false,
+        "reason": "sitting, talking",
+        "start_s": 824.4679720000004
+      },
+      {
+        "end_s": 834.4663610000007,
+        "interesting": false,
+        "reason": "touches own head, talking",
+        "start_s": 829.4671660000004
+      },
+      {
+        "end_s": 839.4655900000016,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 834.4663610000007
+      },
+      {
+        "end_s": 844.4647640000003,
+        "interesting": false,
+        "reason": "hands clasped, talking",
+        "start_s": 839.4655900000016
+      },
+      {
+        "end_s": 849.463960000001,
+        "interesting": false,
+        "reason": "hands clasped, talking",
+        "start_s": 844.4647640000003
+      },
+      {
+        "end_s": 854.4631710000012,
+        "interesting": false,
+        "reason": "hands clasped, talking",
+        "start_s": 849.463960000001
+      },
+      {
+        "end_s": 859.4623640000009,
+        "interesting": false,
+        "reason": "hands clasped, talking",
+        "start_s": 854.4631710000012
+      },
+      {
+        "end_s": 864.4615650000014,
+        "interesting": false,
+        "reason": "hands clasped, talking",
+        "start_s": 859.4623640000009
+      },
+      {
+        "end_s": 869.4607600000018,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 864.4615650000014
+      },
+      {
+        "end_s": 874.4599690000014,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 869.4607600000018
+      },
+      {
+        "end_s": 879.4591610000007,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 874.4599690000014
+      },
+      {
+        "end_s": 884.3917140000012,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 879.4591610000007
+      },
+      {
+        "end_s": 886.4580450000012,
+        "interesting": false,
+        "reason": "gesturing, clasps hands",
+        "start_s": 881.458861000001
+      },
+      {
+        "end_s": 891.4572460000018,
+        "interesting": false,
+        "reason": "touches face, talking",
+        "start_s": 886.4580450000012
+      },
+      {
+        "end_s": 896.4564450000016,
+        "interesting": false,
+        "reason": "touches face, talking",
+        "start_s": 891.4572460000018
+      },
+      {
+        "end_s": 901.4556440000015,
+        "interesting": false,
+        "reason": "touches face, talking",
+        "start_s": 896.4564450000016
+      },
+      {
+        "end_s": 906.4548480000012,
+        "interesting": false,
+        "reason": "touches face, talking",
+        "start_s": 901.4556440000015
+      },
+      {
+        "end_s": 911.4540460000007,
+        "interesting": false,
+        "reason": "touches face, talking",
+        "start_s": 906.4548480000012
+      },
+      {
+        "end_s": 916.4532430000017,
+        "interesting": false,
+        "reason": "touches face, talking",
+        "start_s": 911.4540460000007
+      },
+      {
+        "end_s": 921.4524490000003,
+        "interesting": false,
+        "reason": "touches face, talking",
+        "start_s": 916.4532430000017
+      },
+      {
+        "end_s": 926.4516470000017,
+        "interesting": false,
+        "reason": "clasps hands, talking",
+        "start_s": 921.4524490000003
+      },
+      {
+        "end_s": 931.4508450000012,
+        "interesting": false,
+        "reason": "hands clasped, talking",
+        "start_s": 926.4516470000017
+      },
+      {
+        "end_s": 936.4500500000013,
+        "interesting": false,
+        "reason": "gesturing while talking",
+        "start_s": 931.4508450000012
+      },
+      {
+        "end_s": 941.4492470000005,
+        "interesting": false,
+        "reason": "gesturing, touches hands",
+        "start_s": 936.4500500000013
+      },
+      {
+        "end_s": 946.4484470000007,
+        "interesting": false,
+        "reason": "touches face, gesturing",
+        "start_s": 941.4492470000005
+      },
+      {
+        "end_s": 951.4476440000017,
+        "interesting": false,
+        "reason": "touches face, gesturing",
+        "start_s": 946.4484470000007
+      },
+      {
+        "end_s": 956.4468450000004,
+        "interesting": false,
+        "reason": "gesturing, touches face",
+        "start_s": 951.4476440000017
+      },
+      {
+        "end_s": 961.4460440000003,
+        "interesting": false,
+        "reason": "touches face, talking",
+        "start_s": 956.4468450000004
+      },
+      {
+        "end_s": 966.4452520000013,
+        "interesting": false,
+        "reason": "touches face, talking",
+        "start_s": 961.4460440000003
+      },
+      {
+        "end_s": 971.4444460000013,
+        "interesting": false,
+        "reason": "touches face, talking",
+        "start_s": 966.4452520000013
+      },
+      {
+        "end_s": 973.5107869999993,
+        "interesting": false,
+        "reason": "touches face, looks aside",
+        "start_s": 968.5115860000005
+      },
+      {
+        "end_s": 978.5099820000014,
+        "interesting": true,
+        "reason": "stands up",
+        "start_s": 973.5107869999993
+      },
+      {
+        "end_s": 983.5091860000011,
+        "interesting": true,
+        "reason": "raises arms, pivots, standing",
+        "start_s": 978.5099820000014
+      },
+      {
+        "end_s": 988.5083790000008,
+        "interesting": true,
+        "reason": "steps forward, walks",
+        "start_s": 983.5091860000011
+      },
+      {
+        "end_s": 993.8408660000023,
+        "interesting": false,
+        "reason": "standing idle in hallway",
+        "start_s": 988.5083790000008
+      }
+    ]
+  }
+}
