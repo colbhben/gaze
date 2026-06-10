@@ -475,6 +475,20 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
     export_anno.add_argument("--local-root", metavar="PATH", help="Read source from a local mount instead of ssh.")
     export_anno.set_defaults(func=cmd_curate_export_annotations)
 
+    viewer = curate_sub.add_parser(
+        "viewer-layout",
+        help="Convert a molmoact2 training manifest into the gaze-serve viewer layout.",
+        description=(
+            "Each manifest row (a clip segment) becomes one viewer episode with the segment mp4 "
+            "as video + a per-frame gaze table + annotation text, plus a manifest.parquet the "
+            "`gaze serve` viewer lists. Run `gaze serve --canonical-root <out>` to browse."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    viewer.add_argument("--manifest-root", metavar="PATH", required=True, help="molmoact2 build output root (has manifest.jsonl + videos/).")
+    viewer.add_argument("--out-root", metavar="PATH", required=True, help="Viewer-layout output root.")
+    viewer.set_defaults(func=cmd_curate_viewer_layout)
+
 
 def add_dataset_common(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument("--repo-root", metavar="PATH", default=".", help="Repository root containing DATASETS.md and download_links; default: current directory.")
@@ -777,6 +791,14 @@ def cmd_curate_export_annotations(args: argparse.Namespace) -> int:
             except Exception as exc:  # noqa
                 print(f"warn: {slug}:{ep} export failed: {exc}", file=sys.stderr)
     print(json.dumps({"dataset": slug, "episodes_exported": n, "out": str(out)}, indent=2))
+    return 0
+
+
+def cmd_curate_viewer_layout(args: argparse.Namespace) -> int:
+    from .smoke import molmoact_to_viewer_layout
+
+    report = molmoact_to_viewer_layout(args.manifest_root, args.out_root)
+    print(json.dumps(report, indent=2, sort_keys=True))
     return 0
 
 

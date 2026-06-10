@@ -248,3 +248,80 @@ def _flatten_annotations(channels: list[dict[str, Any]]) -> list[dict[str, Any]]
             })
     out.sort(key=lambda r: (r.get("start_s") if r.get("start_s") is not None else (r.get("point_s") or 0.0)))
     return out
+
+
+# --------------------------------------------------------------------------- #
+# MolmoAct2 manifest -> gaze-serve viewer layout (one viewer-episode per segment).
+# --------------------------------------------------------------------------- #
+def molmoact_to_viewer_layout(manifest_root: str | Path, out_root: str | Path) -> dict[str, Any]:
+    """Convert a molmoact2 manifest root into the canonical layout `gaze serve` reads.
+
+    Each manifest row (a clip SEGMENT) becomes one viewer episode under
+    ``episodes/<dataset>/<episode_id>__seg<k>/`` with the segment mp4 as ``video``,
+    a per-frame gaze table (clip-relative seconds + pixel x/y), and the annotation
+    text. Writes ``manifest.parquet`` + ``manifest.jsonl`` the server lists.
+    """
+    manifest_root = Path(manifest_root)
+    out_root = Path(out_root)
+    (out_root / "episodes").mkdir(parents=True, exist_ok=True)
+    rows = [json.loads(l) for l in (manifest_root / "manifest.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
+
+    index: list[dict[str, Any]] = []
+    for r in rows:
+        if "error" in r or not r.get("video"):
+            continue
+        ds = r["dataset"]
+        ep_seg = f"{_safe(r['episode_id'])}__seg{r.get('seg_index', 0)}"
+        ep_dir = out_root / "episodes" / ds / ep_seg
+        ep_dir.mkdir(parents=True, exist_ok=True)
+        files: dict[str, str] = {}
+
+        src_video = manifest_root / r["video"]
+        if src_video.exists():
+            shutil.copy2(src_video, ep_dir / "video.mp4")
+            files["video"] = "video.mp4"
+
+        # per-frame gaze table (clip-relative s, pixel x/y on the resolution frame)
+        gaze_rows = []
+        for t, pts in zip(r.get("timestamps", []), r.get("points", [])):
+            if pts:
+                gaze_rows.append({"time_s": t, "x_px": pts[0]["x"], "y_px": pts[0]["y"]})
+            else:
+                gaze_rows.append({"time_s": t, "x_px": None, "y_px": None})
+        if gaze_rows:
+            write_table(gaze_rows, ep_dir / "gaze.jsonl")
+            files["gaze"] = "gaze.jsonl"
+
+        anno_text = (r.get("metadata") or {}).get("annotation_text")
+        if anno_text:
+            write_table([{"time_s": 0.0, "text": anno_text}], ep_dir / "annotations.jsonl")
+            files["annotations"] = "annotations.jsonl"
+
+        (ep_dir / "episode.json").write_text(json.dumps({
+            "dataset": ds,
+            "episode_id": ep_seg,
+            "files": files,
+            "resolution": r.get("resolution"),
+            "fps": r.get("fps"),
+            "num_frames_real": r.get("num_frames_real"),
+            "metadata": r.get("metadata"),
+        }, indent=2, sort_keys=True), encoding="utf-8")
+
+        index.append({
+            "id": f"{ds}:{ep_seg}",
+            "dataset": ds,
+            "episode_id": ep_seg,
+            "modalities": ",".join(k for k in ("video", "gaze", "annotations") if k in files),
+            "clip_start_time": (r.get("metadata") or {}).get("clip_start_time"),
+            "clip_end_time": (r.get("metadata") or {}).get("clip_end_time"),
+            "num_frames_real": r.get("num_frames_real"),
+        })
+
+    (out_root / "manifest.jsonl").write_text(
+        "\n".join(json.dumps(row, sort_keys=True) for row in index) + "\n", encoding="utf-8"
+    )
+    write_table(index, out_root / "manifest.parquet")
+    report = {"root": str(out_root), "episodes": len(index),
+              "datasets": sorted({row["dataset"] for row in index})}
+    (out_root / "smoke_report.json").write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+    return report
