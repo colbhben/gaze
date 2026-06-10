@@ -404,6 +404,59 @@ def _dotted_get(row: dict[str, Any], key: str) -> Any:
     return cur
 
 
+# --------------------------------------------------------------------------- #
+# Pad-transform geometry (shared by training.py and molmoact.py). Matches ffmpeg
+# scale=W:H:force_original_aspect_ratio=decrease,pad=side:side:(ow-iw)/2:(oh-ih)/2.
+# Lives here (the contract base) so both downstream modules import it without a cycle.
+# --------------------------------------------------------------------------- #
+COORD_BINS = 1000
+
+
+@dataclass
+class PadTransform:
+    """Maps a source-frame pixel onto the padded square frame, then to [0,1]."""
+
+    src_w: int
+    src_h: int
+    side: int
+
+    @property
+    def scale(self) -> float:
+        return min(self.side / self.src_w, self.side / self.src_h)
+
+    @property
+    def content_w(self) -> float:
+        return self.src_w * self.scale
+
+    @property
+    def content_h(self) -> float:
+        return self.src_h * self.scale
+
+    @property
+    def offset_x(self) -> float:
+        return (self.side - self.content_w) / 2.0
+
+    @property
+    def offset_y(self) -> float:
+        return (self.side - self.content_h) / 2.0
+
+    def px_to_norm(self, x_px: float, y_px: float) -> tuple[float, float]:
+        """Source pixel -> normalized [0,1] coordinate on the padded square frame."""
+        px = self.offset_x + x_px * self.scale
+        py = self.offset_y + y_px * self.scale
+        return px / self.side, py / self.side
+
+
+def clamp01(v: float) -> float:
+    return 0.0 if v < 0.0 else (1.0 if v > 1.0 else v)
+
+
+def to_bins(norm: float, bins: int = COORD_BINS) -> int:
+    """Normalized [0,1] -> integer 0..bins bin (clamped)."""
+    b = int(round(clamp01(norm) * bins))
+    return 0 if b < 0 else (bins if b > bins else b)
+
+
 # NOTE: the per-reader implementations (gaze csv/npy/begaze/whitespace, annotation
 # json_by_key/pandas_pickle, and the Aria/psi projection) are provided in
 # `curate_readers.py` and wired through `extract_episode` there. This module holds

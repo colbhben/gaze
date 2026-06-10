@@ -413,33 +413,43 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
 
     build_training = curate_sub.add_parser(
         "build-training-manifest",
-        help="Build a Qwen3-VL gaze training manifest (clips + normalized gaze targets + annotations).",
+        help="Build a MolmoAct2 (or Qwen) gaze training manifest from annotation-bounded clips.",
         description=(
-            "For each sample episode: resample gaze to the profile fps with linear interpolation, "
-            "project + normalize it to [0,1] on the padded square frame (plus the 0-1000 bin form), "
-            "build sliding-window clips, attach the active annotation span (active_interval), and "
-            "materialize a per-episode resampled mp4. Writes manifest.jsonl + schema.json + a report."
+            "Default output-format=molmoact2: chop each episode into annotation-bounded clip "
+            "SEGMENTS (capped at --max-clip-duration-s), materialize each as a resolution^2 @ fps "
+            "mp4, sample per-frame gaze (pixel points on the padded frame), and emit Molmo2VideoPoint "
+            "rows (message_list + per-frame points + timestamps), variable length padded to "
+            "--max-frames. dataset_filters (cull / exclude globs / gaze-gap) are honored. "
+            "output-format=qwen keeps the legacy fixed sliding-window single-point profile."
         ),
         epilog=(
-            "Design defaults (flag for review): causal past-context clips, 5 Hz, 16 frames, stride 8, "
-            "392x392 pad. Out-of-frame anchors are kept with target_valid=False; only missing anchors drop.\n"
+            "MolmoAct2 defaults: 2 fps, 378x378, max 8 frames, max clip 20s, per-frame pixel points.\n"
             "Examples:\n"
             "  gaze curate build-training-manifest\n"
-            "  gaze curate build-training-manifest --datasets nymeria,egome --num-frames 8 --stride 4"
+            "  gaze curate build-training-manifest --datasets nymeria --interesting-map nymeria=/tmp/nym_map.json\n"
+            "  gaze curate build-training-manifest --output-format qwen --fps 5 --num-frames 16"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    build_training.add_argument("--profile", metavar="NAME", default="qwen3-vl-gaze-5hz-392px", help="Canonical profile name; default: qwen3-vl-gaze-5hz-392px.")
-    build_training.add_argument("--fps", metavar="HZ", type=float, default=5.0, help="Resample fps / clip sampling grid; default: 5.")
-    build_training.add_argument("--num-frames", metavar="N", type=int, default=16, help="Frames per clip; default: 16 (=3.2s @5Hz).")
-    build_training.add_argument("--stride", metavar="N", type=int, default=8, help="Anchor hop in frames between clips; default: 8.")
-    build_training.add_argument("--resolution", metavar="PX", type=int, default=392, help="Square padded video side in pixels; default: 392.")
-    build_training.add_argument("--temporality", choices=["causal", "centered", "future"], default="causal", help="Clip window vs anchor. causal=past-context (default), centered, future (offline-only).")
-    build_training.add_argument("--window-seconds", metavar="N", type=float, default=30.0, help="Max source seconds to trim+resample per episode (keeps remote work light); default: 30.")
+    build_training.add_argument("--output-format", choices=["molmoact2", "qwen"], default="molmoact2", help="Manifest format; default: molmoact2.")
+    build_training.add_argument("--profile", metavar="NAME", default="qwen3-vl-gaze-5hz-392px", help="(qwen) canonical profile name.")
+    build_training.add_argument("--fps", metavar="HZ", type=float, default=2.0, help="Canonical sampling fps; ALL datasets resample down to this. Default: 2 (MolmoAct2).")
+    build_training.add_argument("--max-frames", metavar="N", type=int, default=8, help="(molmoact2) max frames per clip; clips pad up to this for batch consistency. Default: 8.")
+    build_training.add_argument("--max-clip-duration-s", metavar="S", type=float, default=20.0, help="(molmoact2) max clip/segment length in seconds; long takes split at annotation bounds. Default: 20.")
+    build_training.add_argument("--merge-gap-s", metavar="S", type=float, default=1.0, help="(molmoact2) merge annotation spans separated by <= this gap. Default: 1.")
+    build_training.add_argument("--min-clip-s", metavar="S", type=float, default=1.0, help="(molmoact2) drop segments shorter than this. Default: 1.")
+    build_training.add_argument("--prompt", metavar="TEXT", default="Point to where the camera wearer is looking.", help="(molmoact2) gaze prompt text.")
+    build_training.add_argument("--num-frames", metavar="N", type=int, default=16, help="(qwen) frames per clip; default: 16.")
+    build_training.add_argument("--stride", metavar="N", type=int, default=8, help="(qwen) anchor hop in frames; default: 8.")
+    build_training.add_argument("--resolution", metavar="PX", type=int, default=378, help="Square padded video side in pixels; default: 378 (MolmoAct2).")
+    build_training.add_argument("--temporality", choices=["causal", "centered", "future"], default="causal", help="(qwen) clip window vs anchor; default: causal.")
+    build_training.add_argument("--window-seconds", metavar="N", type=float, default=30.0, help="(qwen) max source seconds to trim+resample per episode; default: 30.")
     build_training.add_argument("--out-root", metavar="PATH", default="/tmp/gaze_training_manifest", help="Output root; default: /tmp/gaze_training_manifest.")
     build_training.add_argument("--datasets", metavar="SLUG[,SLUG...]", help="Only build these dataset slugs. Omit for all sample datasets.")
     build_training.add_argument("--episode", metavar="ID", help="Override the episode id (use with a single --datasets slug).")
-    build_training.add_argument("--sample", metavar="PATH", help="Alternate sample-episodes JSON (defaults to recipes/_sample_episodes.json).")
+    build_training.add_argument("--episodes-file", metavar="PATH", help="JSON {datasets:{slug:[episode_id,...]}} for multiple episodes per dataset.")
+    build_training.add_argument("--interesting-map", metavar="SLUG=PATH", action="append", default=[], help="Per-dataset interesting-region filter map (repeatable), e.g. nymeria=/tmp/map.json.")
+    build_training.add_argument("--sample", metavar="PATH", help="Alternate sample-episodes JSON.")
     build_training.add_argument("--ssh-host", metavar="HOST", default="sumedhso-L40S", help="Remote data host; default: sumedhso-L40S.")
     build_training.add_argument("--local-root", metavar="PATH", help="Read source from a local mount instead of ssh.")
     build_training.add_argument("--no-reuse-bundle", action="store_true", help="Re-extract from source instead of reusing /tmp/gaze_extract/<slug>_full.json.")
@@ -733,12 +743,25 @@ def cmd_curate_build_training(args: argparse.Namespace) -> int:
         for slug, entry in (data.get("samples") or {}).items():
             episodes.setdefault(slug, entry.get("episode_id"))
 
+    episode_lists = None
+    if getattr(args, "episodes_file", None):
+        ef = json.loads(Path(args.episodes_file).read_text(encoding="utf-8"))
+        episode_lists = ef.get("datasets") or ef
+
+    interesting_maps = {}
+    for spec in getattr(args, "interesting_map", []) or []:
+        slug, _, path = spec.partition("=")
+        if path:
+            interesting_maps[slug] = json.loads(Path(path).read_text(encoding="utf-8"))
+
     puller = _curate_puller(args)
     report = build_training_manifest(
         args.out_root,
         datasets=parse_set(args.datasets) and sorted(parse_set(args.datasets)),
         episodes=episodes,
+        episode_lists=episode_lists,
         sample_extra=sample_extra,
+        output_format=args.output_format,
         profile=args.profile,
         fps=args.fps,
         num_frames=args.num_frames,
@@ -746,6 +769,12 @@ def cmd_curate_build_training(args: argparse.Namespace) -> int:
         resolution=args.resolution,
         temporality=args.temporality,
         window_s=args.window_seconds,
+        max_clip_s=args.max_clip_duration_s,
+        merge_gap_s=args.merge_gap_s,
+        min_clip_s=args.min_clip_s,
+        max_frames=args.max_frames,
+        prompt=args.prompt,
+        interesting_maps=interesting_maps,
         puller=puller,
         reuse_bundle=not args.no_reuse_bundle,
     )

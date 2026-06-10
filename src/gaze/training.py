@@ -79,6 +79,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from . import molmoact as ma
 from . import overlay as ov
 from .curate import Puller
 from .overlay import (
@@ -157,49 +158,10 @@ TRAINING_EXAMPLE_SCHEMA: dict[str, Any] = {
 # Pad-transform geometry (matches ffmpeg scale=...:force_original_aspect_ratio
 # =decrease,pad=side:side:(ow-iw)/2:(oh-ih)/2).
 # =========================================================================== #
-@dataclass
-class PadTransform:
-    """Maps a source-frame pixel onto the padded square frame, then to [0,1]."""
-
-    src_w: int
-    src_h: int
-    side: int
-
-    @property
-    def scale(self) -> float:
-        return min(self.side / self.src_w, self.side / self.src_h)
-
-    @property
-    def content_w(self) -> float:
-        return self.src_w * self.scale
-
-    @property
-    def content_h(self) -> float:
-        return self.src_h * self.scale
-
-    @property
-    def offset_x(self) -> float:
-        return (self.side - self.content_w) / 2.0
-
-    @property
-    def offset_y(self) -> float:
-        return (self.side - self.content_h) / 2.0
-
-    def px_to_norm(self, x_px: float, y_px: float) -> tuple[float, float]:
-        """Source pixel -> normalized [0,1] coordinate on the padded square frame."""
-        px = self.offset_x + x_px * self.scale
-        py = self.offset_y + y_px * self.scale
-        return px / self.side, py / self.side
-
-
-def clamp01(v: float) -> float:
-    return 0.0 if v < 0.0 else (1.0 if v > 1.0 else v)
-
-
-def to_bins(norm: float, bins: int = COORD_BINS) -> int:
-    """Normalized [0,1] -> integer 0..bins bin (clamped)."""
-    b = int(round(clamp01(norm) * bins))
-    return 0 if b < 0 else (bins if b > bins else b)
+# PadTransform / clamp01 / to_bins / COORD_BINS live in curate.py (the contract base)
+# so molmoact.py can reuse them without a circular import. Re-exported here for
+# back-compat (tests and callers import them from training).
+from .curate import PadTransform, clamp01, to_bins  # noqa: E402,F401
 
 
 # =========================================================================== #
@@ -657,7 +619,9 @@ def build_training_manifest(
     *,
     datasets: list[str] | None = None,
     episodes: dict[str, str] | None = None,
+    episode_lists: dict[str, list[str]] | None = None,
     sample_extra: dict[str, dict[str, Any]] | None = None,
+    output_format: str = "molmoact2",
     profile: str = DEFAULT_PROFILE,
     fps: float = DEFAULT_FPS,
     num_frames: int = DEFAULT_NUM_FRAMES,
@@ -665,19 +629,36 @@ def build_training_manifest(
     resolution: int = DEFAULT_RESOLUTION,
     temporality: str = DEFAULT_TEMPORALITY,
     window_s: float | None = 30.0,
+    # MolmoAct2 / chopping knobs
+    max_clip_s: float = 20.0,
+    merge_gap_s: float = 1.0,
+    min_clip_s: float = 1.0,
+    max_frames: int = ma.DEFAULT_MAX_FRAMES,
+    prompt: str = ma.DEFAULT_PROMPT,
+    interesting_maps: dict[str, dict[str, Any]] | None = None,
     puller: Puller | None = None,
     reuse_bundle: bool = True,
 ) -> dict[str, Any]:
-    """Build the sample training manifest for one episode per selected dataset.
+    """Build a training manifest.
 
-    Writes ``<out_root>/manifest.jsonl`` (one row per example),
-    ``<out_root>/manifest.parquet[.jsonl]``, ``<out_root>/schema.json``,
-    ``<out_root>/training_report.json``, and per-episode resampled mp4s under
-    ``<out_root>/videos/<dataset>/<episode>.mp4``.
+    ``output_format`` selects the emitter:
+      * ``molmoact2`` (default): annotation-bounded clip SEGMENTS, each a
+        ``resolution``x``resolution`` @ ``fps`` mp4, with per-frame pixel gaze points
+        in the Molmo2VideoPoint shape (variable length padded to ``max_frames``).
+      * ``qwen``: the legacy fixed sliding-window single-point profile.
+
+    ``episode_lists`` maps slug -> list of episode ids (multiple per dataset). Falls
+    back to ``episodes`` (one per dataset) then ``recipes/_sample_episodes.json``.
+    ``dataset_filters`` (cull / exclude globs / gaze gap) are honored. For nymeria
+    (or any dataset) an ``interesting_maps[slug]`` filter restricts segments to
+    classified-interesting regions.
     """
+    from . import curate_readers as cr
+
     out_root = Path(out_root)
     (out_root / "videos").mkdir(parents=True, exist_ok=True)
     puller = puller or Puller()
+    interesting_maps = interesting_maps or {}
 
     sample_map = _sample_episode_map()
     if episodes:
@@ -692,6 +673,40 @@ def build_training_manifest(
 
     all_examples: list[dict[str, Any]] = []
     rows_report: list[dict[str, Any]] = []
+
+    # Build the (slug -> [episode_ids]) work list, honoring cull + exclude globs.
+    def episodes_for(slug: str) -> list[str]:
+        if episode_lists and slug in episode_lists:
+            ids = list(episode_lists[slug])
+        else:
+            ids = [sample_map[slug]["episode_id"]]
+        return cr.filter_episode_ids(slug, ids)
+
+    if output_format == "molmoact2":
+        for slug in slugs:
+            if cr.is_culled(slug):
+                rows_report.append({"dataset": slug, "culled": True})
+                continue
+            extra = {k: v for k, v in sample_map[slug].items() if k != "episode_id"}
+            for episode_id in episodes_for(slug):
+                ex, rep = _build_molmoact_episode(
+                    slug, episode_id, extra, out_root, puller,
+                    fps=fps, resolution=resolution, max_frames=max_frames,
+                    max_clip_s=max_clip_s, merge_gap_s=merge_gap_s, min_clip_s=min_clip_s,
+                    prompt=prompt, reuse_bundle=reuse_bundle,
+                    interesting=interesting_maps.get(slug),
+                )
+                all_examples.extend(ex)
+                rows_report.append(rep)
+        return _write_manifest_outputs(
+            out_root, all_examples, rows_report,
+            schema=ma.MOLMOACT_SCHEMA,
+            report_meta={
+                "output_format": "molmoact2", "fps": fps, "resolution": resolution,
+                "max_frames": max_frames, "max_clip_s": max_clip_s,
+                "merge_gap_s": merge_gap_s, "min_clip_s": min_clip_s,
+            },
+        )
 
     for slug in slugs:
         entry = sample_map[slug]
@@ -808,6 +823,151 @@ def build_training_manifest(
     return report
 
 
+# =========================================================================== #
+# MolmoAct2 per-episode builder (annotation-bounded segments -> video-point rows).
+# =========================================================================== #
+def _intersect_interesting(spans: list[dict[str, Any]], interesting: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Keep only spans overlapping a classified-interesting region.
+
+    ``interesting`` is ``{"regions": [{"start_s","end_s","interesting":bool}, ...]}``
+    on the video clock (e.g. the nymeria filter map for one take). Spans not
+    overlapping any interesting region are dropped. If ``interesting`` is None the
+    spans pass through unchanged.
+    """
+    if not interesting:
+        return spans
+    regions = [(r["start_s"], r["end_s"]) for r in interesting.get("regions", [])
+               if r.get("interesting") and r.get("start_s") is not None and r.get("end_s") is not None]
+    if not regions:
+        return []
+    kept = []
+    for s in spans:
+        a = s.get("start_s") if s.get("start_s") is not None else s.get("point_s")
+        b = s.get("end_s") if s.get("end_s") is not None else s.get("point_s")
+        if a is None:
+            continue
+        b = b if b is not None else a
+        if any(a < rb and b > ra for ra, rb in regions):
+            kept.append(s)
+    return kept
+
+
+def _build_molmoact_episode(
+    slug: str,
+    episode_id: str,
+    extra: dict[str, Any],
+    out_root: Path,
+    puller: Puller,
+    *,
+    fps: float,
+    resolution: int,
+    max_frames: int,
+    max_clip_s: float,
+    merge_gap_s: float,
+    min_clip_s: float,
+    prompt: str,
+    reuse_bundle: bool,
+    interesting: dict[str, Any] | None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Build MolmoAct2 video-point rows for one episode: filter -> chop -> per-seg clip."""
+    from . import curate_readers as cr
+
+    try:
+        data = build_episode_data(slug, episode_id, puller, sample_extra=extra, reuse=reuse_bundle)
+    except Exception as exc:  # noqa
+        return [], {"dataset": slug, "episode": episode_id, "error": str(exc)}
+
+    # Gaze validity-gap cull (egome 0.25, via dataset_filters).
+    gap_thr = cr.dataset_filters(slug).get("max_gaze_valid_gap_s")
+    if gap_thr is not None:
+        passes, observed = check_gaze_validity_gaps(data, float(gap_thr))
+        if not passes:
+            return [], {"dataset": slug, "episode": episode_id,
+                        "culled_gaze_gap": True, "max_gap_s": round(observed, 3)}
+
+    src_w = int(data.video.get("width") or resolution)
+    src_h = int(data.video.get("height") or resolution)
+    duration_s = float(data.video.get("duration_s") or 0.0)
+    pad = PadTransform(src_w=src_w, src_h=src_h, side=resolution)
+
+    # Unified annotation spans (video clock), optionally restricted to interesting regions.
+    spans_video = unified_annotation_spans(data)
+    spans_video = _intersect_interesting(spans_video, interesting)
+
+    # Chop into annotation-bounded segments.
+    segments = chop_into_segments(
+        spans_video, max_clip_s=max_clip_s, merge_gap_s=merge_gap_s,
+        min_clip_s=min_clip_s, duration_s=duration_s or None,
+    )
+    if not segments:
+        return [], {"dataset": slug, "episode": episode_id, "segments": 0,
+                    "note": "no annotation-bounded segments"}
+
+    # Project the gaze track once (source px, video clock).
+    times, xs, ys, inf = projected_gaze_track(data, puller)
+    # Resample to the canonical fps grid over the whole episode (video clock).
+    grid_dur = duration_s or (segments[-1]["end_s"] if segments else 0.0)
+    resampled = resample_track_linear(
+        times, xs, ys, inf, fps=fps, duration_s=grid_dur, max_gap_s=1.0,
+    )
+
+    examples: list[dict[str, Any]] = []
+    for k, seg in enumerate(segments):
+        seg_start, seg_end = seg["start_s"], seg["end_s"]
+        seg_len = seg_end - seg_start
+        video_rel = f"videos/{slug}/{_safe(episode_id)}__seg{k}.mp4"
+        try:
+            ov_meta = resample_episode_video(
+                data, puller, out_root / video_rel,
+                fps=fps, side=resolution, window_s=seg_len, start_s=seg_start,
+            )
+        except Exception as exc:  # noqa
+            examples.append({"dataset": slug, "episode_id": episode_id, "seg_index": k,
+                             "error": f"video: {exc}"})
+            continue
+        frames, num_real = ma.sample_segment_frames(
+            resampled.times_s, resampled.px, resampled.py, resampled.in_frame, resampled.valid,
+            seg_start_s=seg_start, seg_end_s=seg_end, fps=fps, max_frames=max_frames, pad=pad,
+        )
+        if num_real == 0:
+            continue
+        # annotation text active mid-segment (for the prompt context)
+        spans_local = active_annotation_at(spans_video, (seg_start + seg_end) / 2.0)
+        anno_text = spans_local[0]["text"] if spans_local else None
+        examples.append(ma.build_molmoact_row(
+            dataset=slug, episode_id=episode_id, seg_index=k, video_rel=video_rel,
+            seg_start_s=seg_start, seg_end_s=seg_end, frames=frames, num_real=num_real,
+            fps=fps, max_frames=max_frames, side=resolution,
+            annotation_text=anno_text, prompt=prompt,
+        ))
+
+    real = [e for e in examples if "error" not in e]
+    rep = {
+        "dataset": slug, "episode": episode_id,
+        "segments": len(segments), "clips": len(real),
+        "source_dims": f"{src_w}x{src_h}", "duration_s": round(duration_s, 3),
+        "projection": data.projection_method, "gaze_space": data.gaze_space,
+        "interesting_filtered": interesting is not None,
+    }
+    return examples, rep
+
+
+def _write_manifest_outputs(
+    out_root: Path,
+    examples: list[dict[str, Any]],
+    rows_report: list[dict[str, Any]],
+    *,
+    schema: dict[str, Any],
+    report_meta: dict[str, Any],
+) -> dict[str, Any]:
+    _write_jsonl(examples, out_root / "manifest.jsonl")
+    _write_table(examples, out_root / "manifest.parquet")
+    (out_root / "schema.json").write_text(json.dumps(schema, indent=2, sort_keys=True), encoding="utf-8")
+    report = {**report_meta, "total_examples": len(examples), "episodes": rows_report}
+    (out_root / "training_report.json").write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+    return report
+
+
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
@@ -848,21 +1008,29 @@ def _write_table(rows: list[dict[str, Any]], path: Path) -> None:
     from .table import write_table
 
     # parquet can't store ragged lists/dicts cleanly; thin to scalar columns for the
-    # table form and keep the full nested record in manifest.jsonl.
+    # table form and keep the full nested record in manifest.jsonl. Handle both the
+    # qwen single-point rows and the molmoact2 video-point rows.
     flat = []
     for r in rows:
-        flat.append({
-            "id": r["id"],
-            "dataset": r["dataset"],
-            "episode_id": r["episode_id"],
-            "anchor_time_s": r["anchor_time_s"],
-            "num_frames": r["num_frames"],
-            "fps": r["fps"],
-            "x_norm": r["target"][0],
-            "y_norm": r["target"][1],
-            "x_1000": r["target_1000"][0],
-            "y_1000": r["target_1000"][1],
-            "target_valid": r["target_valid"],
-            "annotation_text": r["annotation_text"],
-        })
+        if "error" in r:
+            continue
+        if "target" in r:  # qwen single-point row
+            flat.append({
+                "id": r["id"], "dataset": r["dataset"], "episode_id": r["episode_id"],
+                "anchor_time_s": r.get("anchor_time_s"), "num_frames": r.get("num_frames"),
+                "fps": r.get("fps"),
+                "x_norm": r["target"][0], "y_norm": r["target"][1],
+                "x_1000": r["target_1000"][0], "y_1000": r["target_1000"][1],
+                "target_valid": r.get("target_valid"), "annotation_text": r.get("annotation_text"),
+            })
+        else:  # molmoact2 video-point row
+            md = r.get("metadata", {})
+            flat.append({
+                "id": r["id"], "dataset": r["dataset"], "episode_id": r["episode_id"],
+                "seg_index": r.get("seg_index"), "video": r.get("video"),
+                "num_frames": r.get("num_frames"), "num_frames_real": r.get("num_frames_real"),
+                "fps": r.get("fps"), "resolution": r.get("resolution"),
+                "clip_start_time": md.get("clip_start_time"), "clip_end_time": md.get("clip_end_time"),
+                "annotation_text": md.get("annotation_text"),
+            })
     write_table(flat, path)
