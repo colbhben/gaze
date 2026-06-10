@@ -1,0 +1,201 @@
+"""Assemble a viewer-ready smoke manifest from extracted sample episodes.
+
+Builds a canonical-style root the existing `gaze serve` viewer understands:
+
+    <root>/
+      manifest.jsonl                       # episode index (dataset, episode_id, ...)
+      manifest.parquet[.jsonl]             # same, table form the server reads
+      episodes/<dataset>/<episode_id>/
+        episode.json                       # {dataset, episode_id, files{video,gaze,annotations,...}, gaze_meta, ...}
+        overlay.mp4                        # gaze+annotation overlay clip (the "video")
+        gaze.jsonl                         # reconciled gaze rows (video-zero seconds)
+        annotations.jsonl                  # flattened raw segments across channels
+        bundle.json                        # full EpisodeBundle.to_dict() for provenance
+
+The smoke manifest is uploaded to S3 (smoke_manifest/ prefix) via the remote
+host, since local AWS access is read-denied here. Side-by-side GT clips are
+included where available.
+"""
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+from pathlib import Path
+from typing import Any
+
+from .table import write_table
+
+
+def build_smoke_manifest(
+    extract_dir: str | Path,
+    overlays_dir: str | Path,
+    out_root: str | Path,
+    *,
+    datasets: list[str] | None = None,
+) -> dict[str, Any]:
+    """Assemble the viewer-ready root from /tmp/gaze_extract + /tmp/gaze_overlays."""
+    extract_dir = Path(extract_dir)
+    overlays_dir = Path(overlays_dir)
+    out_root = Path(out_root)
+    (out_root / "episodes").mkdir(parents=True, exist_ok=True)
+
+    bundles = sorted(extract_dir.glob("*.json"))
+    bundles = [b for b in bundles if not b.stem.endswith("_full")]
+    if datasets:
+        bundles = [b for b in bundles if b.stem in set(datasets)]
+
+    index: list[dict[str, Any]] = []
+    for bundle_path in bundles:
+        slug = bundle_path.stem
+        summary = json.loads(bundle_path.read_text(encoding="utf-8"))
+        full_path = extract_dir / f"{slug}_full.json"
+        full = json.loads(full_path.read_text(encoding="utf-8")) if full_path.exists() else {}
+        episode_id = summary.get("episode_id", slug)
+        safe_ep = _safe(episode_id)
+        ep_dir = out_root / "episodes" / slug / safe_ep
+        ep_dir.mkdir(parents=True, exist_ok=True)
+
+        files: dict[str, str] = {}
+
+        # overlay video
+        overlay_src = overlays_dir / f"{slug}.mp4"
+        if overlay_src.exists():
+            shutil.copy2(overlay_src, ep_dir / "overlay.mp4")
+            files["video"] = "overlay.mp4"
+        sbs_src = overlays_dir / f"{slug}_side_by_side.mp4"
+        if sbs_src.exists():
+            shutil.copy2(sbs_src, ep_dir / "side_by_side.mp4")
+            files["side_by_side"] = "side_by_side.mp4"
+
+        # gaze rows (reconciled view: keep t_s + projected/native coords)
+        gaze = full.get("gaze") or {}
+        gaze_rows = gaze.get("rows") or []
+        if gaze_rows:
+            write_table(_thin_gaze(gaze_rows), ep_dir / "gaze.jsonl")
+            files["gaze"] = "gaze.jsonl"
+
+        # annotations flattened across channels
+        anno_rows = _flatten_annotations(full.get("annotations") or summary.get("annotations") or [])
+        if anno_rows:
+            write_table(anno_rows, ep_dir / "annotations.jsonl")
+            files["annotations"] = "annotations.jsonl"
+
+        # provenance bundle
+        (ep_dir / "bundle.json").write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
+
+        episode_doc = {
+            "dataset": slug,
+            "episode_id": episode_id,
+            "files": files,
+            "video_meta": summary.get("video"),
+            "gaze_meta": {k: v for k, v in (gaze or {}).items() if k != "rows"},
+            "annotation_channels": [a.get("name") for a in (summary.get("annotations") or [])],
+            "warnings": summary.get("warnings", []),
+        }
+        (ep_dir / "episode.json").write_text(json.dumps(episode_doc, indent=2, sort_keys=True), encoding="utf-8")
+
+        index.append({
+            "id": f"{slug}:{episode_id}",
+            "dataset": slug,
+            "episode_id": episode_id,
+            "modalities": ",".join(
+                ["video"] * ("video" in files) + ["gaze"] * ("gaze" in files)
+                + (["annotations"] if "annotations" in files else [])
+            ),
+            "duration_s": (summary.get("video") or {}).get("duration_s"),
+            "gaze_space": (gaze or {}).get("coordinate_space"),
+            "annotation_channels": ";".join(a.get("name") for a in (summary.get("annotations") or [])),
+            "has_side_by_side": "side_by_side" in files,
+        })
+
+    # manifest in both jsonl and the table form the server reads
+    (out_root / "manifest.jsonl").write_text(
+        "\n".join(json.dumps(row, sort_keys=True) for row in index) + "\n", encoding="utf-8"
+    )
+    write_table(index, out_root / "manifest.parquet")
+
+    report = {
+        "root": str(out_root),
+        "episodes": len(index),
+        "datasets": [row["dataset"] for row in index],
+        "with_side_by_side": [row["dataset"] for row in index if row["has_side_by_side"]],
+    }
+    (out_root / "smoke_report.json").write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+    return report
+
+
+def upload_smoke_manifest(
+    local_root: str | Path,
+    *,
+    ssh_host: str = "sumedhso-L40S",
+    s3_uri: str = "s3://far-research-internal/colbhben/gaze/unprocessed/smoke_manifest",
+    remote_tmp: str = "/tmp/gaze_smoke_upload",
+    aws_bin: str = "/snap/bin/aws",
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Push the local smoke root to S3 via the remote host (local AWS is read-only).
+
+    scp the tree to the remote, then `aws s3 sync` it to the bucket prefix.
+    """
+    local_root = Path(local_root)
+    plan = {
+        "local_root": str(local_root),
+        "ssh_host": ssh_host,
+        "s3_uri": s3_uri,
+        "remote_tmp": remote_tmp,
+        "dry_run": dry_run,
+    }
+    if dry_run:
+        plan["steps"] = [
+            f"ssh {ssh_host} 'rm -rf {remote_tmp} && mkdir -p {remote_tmp}'",
+            f"scp -rq {local_root}/. {ssh_host}:{remote_tmp}/",
+            f"ssh {ssh_host} '{aws_bin} s3 sync {remote_tmp}/ {s3_uri}/'",
+        ]
+        return plan
+    subprocess.run(["ssh", ssh_host, f"rm -rf {remote_tmp} && mkdir -p {remote_tmp}"], check=True)
+    subprocess.run(["scp", "-rq", f"{local_root}/.", f"{ssh_host}:{remote_tmp}/"], check=True)
+    out = subprocess.run(
+        ["ssh", ssh_host, f"{aws_bin} s3 sync {remote_tmp}/ {s3_uri}/"],
+        capture_output=True, text=True,
+    )
+    plan["returncode"] = out.returncode
+    plan["uploaded"] = [line for line in out.stdout.splitlines() if "upload:" in line][-20:]
+    plan["stderr_tail"] = out.stderr.splitlines()[-5:]
+    # cleanup remote staging
+    subprocess.run(["ssh", ssh_host, f"rm -rf {remote_tmp}"], check=False)
+    return plan
+
+
+def _safe(name: str) -> str:
+    return name.replace("/", "__").replace(":", "_")
+
+
+def _thin_gaze(rows: list[dict[str, Any]], max_rows: int = 20000) -> list[dict[str, Any]]:
+    """Keep the core gaze columns; subsample if very long (viewer-friendly)."""
+    keep = ("t_s", "x", "y", "x_norm", "y_norm", "x_px", "y_px", "valid", "depth", "yaw", "pitch")
+    thinned = [{k: r[k] for k in keep if k in r} for r in rows]
+    if len(thinned) > max_rows:
+        step = len(thinned) // max_rows + 1
+        thinned = thinned[::step]
+    return thinned
+
+
+def _flatten_annotations(channels: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for ch in channels:
+        name = ch.get("name")
+        segs = ch.get("segments")
+        if not isinstance(segs, list):
+            continue
+        for s in segs:
+            out.append({
+                "channel": name,
+                "kind": ch.get("kind"),
+                "start_s": s.get("start_s"),
+                "end_s": s.get("end_s"),
+                "point_s": s.get("point_s"),
+                "text": s.get("text"),
+            })
+    out.sort(key=lambda r: (r.get("start_s") if r.get("start_s") is not None else (r.get("point_s") or 0.0)))
+    return out

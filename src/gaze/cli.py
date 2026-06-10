@@ -319,7 +319,97 @@ def build_parser() -> argparse.ArgumentParser:
     pull_processed.add_argument("--split", metavar="NAME", help="Only pull one split bucket, for example train or holdout. Omit to pull all buckets.")
     pull_processed.add_argument("--dry-run", action="store_true", help="Show the planned copies without writing files.")
     pull_processed.set_defaults(func=cmd_s3_pull_processed)
+
+    add_curate_commands(sub)
     return parser
+
+
+CURATE_HELP = """Recipe-driven curation:
+  Recipes live in recipes/<slug>.json and capture how to parse/extract each
+  dataset (episode enumeration, video/gaze/annotation selection, native gaze
+  format + projection, multi-channel annotations, epoch reconciliation).
+  Source data is read-only on the remote NFS host (pulled via ssh/scp); the
+  local machine is the processing host (ffprobe, projectaria_tools, ffmpeg).
+"""
+
+
+def add_curate_commands(sub: argparse._SubParsersAction) -> None:
+    curate = sub.add_parser(
+        "curate",
+        help="Recipe-driven extraction, overlay, and smoke-manifest commands.",
+        description="Extract one episode per recipe, render gaze+annotation overlays, assemble a viewer-ready smoke manifest, and upload it.",
+        epilog=CURATE_HELP
+        + "\nExamples:\n  gaze curate extract --dataset nymeria --episode 20230607_s1_barbara_wheeler_act1_nkg6zo\n  gaze curate smoke --upload",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    name_positionals(curate, "curate commands", "Choose one curate command.")
+    curate_sub = curate.add_subparsers(dest="curate_command", metavar="<curate-command>", required=True, parser_class=GazeArgumentParser)
+
+    extract = curate_sub.add_parser(
+        "extract",
+        help="Extract one episode's video metadata, gaze, and annotation channels.",
+        description="Resolve a recipe's episode files from the read-only source, parse gaze + annotations, ffprobe video, and write the episode bundle JSON.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    extract.add_argument("--dataset", metavar="SLUG", required=True, help="Dataset slug (recipe name). Required.")
+    extract.add_argument("--episode", metavar="ID", help="Episode id. Omit to use recipes/_sample_episodes.json.")
+    extract.add_argument("--out-dir", metavar="PATH", default="/tmp/gaze_extract", help="Output dir for <slug>.json + <slug>_full.json; default: /tmp/gaze_extract.")
+    extract.add_argument("--ssh-host", metavar="HOST", default="sumedhso-L40S", help="Remote data host; default: sumedhso-L40S.")
+    extract.add_argument("--local-root", metavar="PATH", help="Read source from a local mount instead of ssh (e.g. a mounted /nfs).")
+    extract.set_defaults(func=cmd_curate_extract)
+
+    overlay = curate_sub.add_parser(
+        "overlay",
+        help="Render a gaze+annotation overlay clip for one episode.",
+        description="Project gaze per frame (per the recipe), draw gaze + active annotation captions, and encode a short overlay mp4.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    overlay.add_argument("--dataset", metavar="SLUG", required=True, help="Dataset slug. Required.")
+    overlay.add_argument("--episode", metavar="ID", help="Episode id. Omit to use the sample episode.")
+    overlay.add_argument("--out", metavar="PATH", help="Output mp4 path; default: /tmp/gaze_overlays/<slug>.mp4.")
+    overlay.add_argument("--max-seconds", metavar="N", type=float, default=20.0, help="Clip length cap; default: 20.")
+    overlay.add_argument("--ssh-host", metavar="HOST", default="sumedhso-L40S", help="Remote data host; default: sumedhso-L40S.")
+    overlay.add_argument("--local-root", metavar="PATH", help="Read source from a local mount instead of ssh.")
+    overlay.set_defaults(func=cmd_curate_overlay)
+
+    build_smoke = curate_sub.add_parser(
+        "build-smoke",
+        help="Assemble a viewer-ready smoke manifest from extracted episodes + overlays.",
+        description="Build a canonical-style root (manifest + episodes/<dataset>/<id>/ with overlay.mp4, gaze, annotations) the gaze viewer can serve.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    build_smoke.add_argument("--extract-dir", metavar="PATH", default="/tmp/gaze_extract", help="Dir of extracted bundles; default: /tmp/gaze_extract.")
+    build_smoke.add_argument("--overlays-dir", metavar="PATH", default="/tmp/gaze_overlays", help="Dir of overlay mp4s; default: /tmp/gaze_overlays.")
+    build_smoke.add_argument("--out-root", metavar="PATH", default="/tmp/gaze_smoke_manifest", help="Output root; default: /tmp/gaze_smoke_manifest.")
+    build_smoke.add_argument("--datasets", metavar="SLUG[,SLUG...]", help="Only include these dataset slugs.")
+    build_smoke.set_defaults(func=cmd_curate_build_smoke)
+
+    upload_smoke = curate_sub.add_parser(
+        "upload-smoke",
+        help="Upload a smoke manifest to S3 via the remote host.",
+        description="scp the smoke root to the remote host and `aws s3 sync` it to the smoke_manifest prefix (local AWS access is read-only here).",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    upload_smoke.add_argument("--root", metavar="PATH", default="/tmp/gaze_smoke_manifest", help="Local smoke root to upload; default: /tmp/gaze_smoke_manifest.")
+    upload_smoke.add_argument("--ssh-host", metavar="HOST", default="sumedhso-L40S", help="Remote host with S3 write access; default: sumedhso-L40S.")
+    upload_smoke.add_argument("--s3-uri", metavar="URI", default="s3://far-research-internal/colbhben/gaze/unprocessed/smoke_manifest", help="Destination S3 prefix.")
+    upload_smoke.add_argument("--dry-run", action="store_true", help="Show the upload plan without copying.")
+    upload_smoke.set_defaults(func=cmd_curate_upload_smoke)
+
+    smoke = curate_sub.add_parser(
+        "smoke",
+        help="End-to-end: build the smoke manifest from existing artifacts (and optionally upload).",
+        description="Assemble the smoke manifest from already-extracted bundles + overlays, print the report, and optionally upload to S3.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    smoke.add_argument("--extract-dir", metavar="PATH", default="/tmp/gaze_extract")
+    smoke.add_argument("--overlays-dir", metavar="PATH", default="/tmp/gaze_overlays")
+    smoke.add_argument("--out-root", metavar="PATH", default="/tmp/gaze_smoke_manifest")
+    smoke.add_argument("--upload", action="store_true", help="Upload the assembled manifest to S3 after building.")
+    smoke.add_argument("--ssh-host", metavar="HOST", default="sumedhso-L40S")
+    smoke.add_argument("--s3-uri", metavar="URI", default="s3://far-research-internal/colbhben/gaze/unprocessed/smoke_manifest")
+    smoke.add_argument("--dry-run", action="store_true", help="With --upload, show the upload plan without copying.")
+    smoke.set_defaults(func=cmd_curate_smoke)
 
 
 def add_dataset_common(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
@@ -513,6 +603,77 @@ def cmd_s3_pull_processed(args: argparse.Namespace) -> int:
         dry_run=args.dry_run,
     )
     print(json.dumps(report, indent=2, sort_keys=True))
+    return 0
+
+
+def _sample_episode_id(dataset: str) -> str | None:
+    samples_path = Path(__file__).resolve().parents[2] / "recipes" / "_sample_episodes.json"
+    if not samples_path.exists():
+        return None
+    data = json.loads(samples_path.read_text(encoding="utf-8"))
+    return (data.get("samples", {}).get(dataset) or {}).get("episode_id")
+
+
+def _curate_puller(args: argparse.Namespace):
+    from .curate import Puller
+    return Puller(ssh_host=getattr(args, "ssh_host", None), local_root=getattr(args, "local_root", None))
+
+
+def cmd_curate_extract(args: argparse.Namespace) -> int:
+    from . import curate_readers
+    episode = args.episode or _sample_episode_id(args.dataset)
+    if not episode:
+        print(f"error: no --episode given and no sample episode for {args.dataset}", file=sys.stderr)
+        return 1
+    puller = _curate_puller(args)
+    bundle = curate_readers.extract_episode(args.dataset, episode, puller)
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / f"{args.dataset}.json").write_text(json.dumps(bundle.to_dict(), indent=2, sort_keys=True), encoding="utf-8")
+    print(json.dumps(bundle.to_dict(), indent=2, sort_keys=True))
+    return 0 if bundle.emitted else 1
+
+
+def cmd_curate_overlay(args: argparse.Namespace) -> int:
+    from .overlay import render_overlay
+    episode = args.episode or _sample_episode_id(args.dataset)
+    if not episode:
+        print(f"error: no --episode given and no sample episode for {args.dataset}", file=sys.stderr)
+        return 1
+    out = args.out or f"/tmp/gaze_overlays/{args.dataset}.mp4"
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    puller = _curate_puller(args)
+    result = render_overlay(args.dataset, episode, puller, out, max_seconds=args.max_seconds)
+    print(json.dumps(result if isinstance(result, dict) else getattr(result, "__dict__", {"out": out}), indent=2, sort_keys=True, default=str))
+    return 0
+
+
+def cmd_curate_build_smoke(args: argparse.Namespace) -> int:
+    from .smoke import build_smoke_manifest
+    report = build_smoke_manifest(
+        args.extract_dir, args.overlays_dir, args.out_root,
+        datasets=parse_set(args.datasets) and sorted(parse_set(args.datasets)),
+    )
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_curate_upload_smoke(args: argparse.Namespace) -> int:
+    from .smoke import upload_smoke_manifest
+    report = upload_smoke_manifest(args.root, ssh_host=args.ssh_host, s3_uri=args.s3_uri, dry_run=args.dry_run)
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0 if (args.dry_run or report.get("returncode") == 0) else 1
+
+
+def cmd_curate_smoke(args: argparse.Namespace) -> int:
+    from .smoke import build_smoke_manifest, upload_smoke_manifest
+    report = build_smoke_manifest(args.extract_dir, args.overlays_dir, args.out_root)
+    result = {"build": report}
+    if args.upload:
+        result["upload"] = upload_smoke_manifest(args.out_root, ssh_host=args.ssh_host, s3_uri=args.s3_uri, dry_run=args.dry_run)
+    print(json.dumps(result, indent=2, sort_keys=True))
+    if args.upload and not args.dry_run and result["upload"].get("returncode") not in (0, None):
+        return 1
     return 0
 
 
