@@ -1,0 +1,8 @@
+{"datasets":{
+  "ego-exo4d":["cmu_bike01_2","fair_cooking_05_2","nus_covidtest_01_1"],
+  "egome":["CF3-A4-20240802_User1_240802092926","CF3-A4-20240802_User1_240802093440","CF3-A4-20240802_User1_240802093303"],
+  "egtea":["OP01-R01-PastaSalad-1002316-1004005-F024051-F024101","OP02-R01-PastaSalad-114611-119688-F002738-F002885","OP03-R02-TurkeySandwich-106120-110510-F002536-F002663"],
+  "holoassist":["R007-7July-DSLR","R012-7July-Nespresso","R006-7July-Switch"],
+  "nymeria":["20230607_s1_barbara_wheeler_act1_nkg6zo","20230607_s0_james_johnson_act0_e72nhq","20230607_s0_james_johnson_act1_7xwm28"],
+  "hd-epic":["P01-20240202-110250","P03-20240216-084005","P02-20240209-184316"]
+}}
