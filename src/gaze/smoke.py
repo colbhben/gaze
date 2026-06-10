@@ -292,9 +292,19 @@ def molmoact_to_viewer_layout(manifest_root: str | Path, out_root: str | Path) -
             write_table(gaze_rows, ep_dir / "gaze.jsonl")
             files["gaze"] = "gaze.jsonl"
 
-        anno_text = (r.get("metadata") or {}).get("annotation_text")
+        md = r.get("metadata") or {}
+        anno_text = md.get("annotation_text")
+        anno_channel = md.get("annotation_channel")
         if anno_text:
-            write_table([{"time_s": 0.0, "text": anno_text}], ep_dir / "annotations.jsonl")
+            seg_end = md.get("clip_end_time")
+            seg_start = md.get("clip_start_time")
+            dur = (seg_end - seg_start) if (seg_end is not None and seg_start is not None) else None
+            write_table([{
+                "time_s": 0.0,
+                "end_s": dur,
+                "label": anno_channel,   # the channel that drove this clip
+                "text": anno_text,
+            }], ep_dir / "annotations.jsonl")
             files["annotations"] = "annotations.jsonl"
 
         (ep_dir / "episode.json").write_text(json.dumps({

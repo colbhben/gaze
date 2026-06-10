@@ -13,7 +13,7 @@ from src.gaze.molmoact import (
     px_to_padded_px,
     sample_segment_frames,
 )
-from src.gaze.training import chop_into_segments
+from src.gaze.training import chop_into_segments, chop_by_channels
 
 
 class TestPadGeometry(unittest.TestCase):
@@ -142,6 +142,52 @@ class TestBuildRow(unittest.TestCase):
         # every timestamp is a multiple of 0.5 (the MolmoAct2 grid)
         for t in row["timestamps"]:
             self.assertAlmostEqual((t / 0.5) - round(t / 0.5), 0.0, places=6)
+
+
+class TestHierarchicalChop(unittest.TestCase):
+    def _channels(self):
+        # coarsest -> finest, like holoassist (narration / coarse / fine)
+        return [
+            {"name": "narration", "kind": "interval", "mean_dur": 100.0,
+             "spans": [{"start_s": 0.0, "end_s": 100.0, "text": "whole take"}]},
+            {"name": "coarse", "kind": "interval", "mean_dur": 30.0,
+             "spans": [{"start_s": 0.0, "end_s": 15.0, "text": "grabs gopro"},
+                       {"start_s": 15.0, "end_s": 100.0, "text": "opens gopro"}]},
+            {"name": "fine", "kind": "interval", "mean_dur": 3.0,
+             "spans": [{"start_s": 16.0, "end_s": 19.0, "text": "rotate"},
+                       {"start_s": 19.0, "end_s": 24.0, "text": "pull door"},
+                       {"start_s": 24.0, "end_s": 30.0, "text": "grab battery"}]},
+        ]
+
+    def test_coarse_fits_used_else_descend(self):
+        segs = chop_by_channels(self._channels(), max_clip_s=20, min_clip_s=1.0, duration_s=100)
+        by_ch = [(s["channel"], round(s["start_s"], 1), round(s["end_s"], 1)) for s in segs]
+        # the 0-15 coarse span fits (<=20) -> used as a coarse clip with its text
+        self.assertIn(("coarse", 0.0, 15.0), by_ch)
+        # the 15-100 coarse span is too long -> descend to fine within it
+        fine = [s for s in segs if s["channel"] == "fine"]
+        self.assertTrue(fine)
+        self.assertTrue(all(s["end_s"] - s["start_s"] <= 20 + 1e-6 for s in segs))
+
+    def test_clip_carries_driving_channel_text(self):
+        segs = chop_by_channels(self._channels(), max_clip_s=20, min_clip_s=1.0, duration_s=100)
+        coarse0 = next(s for s in segs if s["channel"] == "coarse" and s["start_s"] == 0.0)
+        self.assertEqual(coarse0["text"], "grabs gopro")
+        fine0 = next(s for s in segs if s["channel"] == "fine")
+        self.assertIn(fine0["text"], {"rotate", "pull door", "grab battery"})
+
+    def test_finest_too_long_hard_cuts(self):
+        chans = [
+            {"name": "only", "kind": "interval", "mean_dur": 50.0,
+             "spans": [{"start_s": 0.0, "end_s": 50.0, "text": "long"}]},
+        ]
+        segs = chop_by_channels(chans, max_clip_s=20, min_clip_s=1.0, duration_s=50)
+        self.assertTrue(all(s["end_s"] - s["start_s"] <= 20 + 1e-6 for s in segs))
+        self.assertTrue(all(s["channel"] == "only" and s["text"] == "long" for s in segs))
+        self.assertGreaterEqual(len(segs), 3)  # 50s / 20 -> 3 pieces
+
+    def test_empty_channels(self):
+        self.assertEqual(chop_by_channels([], max_clip_s=20, duration_s=10), [])
 
 
 class TestChopIntegration(unittest.TestCase):

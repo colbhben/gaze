@@ -153,6 +153,7 @@ def build_molmoact_row(
     side: int,
     annotation_text: str | None,
     prompt: str,
+    annotation_channel: str | None = None,
 ) -> dict[str, Any]:
     """Assemble one Molmo2VideoPoint-style manifest row for a clip segment.
 
@@ -209,6 +210,7 @@ def build_molmoact_row(
             "clip_start_time": round(seg_start_s, 3),
             "clip_end_time": round(seg_end_s, 3),
             "annotation_text": annotation_text,
+            "annotation_channel": annotation_channel,
         },
         "provenance": {
             "points_norm": prov_norm,     # per-frame [x_norm,y_norm] in [0,1] or null

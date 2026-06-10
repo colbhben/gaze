@@ -380,6 +380,101 @@ def chop_into_segments(
 
 
 # =========================================================================== #
+# Hierarchical multi-channel chopping (coarsest channel that fits; else descend).
+# =========================================================================== #
+def channels_by_granularity(data: EpisodeData) -> list[dict[str, Any]]:
+    """Per-channel reconciled interval spans, ordered COARSEST -> FINEST.
+
+    Returns ``[{name, kind, spans:[{start_s,end_s,text}]}]`` sorted by descending
+    mean span duration (the coarsest = whole-take narration first, finest = atomic
+    actions last). Only spans with non-empty text and a real [start,end] are kept.
+    """
+    channels: list[dict[str, Any]] = []
+    for ch in reconciled_annotations(data):
+        spans = []
+        for s in ch["segments"]:
+            text = s.get("text")
+            a, b = s.get("start_s"), s.get("end_s")
+            if text is None or str(text).strip() == "":
+                continue
+            if a is None or b is None or b <= a:
+                continue
+            spans.append({"start_s": float(a), "end_s": float(b), "text": str(text)})
+        if not spans:
+            continue
+        spans.sort(key=lambda s: s["start_s"])
+        mean_dur = sum(s["end_s"] - s["start_s"] for s in spans) / len(spans)
+        channels.append({"name": ch["name"], "kind": ch["kind"], "spans": spans, "mean_dur": mean_dur})
+    channels.sort(key=lambda c: c["mean_dur"], reverse=True)  # coarsest first
+    return channels
+
+
+def chop_by_channels(
+    channels: list[dict[str, Any]],
+    *,
+    max_clip_s: float,
+    min_clip_s: float = 1.0,
+    duration_s: float | None = None,
+    _range: tuple[float, float] | None = None,
+    _level: int = 0,
+) -> list[dict[str, Any]]:
+    """Chop using the coarsest annotation channel whose spans fit, else descend.
+
+    Algorithm (per the spec): consider the channels coarsest->finest. Within the
+    current time ``_range`` (whole episode at the top level), walk the coarsest
+    channel's spans that overlap the range:
+      * a span that fits (<= ``max_clip_s``) becomes a CLIP, tagged with that
+        channel's name + the span's text;
+      * a span TOO LONG is recursively re-chopped using the NEXT-finer channels
+        restricted to that span's time range; if no finer channel exists, the span
+        is hard-cut into <= ``max_clip_s`` pieces (carrying the coarse text).
+    Each returned segment is ``{start_s, end_s, channel, text}``. Segments shorter
+    than ``min_clip_s`` are dropped.
+    """
+    if not channels:
+        return []
+    rng_lo, rng_hi = _range if _range is not None else (0.0, float(duration_s) if duration_s else math.inf)
+    coarse = channels[0]
+    finer = channels[1:]
+    segs: list[dict[str, Any]] = []
+    for s in coarse["spans"]:
+        lo, hi = max(s["start_s"], rng_lo), min(s["end_s"], rng_hi)
+        if hi - lo < min_clip_s:
+            continue
+        length = hi - lo
+        if length <= max_clip_s + 1e-6:
+            segs.append({"start_s": round(lo, 6), "end_s": round(hi, 6),
+                         "channel": coarse["name"], "text": s["text"]})
+        elif finer:
+            # descend: re-chop this too-long span with finer channels
+            sub = chop_by_channels(finer, max_clip_s=max_clip_s, min_clip_s=min_clip_s,
+                                   duration_s=duration_s, _range=(lo, hi), _level=_level + 1)
+            if sub:
+                segs.extend(sub)
+            else:
+                # finer channels had no coverage here -> hard-cut with coarse text
+                segs.extend(_hard_cut(lo, hi, max_clip_s, min_clip_s, coarse["name"], s["text"]))
+        else:
+            # finest channel, still too long -> hard-cut, carry the (finest) text
+            segs.extend(_hard_cut(lo, hi, max_clip_s, min_clip_s, coarse["name"], s["text"]))
+    segs.sort(key=lambda r: r["start_s"])
+    return segs
+
+
+def _hard_cut(lo: float, hi: float, max_clip_s: float, min_clip_s: float,
+              channel: str, text: str) -> list[dict[str, Any]]:
+    out = []
+    start = lo
+    while hi - start > max_clip_s + 1e-6:
+        out.append({"start_s": round(start, 6), "end_s": round(start + max_clip_s, 6),
+                    "channel": channel, "text": text})
+        start += max_clip_s
+    if hi - start >= min_clip_s:
+        out.append({"start_s": round(start, 6), "end_s": round(hi, 6), "channel": channel, "text": text})
+    return out
+
+
+# =========================================================================== #
 # Annotation unification + active-at-anchor lookup (active_interval sample_mode).
 # =========================================================================== #
 def unified_annotation_spans(data: EpisodeData) -> list[dict[str, Any]]:
@@ -887,6 +982,26 @@ def _intersect_interesting(spans: list[dict[str, Any]], interesting: dict[str, A
     return kept
 
 
+def _filter_channels_interesting(channels: list[dict[str, Any]], interesting: dict[str, Any]) -> list[dict[str, Any]]:
+    """Drop each channel's spans that don't overlap an interesting region.
+
+    Applies the same overlap test as ``_intersect_interesting`` per channel, so the
+    hierarchical chopper only ever sees interesting spans (at every granularity).
+    Channels left with no spans are removed.
+    """
+    regions = [(r["start_s"], r["end_s"]) for r in interesting.get("regions", [])
+               if r.get("interesting") and r.get("start_s") is not None and r.get("end_s") is not None]
+    if not regions:
+        return []
+    out = []
+    for ch in channels:
+        kept = [s for s in ch["spans"]
+                if any(s["start_s"] < rb and s["end_s"] > ra for ra, rb in regions)]
+        if kept:
+            out.append({**ch, "spans": kept})
+    return out
+
+
 def _build_molmoact_episode(
     slug: str,
     episode_id: str,
@@ -925,21 +1040,22 @@ def _build_molmoact_episode(
     duration_s = float(data.video.get("duration_s") or 0.0)
     pad = PadTransform(src_w=src_w, src_h=src_h, side=resolution)
 
-    # Unified annotation spans (video clock), optionally restricted to interesting regions.
-    # `interesting` is the dataset's whole map {episode_id: {regions:[...]}}; pick this
-    # episode's entry (it already carries a per-take 'regions' list, or IS one).
-    spans_video = unified_annotation_spans(data)
+    # Per-channel spans ordered coarsest -> finest, optionally restricted to the
+    # episode's classified-interesting regions (nymeria etc.). `interesting` is the
+    # dataset's whole map {episode_id: {regions:[...]}}.
+    channels = channels_by_granularity(data)
     ep_interesting = None
     if interesting:
         ep_interesting = interesting.get(episode_id) if episode_id in interesting else (
             interesting if "regions" in interesting else None
         )
-    spans_video = _intersect_interesting(spans_video, ep_interesting)
+    if ep_interesting:
+        channels = _filter_channels_interesting(channels, ep_interesting)
 
-    # Chop into annotation-bounded segments.
-    segments = chop_into_segments(
-        spans_video, max_clip_s=max_clip_s, merge_gap_s=merge_gap_s,
-        min_clip_s=min_clip_s, duration_s=duration_s or None,
+    # Hierarchical chop: coarsest channel that fits <= max_clip; else descend to finer.
+    # Each segment carries the channel + text of the span that drove its boundaries.
+    segments = chop_by_channels(
+        channels, max_clip_s=max_clip_s, min_clip_s=min_clip_s, duration_s=duration_s or None,
     )
     if not segments:
         return [], {"dataset": slug, "episode": episode_id, "segments": 0,
@@ -980,14 +1096,13 @@ def _build_molmoact_episode(
         )
         if num_real == 0:
             continue
-        # annotation text active mid-segment (for the prompt context)
-        spans_local = active_annotation_at(spans_video, (seg_start + seg_end) / 2.0)
-        anno_text = spans_local[0]["text"] if spans_local else None
+        # Each segment carries the channel + text of the span that drove its boundaries.
         examples.append(ma.build_molmoact_row(
             dataset=slug, episode_id=episode_id, seg_index=k, video_rel=video_rel,
             seg_start_s=seg_start, seg_end_s=seg_end, frames=frames, num_real=num_real,
             fps=fps, max_frames=max_frames, side=resolution,
-            annotation_text=anno_text, prompt=prompt,
+            annotation_text=seg.get("text"), annotation_channel=seg.get("channel"),
+            prompt=prompt,
         ))
 
     # Delete the big pulled source (keep small ones like egome/egtea harmlessly).
