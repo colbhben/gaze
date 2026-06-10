@@ -926,8 +926,15 @@ def _build_molmoact_episode(
     pad = PadTransform(src_w=src_w, src_h=src_h, side=resolution)
 
     # Unified annotation spans (video clock), optionally restricted to interesting regions.
+    # `interesting` is the dataset's whole map {episode_id: {regions:[...]}}; pick this
+    # episode's entry (it already carries a per-take 'regions' list, or IS one).
     spans_video = unified_annotation_spans(data)
-    spans_video = _intersect_interesting(spans_video, interesting)
+    ep_interesting = None
+    if interesting:
+        ep_interesting = interesting.get(episode_id) if episode_id in interesting else (
+            interesting if "regions" in interesting else None
+        )
+    spans_video = _intersect_interesting(spans_video, ep_interesting)
 
     # Chop into annotation-bounded segments.
     segments = chop_into_segments(
