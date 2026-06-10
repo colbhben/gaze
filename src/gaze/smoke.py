@@ -19,12 +19,39 @@ included where available.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
 
 from .table import write_table
+from .curate import load_recipe
+
+
+def _reconcile(raw_t: float | None, transform: str, *, gaze_t0: float | None, clip_start_s: float | None) -> float | None:
+    """Rebase a raw channel time onto the video-zero clock per epoch_sync.
+
+    Mirrors overlay.reconcile_to_video_clock so the viewer manifest and the
+    burned-in overlay share one clock.
+    """
+    if raw_t is None:
+        return None
+    if transform == "as_is":
+        return raw_t
+    if transform == "subtract_first_gaze":
+        return raw_t - (gaze_t0 or 0.0)
+    if transform == "subtract_clip_start":
+        return raw_t - (clip_start_s or 0.0)
+    return raw_t
+
+
+def _clip_start_s(slug: str, episode_id: str) -> float | None:
+    """egtea: clip start seconds = filename start_ms / 1000."""
+    if slug != "egtea":
+        return None
+    m = re.search(r"-(\d+)-(\d+)-F\d+-F\d+$", episode_id)
+    return int(m.group(1)) / 1000.0 if m else None
 
 
 def build_smoke_manifest(
@@ -58,6 +85,21 @@ def build_smoke_manifest(
 
         files: dict[str, str] = {}
 
+        # epoch_sync: rebase gaze + annotation times onto the video-zero clock
+        # (same reconciliation the overlay uses), so the viewer table matches the video.
+        try:
+            recipe = load_recipe(slug)
+            epoch = recipe.get("epoch_sync") or {}
+        except Exception:
+            epoch = {}
+        gaze_transform = (epoch.get("gaze") or {}).get("transform", "as_is")
+        anno_transform = (epoch.get("annotations") or {}).get("transform", "as_is")
+
+        gaze = full.get("gaze") or {}
+        gaze_rows = gaze.get("rows") or []
+        gaze_t0 = next((r["t_s"] for r in gaze_rows if r.get("t_s") is not None), 0.0)
+        clip_start = _clip_start_s(slug, episode_id)
+
         # overlay video
         overlay_src = overlays_dir / f"{slug}.mp4"
         if overlay_src.exists():
@@ -68,15 +110,22 @@ def build_smoke_manifest(
             shutil.copy2(sbs_src, ep_dir / "side_by_side.mp4")
             files["side_by_side"] = "side_by_side.mp4"
 
-        # gaze rows (reconciled view: keep t_s + projected/native coords)
-        gaze = full.get("gaze") or {}
-        gaze_rows = gaze.get("rows") or []
+        # gaze rows (times reconciled to video-zero seconds)
         if gaze_rows:
-            write_table(_thin_gaze(gaze_rows), ep_dir / "gaze.jsonl")
+            thinned = _thin_gaze(gaze_rows)
+            for r in thinned:
+                if "t_s" in r:
+                    r["t_s"] = _reconcile(r.get("t_s"), gaze_transform, gaze_t0=gaze_t0, clip_start_s=clip_start)
+            write_table(thinned, ep_dir / "gaze.jsonl")
             files["gaze"] = "gaze.jsonl"
 
-        # annotations flattened across channels
+        # annotations flattened across channels (times reconciled to video-zero seconds)
         anno_rows = _flatten_annotations(full.get("annotations") or summary.get("annotations") or [])
+        for r in anno_rows:
+            for key in ("start_s", "end_s", "point_s"):
+                r[key] = _reconcile(r.get(key), anno_transform, gaze_t0=gaze_t0, clip_start_s=clip_start)
+        # re-sort after reconciliation (offsets are monotonic so order is preserved, but be safe)
+        anno_rows.sort(key=lambda r: (r.get("start_s") if r.get("start_s") is not None else (r.get("point_s") or 0.0)))
         if anno_rows:
             write_table(anno_rows, ep_dir / "annotations.jsonl")
             files["annotations"] = "annotations.jsonl"
