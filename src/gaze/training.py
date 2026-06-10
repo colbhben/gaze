@@ -314,6 +314,110 @@ def projected_gaze_track(data: EpisodeData, puller: Puller) -> tuple[list[float]
 
 
 # =========================================================================== #
+# Gaze validity-gap cull (dataset_filters.max_gaze_valid_gap_s, e.g. egome 0.25).
+# =========================================================================== #
+def check_gaze_validity_gaps(data: EpisodeData, max_gap_s: float) -> tuple[bool, float]:
+    """Return (passes, observed_max_gap_s) for the reconciled gaze track.
+
+    ``passes`` is False (episode should be culled) when the time gap between any two
+    consecutive VALID gaze samples exceeds ``max_gap_s``. Reuses the same valid flag
+    the overlay uses; times are reconciled to the video-zero clock.
+    """
+    from . import curate_readers as cr
+
+    gaze_times = reconciled_gaze_times(data)
+    valid = [bool(r.get("valid", True)) for r in data.gaze_rows]
+    exceeded, observed = cr.max_gaze_gap_exceeded(gaze_times, valid, max_gap_s)
+    return (not exceeded, observed)
+
+
+# =========================================================================== #
+# Annotation-bounded clip chopping (max-duration + merge + min-length).
+# =========================================================================== #
+def chop_into_segments(
+    spans: list[dict[str, Any]],
+    *,
+    max_clip_s: float,
+    merge_gap_s: float = 1.0,
+    min_clip_s: float = 0.5,
+    duration_s: float | None = None,
+) -> list[dict[str, Any]]:
+    """Chop an episode into annotation-bounded clip segments on the video clock.
+
+    Given unified annotation spans (``unified_annotation_spans``, video-zero clock),
+    produce a list of ``{start_s, end_s}`` segments such that:
+
+      * only regions WITH annotation activity become segments (uninteresting/empty
+        regions are dropped),
+      * spans separated by <= ``merge_gap_s`` are merged into one contiguous region,
+      * any merged region longer than ``max_clip_s`` is split into <= ``max_clip_s``
+        sub-segments, preferring to cut at an interior span boundary near the cut point
+        (falling back to a hard cut at ``max_clip_s``),
+      * segments shorter than ``min_clip_s`` are dropped.
+
+    ``duration_s`` (video length) clamps the final segment end. Point annotations
+    (no end) contribute a [point - min_clip_s/2, point + min_clip_s/2] sliver so they
+    are not lost.
+    """
+    # 1. Normalize each span to an [a, b] interval on the video clock.
+    intervals: list[tuple[float, float]] = []
+    boundaries: set[float] = set()
+    half = min_clip_s / 2.0
+    for s in spans:
+        a = s.get("start_s")
+        b = s.get("end_s")
+        p = s.get("point_s")
+        if a is not None and b is not None and b > a:
+            lo, hi = float(a), float(b)
+        elif p is not None:
+            lo, hi = float(p) - half, float(p) + half
+        elif a is not None:
+            lo, hi = float(a), float(a) + min_clip_s
+        else:
+            continue
+        if duration_s is not None:
+            lo = max(0.0, lo)
+            hi = min(float(duration_s), hi)
+        if hi <= lo:
+            continue
+        intervals.append((lo, hi))
+        boundaries.add(lo)
+        boundaries.add(hi)
+    if not intervals:
+        return []
+
+    # 2. Merge overlapping / close (<= merge_gap_s) intervals into regions.
+    intervals.sort()
+    regions: list[tuple[float, float]] = []
+    cur_lo, cur_hi = intervals[0]
+    for lo, hi in intervals[1:]:
+        if lo - cur_hi <= merge_gap_s:
+            cur_hi = max(cur_hi, hi)
+        else:
+            regions.append((cur_lo, cur_hi))
+            cur_lo, cur_hi = lo, hi
+    regions.append((cur_lo, cur_hi))
+
+    # 3. Split long regions at <= max_clip_s, preferring an interior span boundary.
+    sorted_bounds = sorted(boundaries)
+    segments: list[dict[str, Any]] = []
+    for lo, hi in regions:
+        start = lo
+        while hi - start > max_clip_s + 1e-6:
+            hard_cut = start + max_clip_s
+            # prefer the latest span boundary in (start, hard_cut] that leaves a
+            # segment >= min_clip_s; else hard cut.
+            candidates = [b for b in sorted_bounds if start + min_clip_s <= b <= hard_cut]
+            cut = candidates[-1] if candidates else hard_cut
+            if cut - start >= min_clip_s:
+                segments.append({"start_s": round(start, 6), "end_s": round(cut, 6)})
+            start = cut
+        if hi - start >= min_clip_s:
+            segments.append({"start_s": round(start, 6), "end_s": round(hi, 6)})
+    return segments
+
+
+# =========================================================================== #
 # Annotation unification + active-at-anchor lookup (active_interval sample_mode).
 # =========================================================================== #
 def unified_annotation_spans(data: EpisodeData) -> list[dict[str, Any]]:
