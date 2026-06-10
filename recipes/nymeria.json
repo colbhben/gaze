@@ -1,0 +1,122 @@
+{
+  "recipe_version": 1,
+  "dataset": "nymeria",
+  "root": "nymeria",
+  "episode": {
+    "enumerate": "take_dir",
+    "glob": "*",
+    "id_from": { "rule": "path_component", "level": -1 },
+    "id_sanitize": false,
+    "filter": {
+      "comment": "Episode = take dir (~1101, some still extracting). File prefix inside channels is 'Nymeria_v0.0_<take>_<suffix>', NOT the bare take name. recording_observer/ and semidense_observations/ are ignored (ego = recording_head)."
+    }
+  },
+  "video": {
+    "select": {
+      "path_template": "{episode_id}/video_main_rgb/",
+      "glob": "{episode_id}/video_main_rgb/*_preview_rgb.mp4",
+      "pick": "single",
+      "missing": "warn"
+    }
+  },
+  "gaze": {
+    "select": {
+      "path_template": "{episode_id}/recording_head/recording_head/mps/eye_gaze/",
+      "prefer": ["personalized_eye_gaze.csv", "general_eye_gaze.csv"],
+      "pick": "first_existing",
+      "missing": "warn"
+    },
+    "gaze_format": {
+      "reader": "csv",
+      "coordinate_space": "cpf_angular",
+      "header": true,
+      "columns": { "left_yaw": "left_yaw_rads_cpf", "right_yaw": "right_yaw_rads_cpf", "pitch": "pitch_rads_cpf", "depth": "depth_m" },
+      "time": { "source": "tracking_timestamp_us", "units": "us", "epoch": "absolute" },
+      "extra_channels": [
+        "left_yaw_low_rads_cpf", "right_yaw_low_rads_cpf", "pitch_low_rads_cpf",
+        "left_yaw_high_rads_cpf", "right_yaw_high_rads_cpf", "pitch_high_rads_cpf",
+        "tx_left_eye_cpf", "ty_left_eye_cpf", "tz_left_eye_cpf",
+        "tx_right_eye_cpf", "ty_right_eye_cpf", "tz_right_eye_cpf", "session_uid"
+      ],
+      "projection": {
+        "feasible": true,
+        "method": "projectaria_cpf",
+        "needs": ["{episode_id}/recording_head/recording_head/mps/slam/online_calibration.jsonl"],
+        "calibration": { "file": "{episode_id}/recording_head/recording_head/mps/slam/online_calibration.jsonl", "format": "aria_online_calib" },
+        "params": {
+          "lib": "projectaria_tools",
+          "fn": "get_gaze_vector_reprojection(eye_gaze, 'camera-rgb', device_calibration, rgb_cam, depth_m=<per-sample>, make_upright=true)",
+          "camera_label": "camera-rgb",
+          "camera_model": "FISHEYE624",
+          "native_dims": [2880, 2880],
+          "make_upright": true,
+          "scale_to_mp4": "multiply output px by mp4_width/2880 (ffprobe mp4 W per take; preview is a uniform downscale, square, no display-matrix rotation)",
+          "device_cad": "DeviceCadExtrinsics(Gen1, 'DVT-S', 'camera-slam-left'); DeviceCalibration cameras from online_calibration.jsonl CameraCalibrations[] (T_Device_Camera quat+translation, Projection.Params).",
+          "depth": "use per-sample depth_m (vs fixed 1.0 shifts ~60px); yaw=mean(left_yaw,right_yaw), pitch=pitch_rads_cpf",
+          "out_of_fov": "fn returns None when gaze leaves FOV -> emit null gaze for that frame",
+          "calib_pick": "use the online_calibration.jsonl line whose tracking_timestamp_us is nearest the target gaze ts (~1Hz calib)"
+        },
+        "time_sync": "device_ts_us(frame i) = first_gaze_ts_us + round(i * 1e6 / mp4_fps); first_gaze_ts_us = first eye_gaze.csv row tracking_timestamp_us; gaze 30Hz, preview mp4 ~15fps (2:1), durations agree <10ms. mp4 frame0 == first gaze sample (inferred, +-1 frame worst case; validate vs explorer GT). ffprobe mp4 fps/W per take (do not hardcode).",
+        "validated": true,
+        "notes": "VALIDATED end-to-end on take 20230607_s1_barbara_wheeler_act1_nkg6zo: 5 frames projected onto correct targets (face/TV/table) with make_upright=true; make_upright=false is off-target. Calibration from online_calibration.jsonl ALONE works (no VRS, no metadata.json - confirmed metadata.json is not on disk). device_calibration_from_json_string does NOT accept an online-calib line; build CameraCalibration objects directly. personalized has a leading warmup gap of empty rows -> prefer general or filter empty rows."
+      }
+    }
+  },
+  "annotations": [
+    {
+      "name": "activity_summary",
+      "select": {
+        "path_template": "{episode_id}/narration_activity_summarization_csv/",
+        "glob": "{episode_id}/narration_activity_summarization_csv/*.csv",
+        "pick": "single",
+        "missing": "warn"
+      },
+      "reader": "csv",
+      "kind": "interval",
+      "time": { "start": "start_time", "end": "end_time", "units": "s", "epoch": "recording_zero" },
+      "text": { "primary": "Describe my activity" },
+      "extras": ["annotator"],
+      "join": { "by": "stem", "comment": "One csv per take in this dir; coarse ~30s spans. Text column header is literally 'Describe my activity'." }
+    },
+    {
+      "name": "atomic_action",
+      "select": {
+        "path_template": "{episode_id}/narration_atomic_action_csv/",
+        "glob": "{episode_id}/narration_atomic_action_csv/*.csv",
+        "pick": "single",
+        "missing": "warn"
+      },
+      "reader": "csv",
+      "kind": "interval",
+      "time": { "start": "start_time", "end": "end_time", "units": "s", "epoch": "recording_zero" },
+      "text": { "primary": "Describe my atomic actions" },
+      "extras": ["annotator"],
+      "join": { "by": "stem", "comment": "One csv per take; fine ~5s spans. Text column header is literally 'Describe my atomic actions'." }
+    }
+  ],
+  "metadata": {
+    "sample_only": false,
+    "notes": "No metadata file. RESOLVED time-base: annotation start/end SECONDS and gaze tracking_timestamp_us are the SAME device clock, just different units — annotation_s ~= gaze_us/1e6 (verified across 3 takes: act0 gaze 5448.5..6669.1 s vs activity 5831.8..6655.96 s; act1 gaze 7846.8..8831.1 s vs 7963.4..8825.6 s; both annotation ranges sit inside the gaze range). So align by annotation_time_s * 1e6 == tracking_timestamp_us (no separate offset file needed); annotations simply start a few seconds after recording start and end before it. closed_loop_trajectory.csv also carries tracking_timestamp_us on this same clock. Gaze ~30 Hz."
+  },
+  "overrides": {},
+  "provenance": {
+    "notes": "METADATA none. VIDEO <TAKE>/video_main_rgb/<prefix>.mp4. GAZE <TAKE>/recording_head/recording_head/recording_head/mps/eye_gaze/personalized_eye_gaze.csv (fallback general_eye_gaze.csv; not pixel-mapped, check projectaria_tools). ANNOTATION: activity summary (<TAKE>/narration_activity_summarization_csv/<prefix>.csv) and atomic action (<TAKE>/narration_atomic_action_csv/<prefix>.csv). NOTE: not all archives finished extracting; extraction running separately.",
+    "decisions": [
+      "Episode = take; ignore recording_observer + semidense_observations.",
+      "Gaze = Aria CPF (prefer personalized, fall back general); preserve full CPF columns + bounds + eye origins.",
+      "Projection feasible via projectaria_tools using on-disk online_calibration.jsonl (camera-rgb); no VRS needed.",
+      "Two annotation channels: activity_summary (~30s coarse) and atomic_action (~5s fine); text columns 'Describe my activity' / 'Describe my atomic actions'."
+    ],
+    "corrections": [
+      "Gaze path is TWO recording_head levels, not three (recording_head/recording_head/mps/eye_gaze/).",
+      "File prefix is Nymeria_v0.0_<take>_<suffix> (video suffix _preview_rgb), not the bare take name -> glob within the channel dir.",
+      "personalized has a warmup gap of empty rows; general is more complete.",
+      "Time-base RESOLVED: annotation seconds == gaze microseconds / 1e6 (same device clock, not different epochs) — verified on 3 takes; align by annotation_s*1e6 == tracking_timestamp_us, no offset file needed."
+    ],
+    "open_questions": [
+      "Coverage is a point-in-time snapshot (active extraction): video 1100/1101, personalized 969, activity 864, atomic 845; general/calib full-sweep counts were blocked by NFS load.",
+      "Validate the preview_rgb.mp4 image-frame vs calibrated RGB sensor-frame transform (rotation/downscale) when projectaria_tools is available.",
+      "video<->gaze time alignment still needs the mp4's first-frame device timestamp (the gaze/anno clock starts at recording start, not at the trimmed preview video's frame 0) — derive from projectaria/VRS timing at projection time."
+    ]
+  }
+}

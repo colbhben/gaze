@@ -1,0 +1,88 @@
+{
+  "recipe_version": 1,
+  "dataset": "egoexolearn",
+  "root": "egoexolearn",
+  "episode": {
+    "enumerate": "annotation_keys",
+    "id_from": { "rule": "literal", "group": "video_uid" },
+    "id_sanitize": false,
+    "filter": {
+      "include_regex": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "comment": "Enumerate distinct video_uid from the fine-annotation CSV, restricted to ego rows (join.keep_where view=='ego'). The UUID include_regex also discards ~40 malformed rows where multi-line narration leaks into the video_uid column. Usable ego episodes ~421."
+    }
+  },
+  "video": {
+    "select": {
+      "path_template": "videos/{video_uid}.mp4",
+      "pick": "single",
+      "missing": "warn"
+    }
+  },
+  "gaze": {
+    "select": {
+      "path_template": "gazes_30fps_npy/{video_uid}.npy",
+      "pick": "single",
+      "missing": "warn"
+    },
+    "gaze_format": {
+      "reader": "npy",
+      "coordinate_space": "normalized_2d",
+      "columns": { "x": 0, "y": 1 },
+      "time": { "source": "frame_index", "units": "frame_index", "fps": 30, "epoch": "video_zero" },
+      "validity": { "column": 2, "valid_when": "==1", "invalid_placeholder": [0.5, 0.5] },
+      "extra_channels": [2],
+      "projection": {
+        "feasible": true,
+        "method": "normalize_by_dims",
+        "notes": "npy is (N_frames, 3) float32: col0=x_norm, col1=y_norm in [0,1], col2=binary validity. Invalid frames are stuffed with (0.5,0.5) -> MUST mask via col2 (else center placeholders read as real fixations). Time is implicit: frame i -> i/30 s; no timestamp column. Already normalized; multiply by frame W/H downstream if pixels wanted."
+      }
+    }
+  },
+  "annotations": [
+    {
+      "name": "fine",
+      "select": {
+        "path_template": "annotations/fine_annotation_trainvaltest_en.csv",
+        "pick": "single",
+        "missing": "warn"
+      },
+      "reader": "csv",
+      "kind": "interval",
+      "time": { "start": "start_sec", "end": "end_sec", "units": "s", "epoch": "video_zero" },
+      "text": { "primary": "narration_en" },
+      "extras": ["annotation_id", "scene", "narration_en_hand_prompt", "narration_en_no_hand_prompt"],
+      "join": {
+        "by": "row_field",
+        "key_field": "video_uid",
+        "comment": "Rows whose video_uid == episode id. view=='ego' selects egocentric; subset gives split. Stems are identical UUIDs across video/gaze/CSV (no transform)."
+      },
+      "filter": { "keep_where": "view=='ego'" },
+      "split_field": "subset"
+    }
+  ],
+  "metadata": {
+    "sample_only": false,
+    "notes": "No general metadata file. fps for gaze is fixed 30 by construction. Video fps/dims via ffprobe. Other annotation files present but unused: fine_annotation_trainval_en.csv (subset), fine_annotation_test.csv (test id list), coarse_annotations.tar.gz, narration_{noun,verb}_taxonomy.csv."
+  },
+  "overrides": {},
+  "provenance": {
+    "notes": "METADATA none. VIDEO videos/. GAZE gazes_30fps_npy/ (naming likely bijective to videos). ANNOTATIONS annotations/fine_annotation_trainvaltest_en.csv (video_uid->video/gaze, start_sec, end_sec, narration_en; preserve all). NOTE: some videos not mapped to gaze/anno -> drop. annotations/README.md has info.",
+    "decisions": [
+      "Episode = ego video_uid, enumerated from fine-CSV ego rows (~421 usable: video+gaze+anno).",
+      "Gaze npy is (N,3) normalized x,y + validity flag; preserve validity (col2) and mask invalid (0.5,0.5) placeholders; time = frame/30.",
+      "Single annotation channel 'fine' (intervals start_sec/end_sec, text=narration_en).",
+      "Preserve annotation_id, scene, and the two GPT-rewrite text variants as extras.",
+      "ego/exo filter is on the annotation 'view' field (the only reliable discriminator), applied at join (keep_where view=='ego'), not on filename."
+    ],
+    "corrections": [
+      "Gaze is (N,3) with a validity flag, not plain (N,2) x,y.",
+      "CSV has 10 columns (incl. view, subset, scene, two GPT rewrites), not the 4 in the notes; view/subset are essential.",
+      "Bijection is gaze<->ego only (428 gaze = 421 ego-with-anno + 7 ego-without-anno); 304 exo + others have no gaze.",
+      "~40 malformed CSV rows leak multiline text into video_uid; the UUID include_regex filters them."
+    ],
+    "open_questions": [
+      "Coordinate origin (top-left vs bottom-left) and exact validity=0 semantics (blink/untracked/out-of-frame) are undocumented in README; strongly inferred, unconfirmed.",
+      "Whether to also emit the GPT-rewrite text variants as separate downstream channels or keep them only as extras on 'fine'."
+    ]
+  }
+}

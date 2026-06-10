@@ -1,0 +1,316 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gaze/recipes/recipe.schema.json",
+  "title": "Dataset curation recipe",
+  "type": "object",
+  "required": ["dataset", "root", "episode", "video", "gaze", "annotations", "provenance"],
+  "additionalProperties": false,
+  "properties": {
+    "recipe_version": { "type": "integer", "enum": [1] },
+    "dataset": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$" },
+    "root": { "type": "string", "minLength": 1 },
+    "episode": { "$ref": "#/$defs/episode" },
+    "video": { "$ref": "#/$defs/select_block" },
+    "gaze": {
+      "type": "object",
+      "required": ["select", "gaze_format"],
+      "additionalProperties": false,
+      "properties": {
+        "select": { "$ref": "#/$defs/select" },
+        "gaze_format": { "$ref": "#/$defs/gaze_format" }
+      }
+    },
+    "annotations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/annotation_channel" }
+    },
+    "metadata": { "$ref": "#/$defs/metadata" },
+    "overrides": { "type": "object" },
+    "provenance": { "$ref": "#/$defs/provenance" }
+  },
+
+  "$defs": {
+    "select_block": {
+      "type": "object",
+      "required": ["select"],
+      "additionalProperties": false,
+      "properties": { "select": { "$ref": "#/$defs/select" } }
+    },
+
+    "select": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path_template": { "type": "string" },
+        "glob": { "type": "string" },
+        "prefer": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "pick": { "enum": ["first_existing", "largest", "smallest", "single", "invariant_suffix"] },
+        "invariant_suffix": { "type": "string" },
+        "from_metadata": {
+          "type": "object",
+          "required": ["file", "field"],
+          "additionalProperties": false,
+          "properties": { "file": { "type": "string" }, "field": { "type": "string" } }
+        },
+        "scope": { "type": "string", "description": "subdir under the episode in which to glob/select" },
+        "missing": { "enum": ["warn", "skip", "error"], "default": "warn" }
+      },
+      "anyOf": [
+        { "required": ["path_template"] },
+        { "required": ["glob"] },
+        { "required": ["prefer"] },
+        { "required": ["from_metadata"] }
+      ]
+    },
+
+    "episode": {
+      "type": "object",
+      "required": ["enumerate", "id_from"],
+      "additionalProperties": false,
+      "properties": {
+        "enumerate": { "enum": ["video_glob", "take_dir", "annotation_keys", "id_list"] },
+        "glob": { "type": "string" },
+        "id_list": { "type": "array", "items": { "type": "string" } },
+        "id_from": {
+          "type": "object",
+          "required": ["rule"],
+          "additionalProperties": false,
+          "properties": {
+            "rule": { "enum": ["path_component", "filename_regex", "filename_stem", "literal"] },
+            "level": { "type": "integer" },
+            "regex": { "type": "string" },
+            "group": { "type": "string" },
+            "strip_suffix": { "type": "string" }
+          }
+        },
+        "id_sanitize": { "type": "boolean" },
+        "filter": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "include_regex": { "type": "string" },
+            "exclude_regex": { "type": "string" },
+            "comment": { "type": "string" }
+          }
+        },
+        "bridge": {
+          "type": "object",
+          "required": ["file", "maps"],
+          "additionalProperties": false,
+          "properties": {
+            "file": { "type": "string" },
+            "maps": { "type": "string" },
+            "key_field": { "type": "string" },
+            "value_field": { "type": "string" },
+            "comment": { "type": "string" }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "enumerate": { "const": "video_glob" } }, "required": ["enumerate"] },
+          "then": { "required": ["glob"] }
+        },
+        {
+          "if": { "properties": { "enumerate": { "const": "take_dir" } }, "required": ["enumerate"] },
+          "then": { "required": ["glob"] }
+        },
+        {
+          "if": { "properties": { "enumerate": { "const": "id_list" } }, "required": ["enumerate"] },
+          "then": { "required": ["id_list"] }
+        }
+      ]
+    },
+
+    "gaze_format": {
+      "type": "object",
+      "required": ["reader", "coordinate_space", "time", "projection"],
+      "additionalProperties": false,
+      "properties": {
+        "reader": { "enum": ["csv", "npy", "whitespace_txt", "begaze_txt", "tsv"] },
+        "coordinate_space": { "enum": ["pixel_2d", "normalized_2d", "cpf_angular", "head_ray_3d"] },
+        "frame_dims": { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 },
+        "frame_dims_unknown": { "type": "boolean", "description": "pixel space but resolution undetermined; resolve at metadata time before normalizing" },
+        "columns": { "type": "object", "additionalProperties": { "type": ["string", "integer"] } },
+        "time": { "$ref": "#/$defs/time_spec" },
+        "validity": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "column": { "type": ["string", "integer"] },
+            "valid_when": { "type": "string" },
+            "invalid_placeholder": { "type": "array" }
+          }
+        },
+        "extra_channels": { "type": "array", "items": { "type": ["string", "integer"] } },
+        "header": { "type": ["boolean", "integer"], "description": "true/row-index of header, false if none" },
+        "delimiter": { "type": "string" },
+        "projection": { "$ref": "#/$defs/projection" },
+        "variants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["match"],
+            "additionalProperties": false,
+            "properties": {
+              "version": { "type": "string" },
+              "match": { "type": "string" },
+              "reader": { "enum": ["csv", "npy", "whitespace_txt", "begaze_txt", "tsv"] },
+              "columns": { "type": "object", "additionalProperties": { "type": ["string", "integer"] } },
+              "time": { "$ref": "#/$defs/time_spec" },
+              "extra_channels": { "type": "array", "items": { "type": ["string", "integer"] } }
+            }
+          }
+        }
+      }
+    },
+
+    "projection": {
+      "type": "object",
+      "required": ["feasible", "method"],
+      "additionalProperties": false,
+      "properties": {
+        "feasible": { "type": "boolean" },
+        "method": { "enum": ["already_2d", "normalize_by_dims", "projectaria_cpf", "psi_pinhole_ray", "none"] },
+        "needs": { "type": "array", "items": { "type": "string" } },
+        "calibration": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "file": { "type": "string" },
+            "format": { "enum": ["aria_online_calib", "psi_intrinsics_txt"] }
+          }
+        },
+        "extrinsics": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "file": { "type": "string" },
+            "format": { "enum": ["psi_pose_sync_4x4"] }
+          }
+        },
+        "params": {
+          "type": "object",
+          "description": "Resolved, validated projection parameters (free-form per method); enough to reproduce the pixel mapping.",
+          "additionalProperties": true
+        },
+        "time_sync": { "type": "string", "description": "Rule mapping mp4 frames to the gaze/device clock (and confidence)." },
+        "validated": { "type": "boolean", "description": "true once the projection was checked end-to-end (e.g. vs explorer GT)." },
+        "notes": { "type": "string" }
+      }
+    },
+
+    "annotation_channel": {
+      "type": "object",
+      "required": ["name", "select", "reader", "kind", "time", "text", "join"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_]*$" },
+        "select": { "$ref": "#/$defs/select" },
+        "reader": { "enum": ["csv", "tsv", "json", "json_by_key", "pandas_pickle"] },
+        "kind": { "enum": ["interval", "point"] },
+        "time": { "$ref": "#/$defs/time_spec" },
+        "text": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "primary": { "type": "string" },
+            "compose": { "type": "array", "items": { "type": "string" } },
+            "compose_sep": { "type": "string" },
+            "strip_prefix_regex": { "type": "string" }
+          },
+          "anyOf": [ { "required": ["primary"] }, { "required": ["compose"] } ]
+        },
+        "extras": { "type": "array", "items": { "type": "string" } },
+        "join": {
+          "type": "object",
+          "required": ["by"],
+          "additionalProperties": false,
+          "properties": {
+            "by": { "enum": ["episode_id", "key", "stem", "row_field"] },
+            "key_field": { "type": "string" },
+            "key_in_file": { "type": "string" },
+            "select_path": { "type": "string" },
+            "comment": { "type": "string" }
+          }
+        },
+        "filter": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "drop_where": { "type": "string" },
+            "keep_where": { "type": "string" },
+            "denylist_file": { "type": "string" },
+            "denylist_field": { "type": "string" }
+          }
+        },
+        "split_field": { "type": "string" },
+        "missing": { "enum": ["warn", "skip", "error"], "default": "warn" }
+      }
+    },
+
+    "time_spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": { "type": ["string", "integer"] },
+        "start": { "type": ["string", "integer"] },
+        "end": { "type": ["string", "integer"] },
+        "end_from": { "type": "string", "description": "derive end when no end column, e.g. 'start+duration_approx'" },
+        "point": { "type": ["string", "integer"] },
+        "whole_episode": { "type": "boolean", "description": "channel has no native timing; spans the full episode [0, duration]" },
+        "units": { "enum": ["s", "ms", "us", "ns", "frame_index", "filetime_100ns", "timecode_hmsf", "hms_decimal"] },
+        "fps": { "type": "number" },
+        "epoch": { "enum": ["absolute", "video_zero", "recording_zero"] },
+        "anchor_file": { "type": "string", "description": "file giving the zero/offset (e.g. VideoMp4Timing.txt)" }
+      }
+    },
+
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "prefer_shipped": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "video": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": { "file": { "type": "string" }, "fields": { "type": "object" } }
+            }
+          }
+        },
+        "video_metadata_rule": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "How the manifest computes each video metadata field (prose/pseudocode per field). Use when fields are derived (timing files) or non-constant (per-take fps).",
+          "properties": {
+            "fps": { "type": "string" },
+            "width": { "type": "string" },
+            "height": { "type": "string" },
+            "resolution": { "type": "string" },
+            "duration_s": { "type": "string" },
+            "frame_count": { "type": "string" }
+          }
+        },
+        "gaze_frame_mapping": { "type": "string", "description": "Rule mapping gaze samples to video frames when the gaze clock/rate differs from the mp4 fps (map via time, not index)." },
+        "sample_only": { "type": "boolean", "description": "if true, probe a per-dataset sample and assume homogeneity" },
+        "notes": { "type": "string" }
+      }
+    },
+
+    "provenance": {
+      "type": "object",
+      "required": ["notes"],
+      "additionalProperties": false,
+      "properties": {
+        "notes": { "type": "string" },
+        "decisions": { "type": "array", "items": { "type": "string" } },
+        "corrections": { "type": "array", "items": { "type": "string" } },
+        "open_questions": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

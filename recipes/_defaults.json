@@ -1,0 +1,22 @@
+{
+  "recipe_version": 1,
+  "targets": ["video", "gaze", "annotations"],
+  "emit_policy": {
+    "require": ["video", "gaze", "annotation_any"],
+    "on_missing_channel": "warn",
+    "comment": "Episodes anchor on the egocentric RGB video. Emit an episode only when video AND gaze AND at least one annotation channel resolve. A missing optional piece prints a warning and is skipped; it never aborts the run."
+  },
+  "metadata": {
+    "video": ["fps", "width", "height", "duration_s", "frame_count", "codec"],
+    "gaze": ["hz", "sample_count", "duration_s", "channels", "coordinate_space", "valid_fraction"],
+    "annotations": ["segment_count", "coverage_s", "coverage_fraction", "mean_rate_hz", "kind", "first_start_s", "last_end_s"],
+    "tools": {
+      "video_probe": "ffprobe",
+      "npy_columns": "numpy",
+      "pandas_pickle": "pandas",
+      "projectaria_cpf": "projectaria_tools"
+    },
+    "comment": "The manifest step computes per-episode metadata on a host where these tools exist (bare L40S lacks them). Shipped metadata is trusted where a dataset provides it (see each recipe's metadata.prefer_shipped)."
+  },
+  "id_sanitize": true
+}

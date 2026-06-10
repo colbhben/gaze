@@ -1,0 +1,120 @@
+{
+  "recipe_version": 1,
+  "dataset": "ego-exo4d",
+  "root": "ego-exo4d/v2",
+  "episode": {
+    "enumerate": "take_dir",
+    "glob": "takes/takes/*",
+    "id_from": { "rule": "path_component", "level": -1 },
+    "id_sanitize": false,
+    "bridge": {
+      "file": "takes.json",
+      "maps": "take_name<->take_uid",
+      "key_field": "take_name",
+      "value_field": "take_uid",
+      "comment": "Gaze dirs key by take_name; annotations key by take_uid; splits.json keys by take_uid. takes.json (list of take dicts) bridges them. Each take entry: take_name, take_uid, capture.capture_name/uid, task_name, duration_sec, frame_aligned_videos."
+    }
+  },
+  "video": {
+    "select": {
+      "from_metadata": { "file": "takes.json", "field": "frame_aligned_videos.*.rgb.relative_path" },
+      "path_template": "takes/takes/{take_name}/frame_aligned_videos/",
+      "glob": "takes/takes/{take_name}/frame_aligned_videos/*214-1.mp4",
+      "pick": "invariant_suffix",
+      "invariant_suffix": "214-1.mp4",
+      "missing": "warn"
+    }
+  },
+  "gaze": {
+    "select": {
+      "path_template": "take_eye_gaze/takes/{take_name}/eye_gaze/",
+      "prefer": ["personalized_eye_gaze_2d.csv", "general_eye_gaze_2d.csv"],
+      "pick": "first_existing",
+      "missing": "warn"
+    },
+    "gaze_format": {
+      "reader": "csv",
+      "coordinate_space": "pixel_2d",
+      "frame_dims": [1408, 1408],
+      "header": true,
+      "columns": { "x": "x", "y": "y", "frame": "frame_num" },
+      "time": { "source": "tracking_timestamp_us", "units": "us", "epoch": "absolute" },
+      "projection": {
+        "feasible": true,
+        "method": "already_2d",
+        "notes": "The *_2d.csv is already projected to RGB image pixels (1408x1408). Normalize by frame_dims if normalized coords are wanted. The non-2d CPF csv (yaw/pitch/depth) exists too but is angular; prefer the _2d. No validity/depth column in the _2d files."
+      }
+    }
+  },
+  "annotations": [
+    {
+      "name": "atomic",
+      "select": {
+        "prefer": ["annotations_atomic_descriptions/annotations/atomic_descriptions_train.json", "annotations_atomic_descriptions/annotations/atomic_descriptions_val.json"],
+        "pick": "first_existing",
+        "missing": "warn"
+      },
+      "reader": "json_by_key",
+      "kind": "point",
+      "time": { "point": "timestamp", "units": "s", "epoch": "video_zero" },
+      "text": { "primary": "text" },
+      "extras": ["subject", "ego_visible", "unsure"],
+      "join": {
+        "by": "key",
+        "key_field": "take_uid",
+        "select_path": "annotations.{take_uid}",
+        "comment": "annotations[take_uid] = list of passes; each pass has descriptions[] of {text, timestamp, subject, ego_visible, unsure}. Drop passes where rejected==true (empty descriptions). Flatten passes -> point events. Intersect keys with takes.json take_uids (atomic file holds uids not downloaded here)."
+      },
+      "filter": { "drop_where": "rejected==true" },
+      "split_field": "split"
+    },
+    {
+      "name": "expert",
+      "select": {
+        "prefer": ["annotations_expert_commentary/annotations/expert_commentary_train.json", "annotations_expert_commentary/annotations/expert_commentary_val.json"],
+        "pick": "first_existing",
+        "missing": "warn"
+      },
+      "reader": "json_by_key",
+      "kind": "interval",
+      "time": { "start": "video_time", "end_from": "start+duration_approx", "units": "s", "epoch": "video_zero" },
+      "text": { "primary": "text" },
+      "extras": ["task_name", "duration_approx"],
+      "join": {
+        "by": "key",
+        "key_field": "take_uid",
+        "select_path": "annotations.{take_uid}",
+        "comment": "annotations[take_uid] = list of expert entries; each has task_name (entry-level) + commentary_data[] of {text, video_time, duration_approx, error}. Drop items where error==true. Treat video_time as start; end = video_time + duration_approx (duration_approx preserved as extra)."
+      },
+      "filter": { "drop_where": "error==true" }
+    }
+  ],
+  "metadata": {
+    "prefer_shipped": {
+      "video": { "file": "takes.json", "fields": { "duration_s": "duration_sec" } }
+    },
+    "notes": "Split (train/val/test) is in annotations_*/annotations/splits.json -> take_uid_to_split, NOT in takes.json. test takes have no annotation files (will be dropped by emit policy: no annotation)."
+  },
+  "overrides": {},
+  "provenance": {
+    "notes": "METADATA v2/takes.json (capture_name<->capture_uid, task name, clip uid/paths, gaze paths). VIDEO v2/takes/takes/<TAKE>/frame_aligned_videos/aria01_214-1.mp4 (RGB one of 4). GAZE v2/take_eye_gaze/takes/<TAKE>/eye_gaze/personalized_eye_gaze_2d.csv (fallback general_eye_gaze_2d.csv). ANNOTATIONS: atomic (text+timestamp under descriptions, by uid) and expert (task name; text, video_time, duration_approx).",
+    "decisions": [
+      "Episode = take; enumerate on-disk take dirs (~5009).",
+      "RGB video selected by invariant suffix *214-1.mp4 (device prefix aria0N varies); prefer takes.json frame_aligned_videos[*].rgb.relative_path.",
+      "Gaze = *_2d.csv (already RGB pixels); prefer personalized (~15% of takes), fall back general (~100%).",
+      "Two point/interval annotation channels: atomic (point events) and expert (intervals via video_time+duration_approx).",
+      "Per emit policy (video+gaze+>=1 anno), test-split takes and the ~1159 takes with neither annotation are dropped."
+    ],
+    "corrections": [
+      "Video path has doubled takes/takes/ and device prefix varies (not always aria01).",
+      "Gaze dirs key by take_name; annotations + splits key by take_uid; takes.json bridges (recorded in episode.bridge).",
+      "Atomic/expert payload is nested under top-level 'annotations' key; atomic has a rejected-pass layer above descriptions.",
+      "Split lives in splits.json, not takes.json."
+    ],
+    "open_questions": [
+      "Confirm gaze channel policy: prefer-personalized-else-general (current) vs standardize on general for whole-dataset consistency.",
+      "Atomic timestamp is a point; expert is start+duration. Confirm mapping point/interval annotations to the canonical timeline (seconds vs frame_num via fps) at rectify time.",
+      "Exact personalized-vs-general counts were sampled (n=400 -> ~15% personalized); a full count was blocked by NFS latency."
+    ]
+  }
+}

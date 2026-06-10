@@ -1,0 +1,125 @@
+{
+  "recipe_version": 1,
+  "dataset": "holoassist",
+  "root": "holoassist/dataset",
+  "episode": {
+    "enumerate": "annotation_keys",
+    "id_from": { "rule": "literal", "group": "video_name" },
+    "id_sanitize": false,
+    "filter": {
+      "comment": "Episode = take (video_name, e.g. R0027-12-GoPro). Enumerate the 1758 annotation entries; emit only those with video+gaze (~1672). ~85 annotated takes lack video; ~439 video / ~464 gaze dirs are unannotated (likely held-out test, no labels here)."
+    }
+  },
+  "video": {
+    "select": {
+      "path_template": "video/{episode_id}/Video_pitchshift.mp4",
+      "pick": "single",
+      "missing": "warn"
+    }
+  },
+  "gaze": {
+    "select": {
+      "path_template": "gaze/{episode_id}/Eyes/Eyes_sync.txt",
+      "pick": "single",
+      "missing": "warn"
+    },
+    "gaze_format": {
+      "reader": "whitespace_txt",
+      "coordinate_space": "head_ray_3d",
+      "header": false,
+      "delimiter": "\t",
+      "columns": { "px": 2, "py": 3, "pz": 4, "vx": 5, "vy": 6, "vz": 7 },
+      "time": { "source": 0, "units": "s", "epoch": "video_zero", "anchor_file": "video/{episode_id}/Video/VideoMp4Timing.txt" },
+      "validity": { "column": 8, "valid_when": "==1" },
+      "extra_channels": [1],
+      "projection": {
+        "feasible": true,
+        "method": "psi_pinhole_ray",
+        "needs": ["video/{episode_id}/Video/Pose_sync.txt", "cam_info/extracted/{episode_id}/Export_py/Video/Intrinsics.txt"],
+        "calibration": { "file": "cam_info/extracted/{episode_id}/Export_py/Video/Intrinsics.txt", "format": "psi_intrinsics_txt" },
+        "extrinsics": { "file": "video/{episode_id}/Video/Pose_sync.txt", "format": "psi_pose_sync_4x4" },
+        "notes": "Gaze is a 3D ray: 9 tab cols = [rel_time_s, FILETIME_100ns, Px,Py,Pz (origin), Vx,Vy,Vz (direction, unit), valid]. rel_time_s = (FILETIME - VideoMp4Timing[0])/1e7, on the video clock (same as annotations). Project: transform ray to camera frame via per-frame 4x4 Pose_sync.txt, then apply psi Video/Intrinsics.txt (3x3 M + Brown-Conrady radial/tangential + FL/PP + W/H). RESOLVED: Video/Intrinsics.txt is W=896 H=504 = the pitchshift mp4 resolution exactly (verified on 5 takes; videoMetadata res uniformly 896x504), so NO rescale is needed (use FLx~681, FLy~682, PPx~445.4, PPy~237.4 directly on mp4 pixels). Do NOT use the sibling AhatDepth/Intrinsics.txt (512x512) — that is the depth camera. psi Intrinsics M maps camera coords -> NDC [-1,1]; for pixel mapping use FLx/FLy/PPx/PPy + W/H. Eyes.txt (non-sync) is NOT present; only Eyes_sync.txt."
+      }
+    }
+  },
+  "annotations": [
+    {
+      "name": "narration",
+      "select": { "path_template": "annotations/data-annotation-trainval-v1_1.json", "pick": "single", "missing": "warn" },
+      "reader": "json_by_key",
+      "kind": "interval",
+      "time": { "start": "start", "end": "end", "units": "s", "epoch": "video_zero" },
+      "text": { "primary": "attributes.Long form description" },
+      "join": {
+        "by": "key",
+        "key_field": "video_name",
+        "select_path": "[video_name].events[label=='Narration']",
+        "comment": "JSON is a list of 1758 take dicts {batch, videoMetadata, events, taskId, taskType, video_name}. events[] each {id,label,start,end,type,attributes}. Keep events with label=='Narration'."
+      },
+      "filter": { "keep_where": "label=='Narration'" }
+    },
+    {
+      "name": "coarse",
+      "select": { "path_template": "annotations/data-annotation-trainval-v1_1.json", "pick": "single", "missing": "warn" },
+      "reader": "json_by_key",
+      "kind": "interval",
+      "time": { "start": "start", "end": "end", "units": "s", "epoch": "video_zero" },
+      "text": { "primary": "attributes.Action sentence" },
+      "join": {
+        "by": "key",
+        "key_field": "video_name",
+        "select_path": "[video_name].events[label=='Coarse grained action']",
+        "comment": "Keep label=='Coarse grained action'; keep only the concatenated 'Action sentence' (drop Verb/Adjective/Noun)."
+      },
+      "filter": { "keep_where": "label=='Coarse grained action'" }
+    },
+    {
+      "name": "fine",
+      "select": { "path_template": "annotations/data-annotation-trainval-v1_1.json", "pick": "single", "missing": "warn" },
+      "reader": "json_by_key",
+      "kind": "interval",
+      "time": { "start": "start", "end": "end", "units": "s", "epoch": "video_zero" },
+      "text": { "compose": ["attributes.Verb", "attributes.Adjective", "attributes.Noun"], "compose_sep": " " },
+      "extras": ["attributes.Verb", "attributes.Adjective", "attributes.Noun", "attributes.Action Correctness"],
+      "join": {
+        "by": "key",
+        "key_field": "video_name",
+        "select_path": "[video_name].events[label=='Fine grained action']",
+        "comment": "Keep label=='Fine grained action'; preserve Verb, Adjective, Noun, Action Correctness."
+      },
+      "filter": { "keep_where": "label=='Fine grained action'" }
+    }
+  ],
+  "metadata": {
+    "prefer_shipped": {
+      "video": { "file": "annotations/data-annotation-trainval-v1_1.json", "fields": { "fps": "videoMetadata.video.fps", "width": "videoMetadata.video.resolution.w", "height": "videoMetadata.video.resolution.h" } }
+    },
+    "video_metadata_rule": {
+      "duration_s": "(VideoMp4Timing[1] - VideoMp4Timing[0]) / 1e7  # authoritative; from video/<TAKE>/Video/VideoMp4Timing.txt FILETIME ticks. Do NOT use videoMetadata.duration.seconds (int-truncated).",
+      "fps": "videoMetadata.video.fps (per-take, NON-constant: 24.46, 30, ...). FALLBACK for takes absent from the trainval JSON (test split, e.g. R004-7July-GoPro, R006-7July-Switch): ffprobe avg_frame_rate of the mp4.",
+      "resolution": "896x504 for all takes (videoMetadata.video.resolution == Intrinsics W,H; ffprobe-confirmed)."
+    },
+    "gaze_frame_mapping": "Sidecar Pose_sync/Eyes_sync are a FIXED 30 Hz grid (col0 rel_time_sec, step 1/30, start 0.0), DECOUPLED from the mp4 fps. Map gaze->frame via TIME, never index: t = Eyes_sync.col0 (== (tick - VideoMp4Timing[0])/1e7); mp4_frame = round(t * fps). Naive index-equality drifts ~18% on 24.46fps takes.",
+    "notes": "Per-take videoMetadata (896x504; fps 24.46 or 30) + taskType/taskId/batch in the annotation JSON. ffprobe cross-check: avg_frame_rate 24.4604 == shipped 24.46; 30.0017 == 30. No split list files on disk (single trainval JSON = train+val; test labels absent, ~85 annotated-elsewhere takes not in JSON)."
+  },
+  "overrides": {},
+  "provenance": {
+    "notes": "METADATA in annotation file. VIDEO dataset/video/<TAKE>/Video_pitchshift.mp4. GAZE dataset/gaze/<TAKE>/Eyes/Eyes_sync.txt (not 2D; de-risk mapping). ANNOTATION dataset/annotations/data-annotation-trainval-v1_1.json: Narration (Long form description), Coarse (Action sentence), Fine (Verb/Adjective/Noun/Action Correctness); drop label=Conversation. NOTE: Eyes pose = newline records of timestamp + 3D ray (origin P + direction V), tab-separated.",
+    "decisions": [
+      "Episode = take (video_name); three annotation channels (narration, coarse, fine) all from one JSON, split by label; Conversation dropped (not enumerated).",
+      "Gaze preserved native as 3D head ray; projection NOW feasible via psi pinhole: Pose_sync.txt extrinsics + uploaded cam_info Intrinsics.txt.",
+      "rel_time_sec (col0) already on the video clock = annotation clock; no extra alignment file needed.",
+      "Fine text composed Verb+Adjective+Noun, with those + Action Correctness preserved as extras."
+    ],
+    "corrections": [
+      "Only Eyes_sync.txt exists (no Eyes.txt); it has a leading rel_time_sec column before the FILETIME tick (9 cols total), unlike the notes' sketch.",
+      "Intrinsics do NOT ship in the base dataset; resolved by the user's cam_info/extracted/<take>/Export_py/Video/Intrinsics.txt upload (psi HoloLensCaptureExporter format) -> projection unblocked.",
+      "Drop label is exactly 'Conversation' (correct spelling)."
+    ],
+    "open_questions": [
+      "Video/Intrinsics.txt resolution RESOLVED = 896x504 = mp4 resolution (no rescale needed); the only remaining projection unknown is the gaze ray reference frame (rig/world vs PV-camera) -- validate the Pose_sync.txt 4x4 composition end-to-end once projectaria_tools/cv2 are available.",
+      "~85 annotated takes have no video and 1 video lacks its mp4; build the episode set from annotation ∩ video-with-mp4 ∩ gaze.",
+      "fps is NOT uniform: videoMetadata shows 24.46 and 30 across takes (read per-take videoMetadata.video.fps; do not assume a constant)."
+    ]
+  }
+}

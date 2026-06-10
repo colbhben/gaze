@@ -1,0 +1,116 @@
+{
+  "recipe_version": 1,
+  "dataset": "hd-epic",
+  "root": "hd-epic",
+  "episode": {
+    "enumerate": "video_glob",
+    "glob": "Videos/P*/*.mp4",
+    "id_from": { "rule": "filename_stem", "strip_suffix": ".mp4" },
+    "id_sanitize": false,
+    "filter": {
+      "comment": "Episode = take = ego mp4 (e.g. P01-20240202-110250); 156 takes across P01-P09. take id = mp4 basename = video_id in the narrations = gaze-dir stem inside mps_<takeid>_vrs."
+    }
+  },
+  "video": {
+    "select": {
+      "path_template": "Videos/{participant}/{episode_id}.mp4",
+      "pick": "single",
+      "missing": "warn"
+    }
+  },
+  "gaze": {
+    "select": {
+      "path_template": "SLAM-and-Gaze/{participant}/GAZE_HAND/mps_{episode_id}_vrs/eye_gaze/general_eye_gaze.csv",
+      "pick": "single",
+      "missing": "warn"
+    },
+    "gaze_format": {
+      "reader": "csv",
+      "coordinate_space": "cpf_angular",
+      "header": true,
+      "columns": { "left_yaw": "left_yaw_rads_cpf", "right_yaw": "right_yaw_rads_cpf", "pitch": "pitch_rads_cpf", "depth": "depth_m" },
+      "time": { "source": "tracking_timestamp_us", "units": "us", "epoch": "absolute" },
+      "extra_channels": [
+        "left_yaw_low_rads_cpf", "right_yaw_low_rads_cpf", "pitch_low_rads_cpf",
+        "left_yaw_high_rads_cpf", "right_yaw_high_rads_cpf", "pitch_high_rads_cpf",
+        "tx_left_eye_cpf", "ty_left_eye_cpf", "tz_left_eye_cpf",
+        "tx_right_eye_cpf", "ty_right_eye_cpf", "tz_right_eye_cpf", "session_uid"
+      ],
+      "projection": {
+        "feasible": true,
+        "method": "projectaria_cpf",
+        "needs": ["SLAM-and-Gaze/{participant}/SLAM/multi/vrs_to_multi_slam.json", "SLAM-and-Gaze/{participant}/SLAM/multi/{slam_index}/slam/online_calibration.jsonl"],
+        "calibration": { "file": "SLAM-and-Gaze/{participant}/SLAM/multi/{slam_index}/slam/online_calibration.jsonl", "format": "aria_online_calib" },
+        "params": {
+          "lib": "projectaria_tools",
+          "fn": "get_gaze_vector_reprojection(eye_gaze, 'camera-rgb', device_calibration, rgb_cam, depth_m=<per-sample>, make_upright=true)",
+          "camera_label": "camera-rgb",
+          "camera_model": "FISHEYE624",
+          "native_dims": [2880, 2880],
+          "make_upright": true,
+          "scale_to_mp4": "multiply output px by mp4_width/2880 (ffprobe mp4 W per take)",
+          "device_cad": "DeviceCadExtrinsics(Gen1, 'DVT-S', 'camera-slam-left'); cameras from online_calibration.jsonl CameraCalibrations[].",
+          "depth": "use per-sample depth_m; yaw=mean(left_yaw,right_yaw), pitch=pitch_rads_cpf",
+          "out_of_fov": "fn returns None outside FOV -> null gaze for that frame",
+          "calib_index_deref": "slam_index N = vrs_to_multi_slam.json['P##/<takeid>.vrs']; calib at SLAM/multi/N/slam/online_calibration.jsonl"
+        },
+        "time_sync": "Same Aria scheme as nymeria: device_ts_us(frame i) = first_gaze_ts_us + round(i*1e6/mp4_fps). ffprobe mp4 fps per take. Validate frame-0 anchor vs Videos/<P##>/<takeid>_mp4_to_vrs_time_ns.csv (per-frame mp4->vrs ns map) which gives the exact mp4-frame device timestamps for hd-epic (unlike nymeria).",
+        "notes": "Identical Aria MPS to nymeria (general only; no personalized). Calibration is NOT under GAZE_HAND: deref SLAM/multi/vrs_to_multi_slam.json -> index N. hd-epic ALSO ships Videos/<P##>/<takeid>_mp4_to_vrs_time_ns.csv (per-frame mp4<->vrs timestamp map) -> use it for exact frame timing rather than inferring. Apply the nymeria-validated projection params (make_upright=true, scale by mp4_w/2880, per-sample depth_m)."
+      }
+    }
+  },
+  "annotations": [
+    {
+      "name": "narration",
+      "select": {
+        "path_template": "narrations-and-action-segments/HD_EPIC_Narrations.pkl",
+        "pick": "single",
+        "missing": "warn"
+      },
+      "reader": "pandas_pickle",
+      "kind": "interval",
+      "time": { "start": "start_timestamp", "end": "end_timestamp", "units": "s", "epoch": "video_zero" },
+      "text": { "primary": "narration" },
+      "extras": ["main_actions", "verbs", "nouns", "pairs"],
+      "join": {
+        "by": "row_field",
+        "key_field": "video_id",
+        "comment": "DataFrame columns: unique_narration_id, participant_id, video_id, narration, start_timestamp, end_timestamp, nouns, verbs, pairs, main_actions, *_classes, hands, narration_timestamp. Rows where video_id == episode id. start/end are float seconds. main_actions is list-valued (preserve as extra)."
+      },
+      "filter": {
+        "denylist_file": "narrations-and-action-segments/HD_EPIC_Narrations_erratum.csv",
+        "denylist_field": "erratum_narration_id"
+      }
+    }
+  ],
+  "metadata": {
+    "prefer_shipped": {
+      "video": { "file": "Videos/frames.txt", "fields": { "frame_count": "{episode_id}" } }
+    },
+    "sample_only": false,
+    "notes": "frames.txt gives per-mp4 frame count (duration.txt named in readme is absent). fps inferred ~30 (Aria RGB) but not on-disk-confirmed; ffprobe at metadata time. HD_EPIC_{verb,noun}_classes.csv map class ids -> canonical key+category (not required for text channel). The .pkl is the ONLY copy of narrations (no CSV sibling) -> pandas required to read it."
+  },
+  "overrides": {},
+  "provenance": {
+    "notes": "METADATA none, readme.txt at root. VIDEO Videos/P0<k>/. GAZE SLAM-and-Gaze/P0<k>/GAZE_HAND/<take>/eye_gaze/general_eye_gaze.csv (not pixel-mapped; process like nymeria). ANNOTATION narrations-and-action-segments/HD_EPIC_Narrations.pkl (extract narration, start_timestamp, end_timestamp, main_actions).",
+    "decisions": [
+      "Episode = take/ego mp4 (156); gaze dir = mps_<takeid>_vrs; narration join by video_id.",
+      "Gaze = Aria CPF (general only); preserve full CPF columns; project via projectaria_tools.",
+      "Single annotation channel 'narration' (intervals, text=narration); preserve main_actions + verbs/nouns/pairs as extras.",
+      "Apply the erratum denylist (55 ids) to drop corrected narrations."
+    ],
+    "corrections": [
+      "Gaze <take> dir is precisely 'mps_<takeid>_vrs'.",
+      "Calibration is under SLAM/multi/<N>/ (deref vrs_to_multi_slam.json), NOT co-located under GAZE_HAND as in nymeria.",
+      "Narration timestamps are float SECONDS, not HH:MM:SS strings.",
+      "The narrations .pkl is the only copy (pandas-only); no CSV sibling exists.",
+      "duration.txt (per readme) is absent; only frames.txt present.",
+      "No VRS files in this deposit."
+    ],
+    "open_questions": [
+      "main_actions exact container (list vs ndarray vs delimited) and per-row float timestamps need pandas to materialize (could not confirm cell encodings without pandas on remote).",
+      "fps not confirmed on-disk (no ffprobe); validate via ffprobe + frames.txt.",
+      "No official train/val/test split on disk; source externally if needed."
+    ]
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "recipe_version": 1,
+  "dataset": "egtea",
+  "root": "egtea/dataset",
+  "episode": {
+    "enumerate": "video_glob",
+    "glob": "video/cropped_clips/*/*.mp4",
+    "id_from": { "rule": "filename_stem", "strip_suffix": ".mp4" },
+    "id_sanitize": false,
+    "filter": {
+      "comment": "Episode = one cropped CLIP (~15484). Clip filename = <SESSION>-<startMs>-<endMs>-F<startFrame>-F<endFrame>.mp4. SESSION (e.g. OP01-R01-PastaSalad) is the parent dir and the gaze key; the F<start>-F<end> range slices the session gaze. fps=24, frame 1280x960."
+    }
+  },
+  "video": {
+    "select": {
+      "path_template": "video/cropped_clips/{session}/{episode_id}.mp4",
+      "pick": "single",
+      "missing": "warn"
+    }
+  },
+  "gaze": {
+    "select": {
+      "path_template": "gaze/gaze_data/gaze_data/{session}.txt",
+      "pick": "single",
+      "missing": "warn"
+    },
+    "gaze_format": {
+      "reader": "begaze_txt",
+      "coordinate_space": "pixel_2d",
+      "frame_dims": [1280, 960],
+      "header": false,
+      "delimiter": "\t",
+      "columns": { "x": 3, "y": 4, "frame": 5, "type": 6 },
+      "time": { "source": 5, "units": "frame_index", "fps": 24, "epoch": "recording_zero" },
+      "extra_channels": [6],
+      "projection": {
+        "feasible": true,
+        "method": "normalize_by_dims",
+        "notes": "Per-SESSION gaze (full untrimmed recording); frame col indexes the full session. A clip's gaze = session rows with frame in [startFrame, endFrame] from the clip filename. Pixels at 1280x960; normalize by frame_dims. gaze_type (Fixation/Saccade/Blink/etc.) preserved. 69 clips (in OP01-R06-GreekSalad, OP03-R01-PastaSalad, OP03-R07-Pizza) have empty gaze slices per gaze_readme -> warn."
+      },
+      "variants": [
+        {
+          "version": "3.1",
+          "match": "## Version: BeGaze 3.1",
+          "reader": "begaze_txt",
+          "columns": { "x": 3, "y": 4, "frame": 5, "type": 6 },
+          "time": { "source": 5, "units": "frame_index", "fps": 24, "epoch": "recording_zero" }
+        },
+        {
+          "version": "3.4",
+          "match": "## Version: BeGaze 3.4",
+          "reader": "begaze_txt",
+          "columns": { "x": 5, "y": 6, "frame": -2, "type": -1 },
+          "time": { "source": -2, "units": "timecode_hmsf", "fps": 24, "epoch": "recording_zero" }
+        }
+      ]
+    }
+  },
+  "annotations": [
+    {
+      "name": "action",
+      "select": {
+        "path_template": "annotations/raw_annotations/action_labels.csv",
+        "pick": "single",
+        "missing": "warn"
+      },
+      "reader": "csv",
+      "kind": "interval",
+      "time": { "start": "Starting Time (ms)", "end": "Ending Time (ms)", "units": "ms", "epoch": "recording_zero" },
+      "text": { "primary": "Action Label" },
+      "join": {
+        "by": "row_field",
+        "key_field": "Clip Prefix",
+        "comment": "CSV is semicolon-delimited. Clip Prefix = <SESSION>-<startMs>-<endMs> = clip filename minus the -F..-F.. suffix -> exactly one row per clip. Starting/Ending Time(ms) equal the clip filename's first two numbers. 'Video Session' is the session id. Verb/Noun labels not preserved."
+      }
+    }
+  ],
+  "metadata": {
+    "sample_only": false,
+    "notes": "No metadata file; readme says source 1280x960 @ 24 fps. gaze_readme.md at gaze/gaze_data/gaze_readme.md; action readme at annotations/action_annotation_readme.md. Splits: annotations/train_split{1,2,3}.txt + test_split{1,2,3}.txt (VideoName=full clip stem incl frame range). Bundled gaze_io_sample.py (Python2) is the reference parser."
+  },
+  "overrides": {},
+  "provenance": {
+    "notes": "METADATA none. VIDEO dataset/video/cropped_clips/ (split clips per session subdir). GAZE dataset/gaze/gaze_data/gaze_data/ (.txt per session; readme at gaze/gaze_data/gaze_readme.md). ANNOTATION dataset/annotations/raw_annotations/action_labels.csv (Video Session, Starting/Ending Time(ms), Action Label; no split noun/verb). NOTE: video files are split inside each session subdir; ensure mapping to session gaze + annotation makes sense.",
+    "decisions": [
+      "Episode = clip (not session); join clip->one CSV row by 'Clip Prefix'.",
+      "Gaze is per-session; a clip's gaze = session rows with frame in the clip's [startFrame,endFrame].",
+      "Two BeGaze on-disk formats handled via gaze_format.variants (7-col v3.1 for OPxx; 26-col v3.4 with HH:MM:SS:FF timecode for P16+).",
+      "Pixels 1280x960 @ 24 fps; preserve gaze_type; single annotation channel 'action'."
+    ],
+    "corrections": [
+      "Gaze readme is inside gaze_data/ (gaze/gaze_data/gaze_readme.md); the .txt files are one level deeper in gaze_data/gaze_data/.",
+      "Join key is the ready-made 'Clip Prefix' column (unique), not 'Video Session' + time match.",
+      "Effective fps is 24 (the gaze header '## Sample Rate: 30' is the eye-tracker rate, not the frame rate).",
+      "Two gaze formats require version branching."
+    ],
+    "open_questions": [
+      "69 clips have empty gaze slices (documented in gaze_readme); confirm warn-and-emit (still have video+anno) vs require non-empty gaze. NOTE: under the global emit policy (require gaze), an empty gaze slice may need to count as 'gaze present' since the session file exists.",
+      "ms->frame relation has ~5-frame slack; trust the F<start>-F<end> numbers for gaze bounds, not recomputation from ms."
+    ]
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "recipe_version": 1,
+  "dataset": "egome",
+  "root": "egome",
+  "episode": {
+    "enumerate": "video_glob",
+    "glob": "Video/*_ego.mp4",
+    "id_from": { "rule": "filename_stem", "strip_suffix": "_ego.mp4" },
+    "id_sanitize": false,
+    "filter": {
+      "include_regex": "_ego\\.mp4$",
+      "comment": "Episode = the _ego recording stem (e.g. CF3-A4-20240802_User1_240802092926). Ignore _exo. FALSE-token episodes are INCLUDED (they carry full ego video+gaze+anno). ~7902 ego videos."
+    }
+  },
+  "video": {
+    "select": {
+      "path_template": "Video/{episode_id}_ego.mp4",
+      "pick": "single",
+      "missing": "warn"
+    }
+  },
+  "gaze": {
+    "select": {
+      "path_template": "Gaze_IMU/{episode_id}_ego.csv",
+      "pick": "single",
+      "missing": "warn"
+    },
+    "gaze_format": {
+      "reader": "csv",
+      "coordinate_space": "pixel_2d",
+      "frame_dims": [1280, 960],
+      "header": true,
+      "columns": { "x": "Gaze Point X[px]", "y": "Gaze Point Y[px]" },
+      "time": { "source": "Video Time[HH:mm:ss.ms]", "units": "hms_decimal", "epoch": "video_zero" },
+      "validity": { "column": "Gaze Point X[px]", "valid_when": ">=0", "invalid_placeholder": [-1.0, -1.0] },
+      "extra_channels": [
+        "Gaze Point Left X[px]", "Gaze Point Left Y[px]", "Gaze Point Right X[px]", "Gaze Point Right Y[px]",
+        "Pupil Diameter Left[mm]", "Pupil Diameter Right[mm]", "Validity Left", "Validity Right",
+        "Quat Data", "Gyro", "Accel[g]", "Mag"
+      ],
+      "projection": {
+        "feasible": true,
+        "method": "normalize_by_dims",
+        "notes": "70-column Tobii-style eye-tracker + IMU export. 2D gaze = 'Gaze Point X[px]'/'Gaze Point Y[px]' in absolute pixels (invalid sentinel -1.0). RESOLVED: gaze pixel space == ego video frame == 1280x960 (ffprobe of 4 takes across sessions: all 1280x960; binocular gaze X hard-bounded <1260, Y only 0.16% past 960 — the signature of gaze-space==frame; my earlier 'not 1280x960' was from noisier per-EYE columns, not primary gaze). frame_dims=[1280,960] is constant; a per-episode ffprobe assertion (warn on mismatch) is cheap insurance. VIDEO fps VARIES per take (~28.09-29.85, r_frame_rate==avg_frame_rate, odd ratios like 2881/100) -> ffprobe per-episode; do NOT hardcode fps. The ~125 Hz is only the Tobii gaze sample rate (irrelevant to the frame timeline). 'Video Time[HH:mm:ss.ms]' = decimal HH:MM:SS.mmm starting at 0 = video start, shares the annotation clock. Pupil Position cols are normalized [0,1] (sentinel -1.0), carry NO frame-size info. IMU bundled as semicolon-delimited subfields."
+      }
+    }
+  },
+  "annotations": [
+    {
+      "name": "coarse",
+      "select": {
+        "path_template": "Annotation/total.json",
+        "pick": "single",
+        "missing": "warn"
+      },
+      "reader": "json_by_key",
+      "kind": "interval",
+      "time": { "whole_episode": true, "units": "s", "epoch": "video_zero" },
+      "text": { "primary": "Coarse-level", "strip_prefix_regex": "^[A-Z]:" },
+      "join": {
+        "by": "key",
+        "key_field": "episode_id",
+        "key_in_file": "{episode_id}_ego.mp4",
+        "select_path": "annotations.{episode_id}_ego.mp4",
+        "comment": "total.json = {annotations, action_label, scene_label}. annotations[<name>.mp4] (ego AND exo keys, ext included). Coarse-level is a single string spanning the whole take; no per-segment timing -> one interval over [0, Duration]. Strip leading 'C:' prefix (raw kept)."
+      }
+    },
+    {
+      "name": "fine",
+      "select": {
+        "path_template": "Annotation/total.json",
+        "pick": "single",
+        "missing": "warn"
+      },
+      "reader": "json_by_key",
+      "kind": "interval",
+      "time": { "start": "Step timestamp.0", "end": "Step timestamp.1", "units": "s", "epoch": "video_zero" },
+      "text": { "primary": "Step discription", "strip_prefix_regex": "^[A-Z]:" },
+      "extras": ["Step order"],
+      "join": {
+        "by": "key",
+        "key_field": "episode_id",
+        "key_in_file": "{episode_id}_ego.mp4",
+        "select_path": "annotations.{episode_id}_ego.mp4.Fine-level",
+        "comment": "Fine-level = list of steps; each {Step discription (sic, misspelled), Step timestamp:[start,end], Step order}. Timestamps in seconds from video start (align with Duration). Strip leading 'T:'/'F:' prefix (raw kept)."
+      }
+    }
+  ],
+  "metadata": {
+    "prefer_shipped": {
+      "video": { "file": "Annotation/total.json", "fields": { "duration_s": "annotations.{episode_id}_ego.mp4.Duration" } }
+    },
+    "video_metadata_rule": {
+      "resolution": "1280x960 constant (ffprobe-confirmed; gaze pixel space == this frame).",
+      "fps": "VARIES per take (~28-30); ffprobe avg_frame_rate per-episode, do not hardcode.",
+      "duration_s": "shipped total.json per-entry 'Duration' (seconds); ffprobe to cross-check."
+    },
+    "notes": "Per-episode metadata (Scene, Action, Duration, View, Split, Video type) lives in total.json's per-entry dict. Split available per-entry ('Split') and as train/val/test.json."
+  },
+  "overrides": {},
+  "provenance": {
+    "notes": "METADATA none. VIDEO Video/. GAZE Gaze_IMU/. ANNOTATION Annotaton/total.json (by mp4 name): COARSE Coarse-level (one channel); FINE Fine-level with Step description + Step timestamp [start,end] (second channel). NOTE: use only ego (not exo). FALSE = 'impersonated incorrectly' per README; include FALSE episodes if data exists.",
+    "decisions": [
+      "Episode = _ego stem; FALSE episodes included (full data present).",
+      "Gaze 2D = 'Gaze Point X/Y[px]' (pixels, invalid -1.0) from the 70-col Tobii+IMU csv; per-eye gaze, pupil, validity, and IMU preserved as extras.",
+      "Two annotation channels: coarse (single whole-take string -> [0,Duration]) and fine (per-step intervals).",
+      "Strip leading 'C:'/'T:'/'F:' prefixes from text; raw retained.",
+      "Use the misspelled key 'Step discription'."
+    ],
+    "corrections": [
+      "Dir is 'Annotation' (notes said 'Annotaton'); per-video map is nested under 'annotations' key, not the JSON root.",
+      "total.json keys include the .mp4 extension and cover both ego and exo -> filter to *_ego.mp4 keys.",
+      "Fine step description key is misspelled 'Step discription'.",
+      "Gaze is a 70-column eye-tracker+IMU export, far richer than x,y; use Gaze Point X/Y[px]."
+    ],
+    "open_questions": [
+      "RESOLVED: gaze frame == video frame == 1280x960 (constant; ffprobe-confirmed on 4 takes + tail analysis of 140k gaze rows). fps varies per take (28-30) -> ffprobe per-episode.",
+      "No README on this server: 'FALSE/impersonated' meaning unverified (empirically FALSE = subject token, Video type:false, full data present).",
+      "Coarse-level has no native timing; emitting it as a single [0,Duration] interval -- confirm that's the desired representation vs a non-timed 'caption' channel."
+    ]
+  }
+}
