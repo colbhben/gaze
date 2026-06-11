@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import shutil
 import sys
@@ -805,6 +806,12 @@ def cmd_curate_viewer_layout(args: argparse.Namespace) -> int:
 
 def cmd_curate_build_training(args: argparse.Namespace) -> int:
     from .training import build_training_manifest
+
+    # Self-dump all thread stacks if the build wedges (set GAZE_FAULT_TIMEOUT=seconds).
+    _ft = os.environ.get("GAZE_FAULT_TIMEOUT")
+    if _ft:
+        import faulthandler
+        faulthandler.dump_traceback_later(float(_ft), repeat=True)
 
     episodes = None
     if args.episode:

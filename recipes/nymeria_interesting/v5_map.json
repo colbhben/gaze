@@ -1,0 +1,3914 @@
+{
+  "20230607_s0_james_johnson_act2_yhbvpa": {
+    "regions": [
+      {
+        "end_s": 151.2423629999994,
+        "interesting": true,
+        "reason": "picks up and uses tape measure",
+        "start_s": 121.2471659999992
+      },
+      {
+        "end_s": 181.23756400000093,
+        "interesting": true,
+        "reason": "measuring counter/cabinet with tape",
+        "start_s": 151.2423629999994
+      },
+      {
+        "end_s": 211.23276299999998,
+        "interesting": true,
+        "reason": "measuring oven/switch with tape",
+        "start_s": 181.23756400000093
+      },
+      {
+        "end_s": 238.29509900000085,
+        "interesting": true,
+        "reason": "measuring wall/sofa with tape",
+        "start_s": 208.29989600000044
+      },
+      {
+        "end_s": 268.2903060000008,
+        "interesting": true,
+        "reason": "measuring sofa/pillow with tape",
+        "start_s": 238.29509900000085
+      },
+      {
+        "end_s": 298.2188490000008,
+        "interesting": true,
+        "reason": "measuring pillows/couch with tape",
+        "start_s": 268.2903060000008
+      },
+      {
+        "end_s": 325.2811849999998,
+        "interesting": true,
+        "reason": "measuring chair/vase/pillow with tape",
+        "start_s": 295.28597699999955
+      },
+      {
+        "end_s": 355.2763840000007,
+        "interesting": true,
+        "reason": "measuring sofa/table with tape",
+        "start_s": 325.2811849999998
+      },
+      {
+        "end_s": 385.204925,
+        "interesting": true,
+        "reason": "moves remote, measures objects",
+        "start_s": 355.2763840000007
+      },
+      {
+        "end_s": 412.2672590000002,
+        "interesting": true,
+        "reason": "measuring jar/phone/carpet with tape",
+        "start_s": 382.272062
+      },
+      {
+        "end_s": 442.2624570000007,
+        "interesting": true,
+        "reason": "measuring carpet/dining furniture",
+        "start_s": 412.2672590000002
+      },
+      {
+        "end_s": 472.19100400000025,
+        "interesting": true,
+        "reason": "measuring chair/fridge with tape",
+        "start_s": 442.2624570000007
+      },
+      {
+        "end_s": 499.25333599999976,
+        "interesting": true,
+        "reason": "measuring fridge/chair/table with tape",
+        "start_s": 469.2581399999999
+      },
+      {
+        "end_s": 529.2485410000008,
+        "interesting": true,
+        "reason": "measuring table and closet door",
+        "start_s": 499.25333599999976
+      },
+      {
+        "end_s": 559.2437370000007,
+        "interesting": true,
+        "reason": "opens closet, measures washer/dryer",
+        "start_s": 529.2485410000008
+      },
+      {
+        "end_s": 586.3060740000001,
+        "interesting": true,
+        "reason": "measuring laundry machine with tape",
+        "start_s": 556.3108759999996
+      },
+      {
+        "end_s": 616.301284000001,
+        "interesting": true,
+        "reason": "measuring shelf/broom/machine",
+        "start_s": 586.3060740000001
+      },
+      {
+        "end_s": 646.229827000001,
+        "interesting": true,
+        "reason": "measures machine, closes door",
+        "start_s": 616.301284000001
+      },
+      {
+        "end_s": 673.2921559999995,
+        "interesting": true,
+        "reason": "measuring door and wall with tape",
+        "start_s": 643.2969589999993
+      },
+      {
+        "end_s": 703.287354,
+        "interesting": true,
+        "reason": "measuring dresser/jar/TV with tape",
+        "start_s": 673.2921559999995
+      },
+      {
+        "end_s": 693.8888580000003,
+        "interesting": true,
+        "reason": "measuring dresser/mirror with tape",
+        "start_s": 703.287354
+      },
+      {
+        "end_s": 760.278241,
+        "interesting": true,
+        "reason": "measuring mirror and bed with tape",
+        "start_s": 730.2830370000011
+      },
+      {
+        "end_s": 790.2734359999995,
+        "interesting": true,
+        "reason": "measuring bed/frame/lamp with tape",
+        "start_s": 760.278241
+      },
+      {
+        "end_s": 820.2019789999995,
+        "interesting": true,
+        "reason": "grabs pillow, measures with tape",
+        "start_s": 790.2734359999995
+      },
+      {
+        "end_s": 847.2643260000004,
+        "interesting": true,
+        "reason": "arranges pillows, measures comforter",
+        "start_s": 817.2691149999991
+      },
+      {
+        "end_s": 877.2595149999997,
+        "interesting": true,
+        "reason": "measuring comforter/headboard/curtain",
+        "start_s": 847.2643260000004
+      },
+      {
+        "end_s": 907.1880620000011,
+        "interesting": true,
+        "reason": "measuring comforter/bedside table",
+        "start_s": 877.2595149999997
+      },
+      {
+        "end_s": 926.2516859999996,
+        "interesting": true,
+        "reason": "measuring side table/switch with tape",
+        "start_s": 904.2551930000009
+      },
+      {
+        "end_s": 956.246873,
+        "interesting": true,
+        "reason": "measuring side table with tape",
+        "start_s": 926.2516859999996
+      },
+      {
+        "end_s": 980.9096079999999,
+        "interesting": true,
+        "reason": "measures sink, puts down tape",
+        "start_s": 956.246873
+      },
+      {
+        "end_s": 126.2463630000002,
+        "interesting": false,
+        "reason": "pure locomotion, standing",
+        "start_s": 121.2471659999992
+      },
+      {
+        "end_s": 131.2455630000004,
+        "interesting": true,
+        "reason": "grabs tape measure off island",
+        "start_s": 126.2463630000002
+      },
+      {
+        "end_s": 136.24476200000026,
+        "interesting": false,
+        "reason": "stepping while holding tape, no measuring",
+        "start_s": 131.2455630000004
+      },
+      {
+        "end_s": 141.24396799999886,
+        "interesting": true,
+        "reason": "measures width of door with tape",
+        "start_s": 136.24476200000026
+      },
+      {
+        "end_s": 146.24316799999906,
+        "interesting": true,
+        "reason": "measuring door width with tape",
+        "start_s": 141.24396799999886
+      },
+      {
+        "end_s": 151.2423629999994,
+        "interesting": true,
+        "reason": "measures kitchen counter with tape",
+        "start_s": 146.24316799999906
+      },
+      {
+        "end_s": 156.2415660000006,
+        "interesting": true,
+        "reason": "measuring door/cabinet with tape",
+        "start_s": 151.2423629999994
+      },
+      {
+        "end_s": 161.2407629999998,
+        "interesting": true,
+        "reason": "measuring cabinet width with tape",
+        "start_s": 156.2415660000006
+      },
+      {
+        "end_s": 166.23996799999986,
+        "interesting": true,
+        "reason": "measures microwave width with tape",
+        "start_s": 161.2407629999998
+      },
+      {
+        "end_s": 171.2391609999995,
+        "interesting": true,
+        "reason": "measuring microwave/control panel",
+        "start_s": 166.23996799999986
+      },
+      {
+        "end_s": 176.2383609999997,
+        "interesting": true,
+        "reason": "measuring control panel/counter height",
+        "start_s": 171.2391609999995
+      },
+      {
+        "end_s": 181.23756400000093,
+        "interesting": true,
+        "reason": "measures cooking range height",
+        "start_s": 176.2383609999997
+      },
+      {
+        "end_s": 186.23676400000113,
+        "interesting": true,
+        "reason": "measuring cooking range with tape",
+        "start_s": 181.23756400000093
+      },
+      {
+        "end_s": 191.23596299999917,
+        "interesting": true,
+        "reason": "measures range, crouches measuring",
+        "start_s": 186.23676400000113
+      },
+      {
+        "end_s": 196.23516299999937,
+        "interesting": true,
+        "reason": "measuring range height crouched",
+        "start_s": 191.23596299999917
+      },
+      {
+        "end_s": 201.2343639999999,
+        "interesting": true,
+        "reason": "measuring range height crouched",
+        "start_s": 196.23516299999937
+      },
+      {
+        "end_s": 206.23356100000092,
+        "interesting": false,
+        "reason": "holds tape, straightens, steps",
+        "start_s": 201.2343639999999
+      },
+      {
+        "end_s": 211.23276299999998,
+        "interesting": true,
+        "reason": "measures switch plate with tape",
+        "start_s": 206.23356100000092
+      },
+      {
+        "end_s": 213.29909399999997,
+        "interesting": true,
+        "reason": "measures light switch with tape",
+        "start_s": 208.29989600000044
+      },
+      {
+        "end_s": 218.29829900000004,
+        "interesting": true,
+        "reason": "measuring switch/wall with tape",
+        "start_s": 213.29909399999997
+      },
+      {
+        "end_s": 223.29750700000113,
+        "interesting": true,
+        "reason": "measures wall and switch with tape",
+        "start_s": 218.29829900000004
+      },
+      {
+        "end_s": 228.29670100000112,
+        "interesting": true,
+        "reason": "measures switch/remote with tape",
+        "start_s": 223.29750700000113
+      },
+      {
+        "end_s": 233.29590399999688,
+        "interesting": true,
+        "reason": "measures remote, pulls tape",
+        "start_s": 228.29670100000112
+      },
+      {
+        "end_s": 238.29509900000085,
+        "interesting": true,
+        "reason": "measures sofa with tape",
+        "start_s": 233.29590399999688
+      },
+      {
+        "end_s": 243.29430300000058,
+        "interesting": true,
+        "reason": "measuring sofa with tape",
+        "start_s": 238.29509900000085
+      },
+      {
+        "end_s": 248.29349700000057,
+        "interesting": true,
+        "reason": "measuring sofa with tape",
+        "start_s": 243.29430300000058
+      },
+      {
+        "end_s": 253.2927039999995,
+        "interesting": false,
+        "reason": "standing idle holding tape",
+        "start_s": 248.29349700000057
+      },
+      {
+        "end_s": 258.29190299999937,
+        "interesting": true,
+        "reason": "bends to measure sofa with tape",
+        "start_s": 253.2927039999995
+      },
+      {
+        "end_s": 263.2911060000006,
+        "interesting": true,
+        "reason": "crouches measuring sofa with tape",
+        "start_s": 258.29190299999937
+      },
+      {
+        "end_s": 268.2903060000008,
+        "interesting": true,
+        "reason": "measures sofa and red pillow",
+        "start_s": 263.2911060000006
+      },
+      {
+        "end_s": 273.2894959999994,
+        "interesting": true,
+        "reason": "measures red pillow with tape",
+        "start_s": 268.2903060000008
+      },
+      {
+        "end_s": 278.288700000001,
+        "interesting": true,
+        "reason": "measures brown pillow with tape",
+        "start_s": 273.2894959999994
+      },
+      {
+        "end_s": 283.28789999999935,
+        "interesting": true,
+        "reason": "measuring brown pillow with tape",
+        "start_s": 278.288700000001
+      },
+      {
+        "end_s": 288.28709900000104,
+        "interesting": true,
+        "reason": "measures pillow and chair with tape",
+        "start_s": 283.28789999999935
+      },
+      {
+        "end_s": 293.2863040000011,
+        "interesting": true,
+        "reason": "measuring brown chair with tape",
+        "start_s": 288.28709900000104
+      },
+      {
+        "end_s": 298.2188490000008,
+        "interesting": true,
+        "reason": "measures black chair with tape",
+        "start_s": 293.2863040000011
+      },
+      {
+        "end_s": 300.28518299999996,
+        "interesting": true,
+        "reason": "measuring chair with tape",
+        "start_s": 295.28597699999955
+      },
+      {
+        "end_s": 305.28437600000143,
+        "interesting": true,
+        "reason": "squats measuring chair height",
+        "start_s": 300.28518299999996
+      },
+      {
+        "end_s": 310.2835840000007,
+        "interesting": true,
+        "reason": "squats measuring lamp height",
+        "start_s": 305.28437600000143
+      },
+      {
+        "end_s": 315.28278300000056,
+        "interesting": true,
+        "reason": "measures lamp height/width with tape",
+        "start_s": 310.2835840000007
+      },
+      {
+        "end_s": 320.2819820000004,
+        "interesting": false,
+        "reason": "walks holding tape, no measuring",
+        "start_s": 315.28278300000056
+      },
+      {
+        "end_s": 325.2811849999998,
+        "interesting": true,
+        "reason": "measures sofa and pillow with tape",
+        "start_s": 320.2819820000004
+      },
+      {
+        "end_s": 330.280381999999,
+        "interesting": true,
+        "reason": "measuring pillow with tape",
+        "start_s": 325.2811849999998
+      },
+      {
+        "end_s": 335.2795879999994,
+        "interesting": true,
+        "reason": "measures sofa armrest with tape",
+        "start_s": 330.280381999999
+      },
+      {
+        "end_s": 340.27878299999975,
+        "interesting": true,
+        "reason": "measures armrest and backrest",
+        "start_s": 335.2795879999994
+      },
+      {
+        "end_s": 345.2779819999996,
+        "interesting": true,
+        "reason": "measures backrest, bends to table",
+        "start_s": 340.27878299999975
+      },
+      {
+        "end_s": 350.277184999999,
+        "interesting": true,
+        "reason": "measures center table length",
+        "start_s": 345.2779819999996
+      },
+      {
+        "end_s": 355.2763840000007,
+        "interesting": true,
+        "reason": "measures table and remote with tape",
+        "start_s": 350.277184999999
+      },
+      {
+        "end_s": 360.2755780000007,
+        "interesting": true,
+        "reason": "moves remote, measures book",
+        "start_s": 355.2763840000007
+      },
+      {
+        "end_s": 365.2747760000002,
+        "interesting": true,
+        "reason": "measures book and whiteboard",
+        "start_s": 360.2755780000007
+      },
+      {
+        "end_s": 370.27397700000074,
+        "interesting": true,
+        "reason": "rotates whiteboard, pulls tape",
+        "start_s": 365.2747760000002
+      },
+      {
+        "end_s": 375.2731789999998,
+        "interesting": true,
+        "reason": "measures whiteboard and table",
+        "start_s": 370.27397700000074
+      },
+      {
+        "end_s": 380.27238899999975,
+        "interesting": true,
+        "reason": "measures table width/height",
+        "start_s": 375.2731789999998
+      },
+      {
+        "end_s": 385.204925,
+        "interesting": true,
+        "reason": "measures object on table with tape",
+        "start_s": 380.27238899999975
+      },
+      {
+        "end_s": 387.27126599999974,
+        "interesting": true,
+        "reason": "measures object on table with tape",
+        "start_s": 382.272062
+      },
+      {
+        "end_s": 392.2704580000009,
+        "interesting": true,
+        "reason": "measuring objects on table",
+        "start_s": 387.27126599999974
+      },
+      {
+        "end_s": 397.26965700000073,
+        "interesting": true,
+        "reason": "measuring objects on table",
+        "start_s": 392.2704580000009
+      },
+      {
+        "end_s": 402.2688699999999,
+        "interesting": true,
+        "reason": "measuring tumbler with tape",
+        "start_s": 397.26965700000073
+      },
+      {
+        "end_s": 407.2680679999994,
+        "interesting": true,
+        "reason": "measures tumbler with tape",
+        "start_s": 402.2688699999999
+      },
+      {
+        "end_s": 412.2672590000002,
+        "interesting": true,
+        "reason": "adjusts device, measures carpet",
+        "start_s": 407.2680679999994
+      },
+      {
+        "end_s": 417.2664650000006,
+        "interesting": true,
+        "reason": "crouches measuring carpet with tape",
+        "start_s": 412.2672590000002
+      },
+      {
+        "end_s": 422.2656960000004,
+        "interesting": false,
+        "reason": "walks holding tape, no measuring",
+        "start_s": 417.2664650000006
+      },
+      {
+        "end_s": 427.26486300000033,
+        "interesting": true,
+        "reason": "measures dining bench with tape",
+        "start_s": 422.2656960000004
+      },
+      {
+        "end_s": 432.2640599999995,
+        "interesting": true,
+        "reason": "measures dining table with tape",
+        "start_s": 427.26486300000033
+      },
+      {
+        "end_s": 437.26325800000086,
+        "interesting": true,
+        "reason": "measures dining table with tape",
+        "start_s": 432.2640599999995
+      },
+      {
+        "end_s": 442.2624570000007,
+        "interesting": true,
+        "reason": "measures table and chair with tape",
+        "start_s": 437.26325800000086
+      },
+      {
+        "end_s": 447.2616600000001,
+        "interesting": true,
+        "reason": "measuring chair with tape",
+        "start_s": 442.2624570000007
+      },
+      {
+        "end_s": 452.26086600000053,
+        "interesting": true,
+        "reason": "measuring chair with tape",
+        "start_s": 447.2616600000001
+      },
+      {
+        "end_s": 457.2600650000004,
+        "interesting": true,
+        "reason": "measures chair with tape",
+        "start_s": 452.26086600000053
+      },
+      {
+        "end_s": 462.2592590000004,
+        "interesting": true,
+        "reason": "measures refrigerator with tape",
+        "start_s": 457.2600650000004
+      },
+      {
+        "end_s": 467.2584590000006,
+        "interesting": true,
+        "reason": "measuring refrigerator with tape",
+        "start_s": 462.2592590000004
+      },
+      {
+        "end_s": 472.19100400000025,
+        "interesting": true,
+        "reason": "measuring refrigerator with tape",
+        "start_s": 467.2584590000006
+      },
+      {
+        "end_s": 474.2573389999998,
+        "interesting": true,
+        "reason": "measures freezer door handle",
+        "start_s": 469.2581399999999
+      },
+      {
+        "end_s": 479.256539,
+        "interesting": true,
+        "reason": "measures freezer length with tape",
+        "start_s": 474.2573389999998
+      },
+      {
+        "end_s": 484.2557429999997,
+        "interesting": true,
+        "reason": "measures freezer, then talks",
+        "start_s": 479.256539
+      },
+      {
+        "end_s": 489.2549450000006,
+        "interesting": true,
+        "reason": "crouches holding tape, walks to table",
+        "start_s": 484.2557429999997
+      },
+      {
+        "end_s": 494.25413800000024,
+        "interesting": true,
+        "reason": "measures dining chair with tape",
+        "start_s": 489.2549450000006
+      },
+      {
+        "end_s": 499.25333599999976,
+        "interesting": true,
+        "reason": "measures dining table with tape",
+        "start_s": 494.25413800000024
+      },
+      {
+        "end_s": 504.2525459999997,
+        "interesting": true,
+        "reason": "measures table, fixes eyewear",
+        "start_s": 499.25333599999976
+      },
+      {
+        "end_s": 509.2517449999996,
+        "interesting": false,
+        "reason": "walks then talks, no measuring",
+        "start_s": 504.2525459999997
+      },
+      {
+        "end_s": 514.2509399999999,
+        "interesting": true,
+        "reason": "measures kitchen closet with tape",
+        "start_s": 509.2517449999996
+      },
+      {
+        "end_s": 519.2501389999998,
+        "interesting": true,
+        "reason": "measures closet doors with tape",
+        "start_s": 514.2509399999999
+      },
+      {
+        "end_s": 524.2493479999994,
+        "interesting": true,
+        "reason": "measures closet doors with tape",
+        "start_s": 519.2501389999998
+      },
+      {
+        "end_s": 529.2485410000008,
+        "interesting": true,
+        "reason": "measures closet doors with tape",
+        "start_s": 524.2493479999994
+      },
+      {
+        "end_s": 534.2477429999999,
+        "interesting": false,
+        "reason": "touches face, holds tape, steps",
+        "start_s": 529.2485410000008
+      },
+      {
+        "end_s": 539.2469390000006,
+        "interesting": true,
+        "reason": "measures closet door, opens it",
+        "start_s": 534.2477429999999
+      },
+      {
+        "end_s": 544.2461679999997,
+        "interesting": true,
+        "reason": "pushes closet door open",
+        "start_s": 539.2469390000006
+      },
+      {
+        "end_s": 549.2453380000006,
+        "interesting": true,
+        "reason": "measures washing machine with tape",
+        "start_s": 544.2461679999997
+      },
+      {
+        "end_s": 554.2445370000005,
+        "interesting": true,
+        "reason": "measures washing machine corners",
+        "start_s": 549.2453380000006
+      },
+      {
+        "end_s": 559.2437370000007,
+        "interesting": true,
+        "reason": "measuring washing machine corners",
+        "start_s": 554.2445370000005
+      },
+      {
+        "end_s": 561.3100760000016,
+        "interesting": true,
+        "reason": "measures laundry machine length",
+        "start_s": 556.3108760000014
+      },
+      {
+        "end_s": 566.3092749999996,
+        "interesting": true,
+        "reason": "measures laundry machine width",
+        "start_s": 561.3100760000016
+      },
+      {
+        "end_s": 571.3084749999998,
+        "interesting": true,
+        "reason": "measures machine and control panel",
+        "start_s": 566.3092749999996
+      },
+      {
+        "end_s": 576.307675,
+        "interesting": true,
+        "reason": "measures control panel with tape",
+        "start_s": 571.3084749999998
+      },
+      {
+        "end_s": 581.3068860000003,
+        "interesting": true,
+        "reason": "measures control selectors with tape",
+        "start_s": 576.307675
+      },
+      {
+        "end_s": 586.3060740000001,
+        "interesting": true,
+        "reason": "measures selectors and shelf",
+        "start_s": 581.3068860000003
+      },
+      {
+        "end_s": 591.3052810000008,
+        "interesting": true,
+        "reason": "measures shelf and hose with tape",
+        "start_s": 586.3060740000001
+      },
+      {
+        "end_s": 596.3044730000001,
+        "interesting": true,
+        "reason": "measures rubber hose with tape",
+        "start_s": 591.3052810000008
+      },
+      {
+        "end_s": 601.3036730000003,
+        "interesting": true,
+        "reason": "measures outlet and hose with tape",
+        "start_s": 596.3044730000001
+      },
+      {
+        "end_s": 606.3028760000016,
+        "interesting": true,
+        "reason": "measures machine door with tape",
+        "start_s": 601.3036730000003
+      },
+      {
+        "end_s": 611.3020760000018,
+        "interesting": true,
+        "reason": "measures machine label with tape",
+        "start_s": 606.3028760000016
+      },
+      {
+        "end_s": 616.301284000001,
+        "interesting": true,
+        "reason": "crouches measuring machine height",
+        "start_s": 611.3020760000018
+      },
+      {
+        "end_s": 621.300475,
+        "interesting": true,
+        "reason": "measures other machine height",
+        "start_s": 616.301284000001
+      },
+      {
+        "end_s": 626.2996770000009,
+        "interesting": true,
+        "reason": "measures machine height, stands",
+        "start_s": 621.300475
+      },
+      {
+        "end_s": 631.2988800000003,
+        "interesting": true,
+        "reason": "closes laundry closet door",
+        "start_s": 626.2996770000009
+      },
+      {
+        "end_s": 636.2980719999996,
+        "interesting": true,
+        "reason": "closes closet door, walks",
+        "start_s": 631.2988800000003
+      },
+      {
+        "end_s": 641.2972769999997,
+        "interesting": true,
+        "reason": "measures bedroom door with tape",
+        "start_s": 636.2980719999996
+      },
+      {
+        "end_s": 646.2298269999992,
+        "interesting": true,
+        "reason": "measures door panels with tape",
+        "start_s": 641.2972769999997
+      },
+      {
+        "end_s": 648.2961599999999,
+        "interesting": true,
+        "reason": "measures door, expands/retracts tape",
+        "start_s": 643.2969590000012
+      },
+      {
+        "end_s": 653.2953560000005,
+        "interesting": true,
+        "reason": "measures door with tape",
+        "start_s": 648.2961599999999
+      },
+      {
+        "end_s": 658.2945519999994,
+        "interesting": true,
+        "reason": "measures door with tape",
+        "start_s": 653.2953560000005
+      },
+      {
+        "end_s": 663.2937529999999,
+        "interesting": true,
+        "reason": "measures door with tape",
+        "start_s": 658.2945519999994
+      },
+      {
+        "end_s": 668.2929560000011,
+        "interesting": true,
+        "reason": "measures door, glances at bedroom",
+        "start_s": 663.2937529999999
+      },
+      {
+        "end_s": 673.2921560000013,
+        "interesting": true,
+        "reason": "walks in, measures wall with tape",
+        "start_s": 668.2929560000011
+      },
+      {
+        "end_s": 678.2913560000015,
+        "interesting": true,
+        "reason": "measures dresser with tape",
+        "start_s": 673.2921560000013
+      },
+      {
+        "end_s": 683.2905580000006,
+        "interesting": true,
+        "reason": "measures dresser, retracts tape",
+        "start_s": 678.2913560000015
+      },
+      {
+        "end_s": 688.2897549999998,
+        "interesting": true,
+        "reason": "measures dresser with tape",
+        "start_s": 683.2905580000006
+      },
+      {
+        "end_s": 693.288955,
+        "interesting": true,
+        "reason": "measures wooden shelf with tape",
+        "start_s": 688.2897549999998
+      },
+      {
+        "end_s": 698.2881539999998,
+        "interesting": true,
+        "reason": "measures shelf and TV with tape",
+        "start_s": 693.288955
+      },
+      {
+        "end_s": 703.287354,
+        "interesting": true,
+        "reason": "measures TV, retracts tape",
+        "start_s": 698.2881539999998
+      },
+      {
+        "end_s": 708.2865529999999,
+        "interesting": true,
+        "reason": "measures dresser with tape",
+        "start_s": 703.287354
+      },
+      {
+        "end_s": 713.2857530000001,
+        "interesting": false,
+        "reason": "retracts tape, bends, no measuring",
+        "start_s": 708.2865529999999
+      },
+      {
+        "end_s": 718.2849530000003,
+        "interesting": true,
+        "reason": "measures dresser with tape",
+        "start_s": 713.2857530000001
+      },
+      {
+        "end_s": 723.2841599999992,
+        "interesting": true,
+        "reason": "measures dresser, retracts tape",
+        "start_s": 718.2849530000003
+      },
+      {
+        "end_s": 728.2833630000005,
+        "interesting": true,
+        "reason": "measures mirror with tape",
+        "start_s": 723.2841599999992
+      },
+      {
+        "end_s": 733.2159019999999,
+        "interesting": true,
+        "reason": "measures mirror, then talks",
+        "start_s": 728.2833630000005
+      },
+      {
+        "end_s": 735.2822360000009,
+        "interesting": true,
+        "reason": "measures mirror and bed with tape",
+        "start_s": 730.2830370000011
+      },
+      {
+        "end_s": 740.2814419999995,
+        "interesting": true,
+        "reason": "measures bed with tape",
+        "start_s": 735.2822360000009
+      },
+      {
+        "end_s": 745.280643,
+        "interesting": true,
+        "reason": "measures bed top with tape",
+        "start_s": 740.2814419999995
+      },
+      {
+        "end_s": 750.279837,
+        "interesting": true,
+        "reason": "measures bed top with tape",
+        "start_s": 745.280643
+      },
+      {
+        "end_s": 755.2790349999996,
+        "interesting": true,
+        "reason": "measures bed top with tape",
+        "start_s": 750.279837
+      },
+      {
+        "end_s": 760.278241,
+        "interesting": true,
+        "reason": "measures bed top with tape",
+        "start_s": 755.2790349999996
+      },
+      {
+        "end_s": 765.2774339999996,
+        "interesting": true,
+        "reason": "furls/unfurls tape, repositions",
+        "start_s": 760.278241
+      },
+      {
+        "end_s": 770.2766329999995,
+        "interesting": true,
+        "reason": "measures wall decoration with tape",
+        "start_s": 765.2774339999996
+      },
+      {
+        "end_s": 775.2758329999997,
+        "interesting": true,
+        "reason": "measures wall decoration with tape",
+        "start_s": 770.2766329999995
+      },
+      {
+        "end_s": 780.2750329999999,
+        "interesting": true,
+        "reason": "measures decoration and lamp",
+        "start_s": 775.2758329999997
+      },
+      {
+        "end_s": 785.2742360000011,
+        "interesting": true,
+        "reason": "measures lamp with tape",
+        "start_s": 780.2750329999999
+      },
+      {
+        "end_s": 790.2734359999995,
+        "interesting": true,
+        "reason": "measures lamp, crouches to table",
+        "start_s": 785.2742360000011
+      },
+      {
+        "end_s": 795.2726349999994,
+        "interesting": true,
+        "reason": "measures bedside table with tape",
+        "start_s": 790.2734359999995
+      },
+      {
+        "end_s": 800.2718349999996,
+        "interesting": true,
+        "reason": "measures bedside table with tape",
+        "start_s": 795.2726349999994
+      },
+      {
+        "end_s": 805.2710370000004,
+        "interesting": true,
+        "reason": "measures bedside table with tape",
+        "start_s": 800.2718349999996
+      },
+      {
+        "end_s": 810.270235,
+        "interesting": true,
+        "reason": "measures pillow with tape",
+        "start_s": 805.2710370000004
+      },
+      {
+        "end_s": 815.2694370000008,
+        "interesting": true,
+        "reason": "measures pillow with tape",
+        "start_s": 810.270235
+      },
+      {
+        "end_s": 820.2019789999995,
+        "interesting": true,
+        "reason": "picks up and measures pillow",
+        "start_s": 815.2694370000008
+      },
+      {
+        "end_s": 822.2683219999999,
+        "interesting": true,
+        "reason": "puts down pillow, measures it",
+        "start_s": 817.269115000001
+      },
+      {
+        "end_s": 826.6676110000008,
+        "interesting": true,
+        "reason": "measures pillow with tape",
+        "start_s": 822.2683219999999
+      },
+      {
+        "end_s": 831.6668090000003,
+        "interesting": true,
+        "reason": "moves pillows, measures with tape",
+        "start_s": 826.6676110000008
+      },
+      {
+        "end_s": 836.666013,
+        "interesting": true,
+        "reason": "measures pillow with tape",
+        "start_s": 831.6668090000003
+      },
+      {
+        "end_s": 841.6652130000002,
+        "interesting": true,
+        "reason": "moves pillows, holds tape",
+        "start_s": 836.666013
+      },
+      {
+        "end_s": 846.6644190000006,
+        "interesting": true,
+        "reason": "arranges pillow, measures blanket",
+        "start_s": 841.6652130000002
+      },
+      {
+        "end_s": 850.6637759999994,
+        "interesting": true,
+        "reason": "measures blanket with tape",
+        "start_s": 846.6644190000006
+      },
+      {
+        "end_s": 855.6629699999994,
+        "interesting": true,
+        "reason": "measures bed with tape",
+        "start_s": 850.6637759999994
+      },
+      {
+        "end_s": 860.2622370000008,
+        "interesting": true,
+        "reason": "measures bed with tape",
+        "start_s": 855.6629699999994
+      },
+      {
+        "end_s": 865.2614389999999,
+        "interesting": true,
+        "reason": "measures curtain, then talks",
+        "start_s": 860.2622370000008
+      },
+      {
+        "end_s": 870.2606410000008,
+        "interesting": true,
+        "reason": "measures bed while talking",
+        "start_s": 865.2614389999999
+      },
+      {
+        "end_s": 875.2598350000007,
+        "interesting": true,
+        "reason": "measures bed while talking",
+        "start_s": 870.2606410000008
+      },
+      {
+        "end_s": 880.2590340000006,
+        "interesting": true,
+        "reason": "measures bed with tape",
+        "start_s": 875.2598350000007
+      },
+      {
+        "end_s": 884.2583930000001,
+        "interesting": true,
+        "reason": "measures bed with tape",
+        "start_s": 880.2590340000006
+      },
+      {
+        "end_s": 887.2579120000009,
+        "interesting": true,
+        "reason": "measures bed with tape",
+        "start_s": 884.2583930000001
+      },
+      {
+        "end_s": 890.2574370000002,
+        "interesting": true,
+        "reason": "measures bed with tape",
+        "start_s": 887.2579120000009
+      },
+      {
+        "end_s": 895.2566380000007,
+        "interesting": true,
+        "reason": "measures bed with tape",
+        "start_s": 890.2574370000002
+      },
+      {
+        "end_s": 900.255849000001,
+        "interesting": true,
+        "reason": "measures bed, then talks",
+        "start_s": 895.2566380000007
+      },
+      {
+        "end_s": 903.2553540000008,
+        "interesting": true,
+        "reason": "measures side table with tape",
+        "start_s": 900.255849000001
+      },
+      {
+        "end_s": 907.1880620000011,
+        "interesting": true,
+        "reason": "measures side table, then talks",
+        "start_s": 903.2553540000008
+      },
+      {
+        "end_s": 909.2544010000001,
+        "interesting": true,
+        "reason": "measures bedside table with tape",
+        "start_s": 904.255192999999
+      },
+      {
+        "end_s": 914.2535980000011,
+        "interesting": true,
+        "reason": "measures bedside table with tape",
+        "start_s": 909.2544010000001
+      },
+      {
+        "end_s": 919.2527950000003,
+        "interesting": true,
+        "reason": "measures light switch with tape",
+        "start_s": 914.2535980000011
+      },
+      {
+        "end_s": 924.2519990000001,
+        "interesting": true,
+        "reason": "measures light switch with tape",
+        "start_s": 919.2527950000003
+      },
+      {
+        "end_s": 929.2511950000007,
+        "interesting": true,
+        "reason": "measures switch and bedside table",
+        "start_s": 924.2519990000001
+      },
+      {
+        "end_s": 934.2503940000006,
+        "interesting": true,
+        "reason": "measures bedside table with tape",
+        "start_s": 929.2511950000007
+      },
+      {
+        "end_s": 939.2495940000008,
+        "interesting": true,
+        "reason": "measures bedside table with tape",
+        "start_s": 934.2503940000006
+      },
+      {
+        "end_s": 944.248794000001,
+        "interesting": true,
+        "reason": "measures bedside table with tape",
+        "start_s": 939.2495940000008
+      },
+      {
+        "end_s": 949.247992999999,
+        "interesting": true,
+        "reason": "measures bedside table with tape",
+        "start_s": 944.248794000001
+      },
+      {
+        "end_s": 954.2471999999998,
+        "interesting": true,
+        "reason": "measures bedside table with tape",
+        "start_s": 949.247992999999
+      },
+      {
+        "end_s": 959.2464039999995,
+        "interesting": false,
+        "reason": "touches face, stands, moves back",
+        "start_s": 954.2471999999998
+      },
+      {
+        "end_s": 964.2455989999999,
+        "interesting": true,
+        "reason": "measures bathroom vanity sink",
+        "start_s": 959.2464039999995
+      },
+      {
+        "end_s": 969.2447950000005,
+        "interesting": true,
+        "reason": "measures vanity sink with tape",
+        "start_s": 964.2455989999999
+      },
+      {
+        "end_s": 974.244048999999,
+        "interesting": false,
+        "reason": "pure locomotion through rooms",
+        "start_s": 969.2447950000005
+      },
+      {
+        "end_s": 977.5767959999994,
+        "interesting": false,
+        "reason": "walks and talks, no measuring",
+        "start_s": 974.244048999999
+      },
+      {
+        "end_s": 980.9096079999999,
+        "interesting": false,
+        "reason": "talks, stands still, peer fixes gear",
+        "start_s": 977.5767959999994
+      }
+    ]
+  },
+  "20230607_s0_james_johnson_act3_ifj2gc": {
+    "regions": [
+      {
+        "end_s": 152.54215999999906,
+        "interesting": true,
+        "reason": "picks up/puts down container, moves tumbler and phone on table",
+        "start_s": 122.54695299999912
+      },
+      {
+        "end_s": 182.6040129999983,
+        "interesting": false,
+        "reason": "adjusts glasses, talks, squats; no object manipulation",
+        "start_s": 152.54215999999906
+      },
+      {
+        "end_s": 212.5325699999994,
+        "interesting": true,
+        "reason": "moves keys, picks up tumbler to drink, receives deck of cards",
+        "start_s": 182.6040129999983
+      },
+      {
+        "end_s": 239.5948989999997,
+        "interesting": true,
+        "reason": "shuffles and cuts cards, places half deck on table",
+        "start_s": 209.59968899999876
+      },
+      {
+        "end_s": 269.5900980000006,
+        "interesting": true,
+        "reason": "shuffles cards on table, fixes and passes cards",
+        "start_s": 239.5948989999997
+      },
+      {
+        "end_s": 299.51864399999977,
+        "interesting": true,
+        "reason": "picks up card, gives it to peer, arranges cards",
+        "start_s": 269.5900980000006
+      },
+      {
+        "end_s": 326.5809790000003,
+        "interesting": true,
+        "reason": "lines up cards, picks up pile, moves tumbler, arranges cards",
+        "start_s": 296.5857729999989
+      },
+      {
+        "end_s": 356.5761789999997,
+        "interesting": true,
+        "reason": "draws a card from deck, flips it, holds another card",
+        "start_s": 326.5809790000003
+      },
+      {
+        "end_s": 386.504721000003,
+        "interesting": true,
+        "reason": "picks up and flips cards, interchanges them on table",
+        "start_s": 356.5761789999997
+      },
+      {
+        "end_s": 398.5694590000003,
+        "interesting": true,
+        "reason": "rearranges cards, picks up a card from pile",
+        "start_s": 383.57185000000027
+      },
+      {
+        "end_s": 413.56706099999974,
+        "interesting": true,
+        "reason": "rearranges cards, picks up card from pile and places it",
+        "start_s": 398.5694590000003
+      },
+      {
+        "end_s": 443.56225300000006,
+        "interesting": true,
+        "reason": "repeatedly picks up and places cards, exchanges cards",
+        "start_s": 413.56706099999974
+      },
+      {
+        "end_s": 473.49079399999937,
+        "interesting": true,
+        "reason": "rearranges and places cards repeatedly",
+        "start_s": 443.56225300000006
+      },
+      {
+        "end_s": 500.5531379999993,
+        "interesting": true,
+        "reason": "gathers cards, arranges cards on table",
+        "start_s": 470.55793300000005
+      },
+      {
+        "end_s": 530.548342,
+        "interesting": true,
+        "reason": "shuffles cards, gives cards to peer",
+        "start_s": 500.5531379999993
+      },
+      {
+        "end_s": 560.543533,
+        "interesting": true,
+        "reason": "arranges cards, draws a card from deck",
+        "start_s": 530.548342
+      },
+      {
+        "end_s": 587.6058809999995,
+        "interesting": true,
+        "reason": "picks up card, rearranges cards, places card",
+        "start_s": 557.6106719999989
+      },
+      {
+        "end_s": 617.6010779999997,
+        "interesting": true,
+        "reason": "picks up card, rearranges cards, places card",
+        "start_s": 587.6058809999995
+      },
+      {
+        "end_s": 647.5296129999988,
+        "interesting": true,
+        "reason": "places and picks up cards, rearranges cards",
+        "start_s": 617.6010779999997
+      },
+      {
+        "end_s": 674.5919489999997,
+        "interesting": true,
+        "reason": "helps organize the deck of cards",
+        "start_s": 644.5967499999988
+      },
+      {
+        "end_s": 704.5871520000001,
+        "interesting": true,
+        "reason": "grabs and shuffles a card",
+        "start_s": 674.5919489999997
+      },
+      {
+        "end_s": 734.5156910000005,
+        "interesting": true,
+        "reason": "shuffles cards, receives and piles cards",
+        "start_s": 704.5871520000001
+      },
+      {
+        "end_s": 761.5780329999998,
+        "interesting": true,
+        "reason": "receives cards, draws a card on the table",
+        "start_s": 731.582832
+      },
+      {
+        "end_s": 791.573234999998,
+        "interesting": true,
+        "reason": "interchanges drawn card, places card on table",
+        "start_s": 761.5780329999998
+      },
+      {
+        "end_s": 821.5017769999995,
+        "interesting": true,
+        "reason": "interchanges drawn card, places card on table",
+        "start_s": 791.573234999998
+      },
+      {
+        "end_s": 848.5641159999996,
+        "interesting": true,
+        "reason": "grabs/flips card, places and deals cards",
+        "start_s": 818.568906999999
+      },
+      {
+        "end_s": 878.5593129999997,
+        "interesting": true,
+        "reason": "gathers cards and cuts the cards",
+        "start_s": 848.5641159999996
+      },
+      {
+        "end_s": 907.5546709999999,
+        "interesting": true,
+        "reason": "puts down and arranges cards received from peer",
+        "start_s": 878.5593129999997
+      },
+      {
+        "end_s": 935.5501870000007,
+        "interesting": true,
+        "reason": "lines up cards, interchanges drawn card, places card",
+        "start_s": 905.5549859999992
+      },
+      {
+        "end_s": 947.2149829999998,
+        "interesting": true,
+        "reason": "draws from deck before standing; card manipulation present",
+        "start_s": 935.5501870000007
+      },
+      {
+        "end_s": 127.54615700000068,
+        "interesting": false,
+        "reason": "standing on landing listening to peers; idle",
+        "start_s": 122.54695299999912
+      },
+      {
+        "end_s": 132.54535899999973,
+        "interesting": false,
+        "reason": "standing on landing listening to peers; idle",
+        "start_s": 127.54615700000068
+      },
+      {
+        "end_s": 137.54456599999867,
+        "interesting": false,
+        "reason": "standing then walks to sofa; idle plus locomotion",
+        "start_s": 132.54535899999973
+      },
+      {
+        "end_s": 142.54375999999866,
+        "interesting": true,
+        "reason": "picks up object from coffee table and holds it",
+        "start_s": 137.54456599999867
+      },
+      {
+        "end_s": 147.54295999999886,
+        "interesting": true,
+        "reason": "places object, picks up backpack and moves it",
+        "start_s": 142.54375999999866
+      },
+      {
+        "end_s": 152.54215999999906,
+        "interesting": true,
+        "reason": "moves tumbler, picks up phone and relocates it",
+        "start_s": 147.54295999999886
+      },
+      {
+        "end_s": 157.54135599999972,
+        "interesting": false,
+        "reason": "adjusts head equipment then rests hands; no object manipulation",
+        "start_s": 152.54215999999906
+      },
+      {
+        "end_s": 162.54055499999959,
+        "interesting": false,
+        "reason": "resting hands on lap watching peer; idle",
+        "start_s": 157.54135599999972
+      },
+      {
+        "end_s": 167.53975199999877,
+        "interesting": false,
+        "reason": "resting hands on lap watching peer; idle",
+        "start_s": 162.54055499999959
+      },
+      {
+        "end_s": 172.53895700000066,
+        "interesting": false,
+        "reason": "resting hands, raises and joins hands; no manipulation",
+        "start_s": 167.53975199999877
+      },
+      {
+        "end_s": 177.5381529999995,
+        "interesting": false,
+        "reason": "gesticulating and resting hands, watching peer; no manipulation",
+        "start_s": 172.53895700000066
+      },
+      {
+        "end_s": 182.6040129999983,
+        "interesting": false,
+        "reason": "kneels, rests hands on table watching peer; no manipulation",
+        "start_s": 177.5381529999995
+      },
+      {
+        "end_s": 187.60321399999884,
+        "interesting": false,
+        "reason": "hands resting on table watching peer; idle",
+        "start_s": 182.6040129999983
+      },
+      {
+        "end_s": 192.6024120000002,
+        "interesting": true,
+        "reason": "moves object on table and holds object",
+        "start_s": 187.60321399999884
+      },
+      {
+        "end_s": 197.60161700000026,
+        "interesting": true,
+        "reason": "picks up object and moves it on the table",
+        "start_s": 192.6024120000002
+      },
+      {
+        "end_s": 202.60081700000046,
+        "interesting": false,
+        "reason": "hands resting on table watching peer; idle",
+        "start_s": 197.60161700000026
+      },
+      {
+        "end_s": 207.60001399999965,
+        "interesting": true,
+        "reason": "picks up tumbler and drinks from it",
+        "start_s": 202.60081700000046
+      },
+      {
+        "end_s": 212.5325699999994,
+        "interesting": true,
+        "reason": "lowers tumbler, takes deck of cards and places it",
+        "start_s": 207.60001399999965
+      },
+      {
+        "end_s": 214.5988980000002,
+        "interesting": true,
+        "reason": "receives cards, puts down and picks up cards",
+        "start_s": 209.59968899999876
+      },
+      {
+        "end_s": 219.5980870000003,
+        "interesting": true,
+        "reason": "shuffles cards on table with both hands",
+        "start_s": 214.5988980000002
+      },
+      {
+        "end_s": 224.59728499999983,
+        "interesting": true,
+        "reason": "shuffles cards on table with both hands",
+        "start_s": 219.5980870000003
+      },
+      {
+        "end_s": 229.59649199999876,
+        "interesting": true,
+        "reason": "shuffles cards, places cards on table, holds cards",
+        "start_s": 224.59728499999983
+      },
+      {
+        "end_s": 234.5956929999993,
+        "interesting": true,
+        "reason": "shuffles cards with both hands",
+        "start_s": 229.59649199999876
+      },
+      {
+        "end_s": 239.5948989999997,
+        "interesting": true,
+        "reason": "shuffles cards with both hands",
+        "start_s": 234.5956929999993
+      },
+      {
+        "end_s": 244.59409099999903,
+        "interesting": true,
+        "reason": "shuffles cards on table with both hands",
+        "start_s": 239.5948989999997
+      },
+      {
+        "end_s": 249.59329499999876,
+        "interesting": true,
+        "reason": "shuffles cards on table with both hands",
+        "start_s": 244.59409099999903
+      },
+      {
+        "end_s": 254.59249499999896,
+        "interesting": true,
+        "reason": "shuffles cards on table with both hands",
+        "start_s": 249.59329499999876
+      },
+      {
+        "end_s": 259.5916939999988,
+        "interesting": true,
+        "reason": "shuffles cards on table with both hands",
+        "start_s": 254.59249499999896
+      },
+      {
+        "end_s": 264.59089200000017,
+        "interesting": true,
+        "reason": "shuffles cards on table with both hands",
+        "start_s": 259.5916939999988
+      },
+      {
+        "end_s": 269.59009799999876,
+        "interesting": true,
+        "reason": "shuffles cards, gives cards to peer, gets remaining card",
+        "start_s": 264.59089200000017
+      },
+      {
+        "end_s": 274.5892929999991,
+        "interesting": true,
+        "reason": "gets remaining card and gives it to peer",
+        "start_s": 269.59009799999876
+      },
+      {
+        "end_s": 279.5884969999988,
+        "interesting": false,
+        "reason": "rests hands on table while talking; no manipulation",
+        "start_s": 274.5892929999991
+      },
+      {
+        "end_s": 284.5876909999988,
+        "interesting": false,
+        "reason": "raises body to sit while talking; no object manipulation",
+        "start_s": 279.5884969999988
+      },
+      {
+        "end_s": 289.5868929999997,
+        "interesting": true,
+        "reason": "gets cards on the table with right hand",
+        "start_s": 284.5876909999988
+      },
+      {
+        "end_s": 294.5860929999999,
+        "interesting": true,
+        "reason": "organizes cards on the table with both hands",
+        "start_s": 289.5868929999997
+      },
+      {
+        "end_s": 299.51864399999977,
+        "interesting": true,
+        "reason": "organizes cards on the table",
+        "start_s": 294.5860929999999
+      },
+      {
+        "end_s": 301.58497799999896,
+        "interesting": true,
+        "reason": "organizes cards on the table",
+        "start_s": 296.5857730000007
+      },
+      {
+        "end_s": 306.5841739999996,
+        "interesting": true,
+        "reason": "organizes cards on the table",
+        "start_s": 301.58497799999896
+      },
+      {
+        "end_s": 311.51671499999975,
+        "interesting": true,
+        "reason": "organizes cards, moves tumbler, organizes cards",
+        "start_s": 306.5841739999996
+      },
+      {
+        "end_s": 316.51591599999847,
+        "interesting": true,
+        "reason": "organizes cards on the table",
+        "start_s": 311.5833700000003
+      },
+      {
+        "end_s": 321.515116999999,
+        "interesting": true,
+        "reason": "organizes cards on table (scratches face briefly)",
+        "start_s": 316.58257199999935
+      },
+      {
+        "end_s": 326.51431799999955,
+        "interesting": false,
+        "reason": "hands resting on lap during game; no manipulation",
+        "start_s": 321.5817760000009
+      },
+      {
+        "end_s": 331.5135140000002,
+        "interesting": false,
+        "reason": "hands resting on lap; no manipulation",
+        "start_s": 326.5809790000003
+      },
+      {
+        "end_s": 336.5127229999998,
+        "interesting": false,
+        "reason": "points at table; gesturing, no manipulation",
+        "start_s": 331.58016899999893
+      },
+      {
+        "end_s": 341.5119159999995,
+        "interesting": false,
+        "reason": "hands resting on lap; no manipulation",
+        "start_s": 336.57937800000036
+      },
+      {
+        "end_s": 346.51111200000014,
+        "interesting": false,
+        "reason": "hands resting on lap; no manipulation",
+        "start_s": 341.57857499999955
+      },
+      {
+        "end_s": 351.5103170000002,
+        "interesting": false,
+        "reason": "hands resting on lap; no manipulation",
+        "start_s": 346.5777710000002
+      },
+      {
+        "end_s": 356.50952099999995,
+        "interesting": true,
+        "reason": "draws a card from deck and holds a card",
+        "start_s": 351.5769789999995
+      },
+      {
+        "end_s": 361.50871599999846,
+        "interesting": true,
+        "reason": "gets card, puts down card, holds card",
+        "start_s": 356.5761789999997
+      },
+      {
+        "end_s": 366.50792100000035,
+        "interesting": true,
+        "reason": "holds a card from the table",
+        "start_s": 361.5753710000008
+      },
+      {
+        "end_s": 371.50711799999954,
+        "interesting": true,
+        "reason": "draws card from the table with both hands",
+        "start_s": 366.5745700000007
+      },
+      {
+        "end_s": 376.5063169999994,
+        "interesting": true,
+        "reason": "draws card from the table with both hands",
+        "start_s": 371.5737730000001
+      },
+      {
+        "end_s": 381.50552399999833,
+        "interesting": true,
+        "reason": "draws card from the table with both hands",
+        "start_s": 376.57297800000015
+      },
+      {
+        "end_s": 386.504721000003,
+        "interesting": true,
+        "reason": "draws card from the table with both hands",
+        "start_s": 381.57217499999933
+      },
+      {
+        "end_s": 388.57105000000047,
+        "interesting": true,
+        "reason": "swaps playing cards on the table with both hands",
+        "start_s": 383.57185000000027
+      },
+      {
+        "end_s": 393.5702509999992,
+        "interesting": true,
+        "reason": "swaps cards, puts card onto discard pile",
+        "start_s": 388.57105000000047
+      },
+      {
+        "end_s": 398.5694590000003,
+        "interesting": true,
+        "reason": "picks up a card from the draw pile",
+        "start_s": 393.5702509999992
+      },
+      {
+        "end_s": 403.5686569999998,
+        "interesting": true,
+        "reason": "swaps card, puts card onto discard pile",
+        "start_s": 398.5694590000003
+      },
+      {
+        "end_s": 408.5678549999993,
+        "interesting": true,
+        "reason": "picks up a card from the draw pile",
+        "start_s": 403.5686569999998
+      },
+      {
+        "end_s": 413.56706099999974,
+        "interesting": true,
+        "reason": "picks up and puts down a card",
+        "start_s": 408.5678549999993
+      },
+      {
+        "end_s": 418.5662570000004,
+        "interesting": true,
+        "reason": "picks up card from draw pile (also points)",
+        "start_s": 413.56706099999974
+      },
+      {
+        "end_s": 423.5654479999994,
+        "interesting": true,
+        "reason": "picks up and puts down card (also points)",
+        "start_s": 418.5662570000004
+      },
+      {
+        "end_s": 428.5646519999991,
+        "interesting": true,
+        "reason": "starts to pick up a card from the draw pile",
+        "start_s": 423.5654479999994
+      },
+      {
+        "end_s": 433.563854,
+        "interesting": true,
+        "reason": "picks up and puts down a card",
+        "start_s": 428.5646519999991
+      },
+      {
+        "end_s": 438.56304999999884,
+        "interesting": false,
+        "reason": "hands resting on lap during game; no manipulation",
+        "start_s": 433.563854
+      },
+      {
+        "end_s": 443.56225300000006,
+        "interesting": true,
+        "reason": "starts to swap card from discard pile with both hands",
+        "start_s": 438.56304999999884
+      },
+      {
+        "end_s": 448.56145599999945,
+        "interesting": true,
+        "reason": "swaps card, puts down card, picks up card",
+        "start_s": 443.56225300000006
+      },
+      {
+        "end_s": 453.56065899999885,
+        "interesting": true,
+        "reason": "picks up and puts down a card",
+        "start_s": 448.56145599999945
+      },
+      {
+        "end_s": 458.55985299999884,
+        "interesting": true,
+        "reason": "picks up and puts down cards from draw/discard pile",
+        "start_s": 453.56065899999885
+      },
+      {
+        "end_s": 463.5590549999997,
+        "interesting": true,
+        "reason": "picks up, swaps and puts down cards",
+        "start_s": 458.55985299999884
+      },
+      {
+        "end_s": 468.55825600000026,
+        "interesting": false,
+        "reason": "hand on lap, hand on table, then talks; no card manipulation",
+        "start_s": 463.5590549999997
+      },
+      {
+        "end_s": 473.49079399999937,
+        "interesting": false,
+        "reason": "hand on lap and on table, talking, removes hand; no manipulation",
+        "start_s": 468.55825600000026
+      },
+      {
+        "end_s": 475.5571379999983,
+        "interesting": true,
+        "reason": "gathers the cards together with both hands",
+        "start_s": 470.55793300000005
+      },
+      {
+        "end_s": 480.5563340000008,
+        "interesting": true,
+        "reason": "gathers and picks up cards",
+        "start_s": 475.5571379999983
+      },
+      {
+        "end_s": 485.55552799999896,
+        "interesting": true,
+        "reason": "holds cards while peer adjusts device; still holding cards",
+        "start_s": 480.5563340000008
+      },
+      {
+        "end_s": 490.5547349999997,
+        "interesting": false,
+        "reason": "hands raised while peer adjusts device; no object manipulation",
+        "start_s": 485.55552799999896
+      },
+      {
+        "end_s": 495.5539370000006,
+        "interesting": true,
+        "reason": "combines and fixes cards with both hands",
+        "start_s": 490.5547349999997
+      },
+      {
+        "end_s": 500.5531379999993,
+        "interesting": true,
+        "reason": "fixing the cards she holds with both hands",
+        "start_s": 495.5539370000006
+      },
+      {
+        "end_s": 505.55233299999963,
+        "interesting": true,
+        "reason": "holds and shuffles cards with both hands",
+        "start_s": 500.5531379999993
+      },
+      {
+        "end_s": 510.5515319999995,
+        "interesting": true,
+        "reason": "shuffling the cards with both hands",
+        "start_s": 505.55233299999963
+      },
+      {
+        "end_s": 515.5507319999997,
+        "interesting": true,
+        "reason": "shuffling cards (also gesticulates briefly)",
+        "start_s": 510.5515319999995
+      },
+      {
+        "end_s": 520.5499400000008,
+        "interesting": true,
+        "reason": "shuffling cards with both hands",
+        "start_s": 515.5507319999997
+      },
+      {
+        "end_s": 525.5491419999998,
+        "interesting": true,
+        "reason": "holds and places the cards",
+        "start_s": 520.5499400000008
+      },
+      {
+        "end_s": 530.548342,
+        "interesting": true,
+        "reason": "holds cards and passes them to peer",
+        "start_s": 525.5491419999998
+      },
+      {
+        "end_s": 535.5475379999989,
+        "interesting": true,
+        "reason": "passes cards to peer (then touches hair)",
+        "start_s": 530.548342
+      },
+      {
+        "end_s": 540.546726999999,
+        "interesting": true,
+        "reason": "grabs and holds cards",
+        "start_s": 535.5475379999989
+      },
+      {
+        "end_s": 545.5459299999984,
+        "interesting": true,
+        "reason": "moves and arranges cards on table with both hands",
+        "start_s": 540.546726999999
+      },
+      {
+        "end_s": 550.5451290000001,
+        "interesting": true,
+        "reason": "moves and places cards in a row on table",
+        "start_s": 545.5459299999984
+      },
+      {
+        "end_s": 555.5443290000003,
+        "interesting": true,
+        "reason": "moves and arranges cards in row with both hands",
+        "start_s": 550.5451290000001
+      },
+      {
+        "end_s": 560.543533,
+        "interesting": true,
+        "reason": "arranges cards and grabs a card from the deck",
+        "start_s": 555.5443290000003
+      },
+      {
+        "end_s": 562.6098719999991,
+        "interesting": true,
+        "reason": "picks up a card, transfers it, swaps cards on table",
+        "start_s": 557.6106719999989
+      },
+      {
+        "end_s": 567.6090679999998,
+        "interesting": true,
+        "reason": "swaps playing cards on the table with both hands",
+        "start_s": 562.6098719999991
+      },
+      {
+        "end_s": 572.6082699999988,
+        "interesting": true,
+        "reason": "puts down playing card onto the table",
+        "start_s": 567.6090679999998
+      },
+      {
+        "end_s": 577.6074690000005,
+        "interesting": false,
+        "reason": "both hands placed/resting on table; no card manipulation",
+        "start_s": 572.6082699999988
+      },
+      {
+        "end_s": 582.6066699999992,
+        "interesting": true,
+        "reason": "picks up card, swaps cards, puts card down",
+        "start_s": 577.6074690000005
+      },
+      {
+        "end_s": 587.6058809999995,
+        "interesting": true,
+        "reason": "puts down card and picks up card from draw pile",
+        "start_s": 582.6066699999992
+      },
+      {
+        "end_s": 592.6050699999996,
+        "interesting": true,
+        "reason": "picks up card and swaps cards on table",
+        "start_s": 587.6058809999995
+      },
+      {
+        "end_s": 597.6042679999991,
+        "interesting": true,
+        "reason": "swaps cards and puts down card",
+        "start_s": 592.6050699999996
+      },
+      {
+        "end_s": 602.6034689999997,
+        "interesting": true,
+        "reason": "picks up card and swaps cards on table",
+        "start_s": 597.6042679999991
+      },
+      {
+        "end_s": 607.6026679999995,
+        "interesting": true,
+        "reason": "puts down playing card onto discard pile",
+        "start_s": 602.6034689999997
+      },
+      {
+        "end_s": 612.6018700000004,
+        "interesting": true,
+        "reason": "picks up card and swaps cards on table",
+        "start_s": 607.6026679999995
+      },
+      {
+        "end_s": 617.6010779999997,
+        "interesting": true,
+        "reason": "swaps cards and holds playing card",
+        "start_s": 612.6018700000004
+      },
+      {
+        "end_s": 622.6002630000003,
+        "interesting": true,
+        "reason": "puts down playing card onto discard pile",
+        "start_s": 617.6010779999997
+      },
+      {
+        "end_s": 627.5994719999999,
+        "interesting": true,
+        "reason": "picks up and puts down a card",
+        "start_s": 622.6002630000003
+      },
+      {
+        "end_s": 632.5986670000002,
+        "interesting": true,
+        "reason": "picks up a card from the draw pile",
+        "start_s": 627.5994719999999
+      },
+      {
+        "end_s": 637.5978649999997,
+        "interesting": true,
+        "reason": "picks up, swaps and puts down cards",
+        "start_s": 632.5986670000002
+      },
+      {
+        "end_s": 642.5970739999993,
+        "interesting": true,
+        "reason": "extends hand toward and engages card on table",
+        "start_s": 637.5978649999997
+      },
+      {
+        "end_s": 647.5296129999988,
+        "interesting": true,
+        "reason": "picks up card, puts it down, gathers all cards",
+        "start_s": 642.5970739999993
+      },
+      {
+        "end_s": 649.5959449999991,
+        "interesting": true,
+        "reason": "gathers, pulls and picks up pile of cards, combines piles",
+        "start_s": 644.5967499999988
+      },
+      {
+        "end_s": 654.5951489999989,
+        "interesting": true,
+        "reason": "pulls/picks up cards, aligns pile, hands cards to colleague",
+        "start_s": 649.5959449999991
+      },
+      {
+        "end_s": 659.594348999999,
+        "interesting": true,
+        "reason": "grabs the pack of rubber ducks on the table",
+        "start_s": 654.5951489999989
+      },
+      {
+        "end_s": 664.5935559999998,
+        "interesting": true,
+        "reason": "grabs and releases the pack of rubber ducks",
+        "start_s": 659.594348999999
+      },
+      {
+        "end_s": 669.5927489999995,
+        "interesting": false,
+        "reason": "hands on lap/knee talking, scratches face; no manipulation",
+        "start_s": 664.5935559999998
+      },
+      {
+        "end_s": 674.5919489999997,
+        "interesting": false,
+        "reason": "scratches face, waits; no object manipulation",
+        "start_s": 669.5927489999995
+      },
+      {
+        "end_s": 679.5911539999997,
+        "interesting": true,
+        "reason": "fixes something by her left foot with her hand",
+        "start_s": 674.5919489999997
+      },
+      {
+        "end_s": 684.5903549999985,
+        "interesting": true,
+        "reason": "fixes something by her foot with her left hand",
+        "start_s": 679.5911539999997
+      },
+      {
+        "end_s": 689.5895549999987,
+        "interesting": true,
+        "reason": "picks up deck of cards and holds it",
+        "start_s": 684.5903549999985
+      },
+      {
+        "end_s": 694.588749999999,
+        "interesting": true,
+        "reason": "divides deck, holds and picks up halves of cards",
+        "start_s": 689.5895549999987
+      },
+      {
+        "end_s": 699.5879459999996,
+        "interesting": true,
+        "reason": "shuffles deck on table, divides deck",
+        "start_s": 694.588749999999
+      },
+      {
+        "end_s": 704.5871519999982,
+        "interesting": true,
+        "reason": "divides, taps and shuffles deck of cards",
+        "start_s": 699.5879459999996
+      },
+      {
+        "end_s": 709.5863499999996,
+        "interesting": true,
+        "reason": "shuffles, aligns and hands deck to colleague",
+        "start_s": 704.5871519999982
+      },
+      {
+        "end_s": 714.5855479999991,
+        "interesting": false,
+        "reason": "hands on lap, scratches face, waits; no manipulation",
+        "start_s": 709.5863499999996
+      },
+      {
+        "end_s": 719.5847460000005,
+        "interesting": false,
+        "reason": "hands on lap waiting; idle",
+        "start_s": 714.5855479999991
+      },
+      {
+        "end_s": 724.5839510000005,
+        "interesting": false,
+        "reason": "hands on lap waiting, then leans forward; no manipulation",
+        "start_s": 719.5847460000005
+      },
+      {
+        "end_s": 729.5831570000009,
+        "interesting": true,
+        "reason": "pulls cards toward her and arranges cards on table",
+        "start_s": 724.5839510000005
+      },
+      {
+        "end_s": 734.5156909999987,
+        "interesting": true,
+        "reason": "arranges the cards on the center table with both hands",
+        "start_s": 729.5831570000009
+      },
+      {
+        "end_s": 736.5820269999986,
+        "interesting": true,
+        "reason": "receives cards, places card on table, holds card",
+        "start_s": 731.582832
+      },
+      {
+        "end_s": 741.581236,
+        "interesting": false,
+        "reason": "touches face then hands on lap, talking; no manipulation",
+        "start_s": 736.5820269999986
+      },
+      {
+        "end_s": 746.58043,
+        "interesting": false,
+        "reason": "arms resting on lap talking, leans forward; no manipulation",
+        "start_s": 741.581236
+      },
+      {
+        "end_s": 751.5796349999982,
+        "interesting": false,
+        "reason": "holding hands together on lap; no object manipulation",
+        "start_s": 746.58043
+      },
+      {
+        "end_s": 756.5788249999987,
+        "interesting": true,
+        "reason": "picks up card, holds it, places it, flips and grabs another",
+        "start_s": 751.5796349999982
+      },
+      {
+        "end_s": 761.5780329999998,
+        "interesting": true,
+        "reason": "holds card, touches flipped card, transfers card between hands",
+        "start_s": 756.5788249999987
+      },
+      {
+        "end_s": 766.5772349999988,
+        "interesting": true,
+        "reason": "places card on table, flips and places another card",
+        "start_s": 761.5780329999998
+      },
+      {
+        "end_s": 771.576427,
+        "interesting": false,
+        "reason": "arms resting on lap; no card manipulation this span",
+        "start_s": 766.5772349999988
+      },
+      {
+        "end_s": 776.5756359999996,
+        "interesting": true,
+        "reason": "picks up a card and grabs another card",
+        "start_s": 771.576427
+      },
+      {
+        "end_s": 781.5748309999999,
+        "interesting": true,
+        "reason": "holds/grabs cards, places and passes cards on table",
+        "start_s": 776.5756359999996
+      },
+      {
+        "end_s": 786.5740289999994,
+        "interesting": false,
+        "reason": "arms resting on lap, hands near each other; no manipulation",
+        "start_s": 781.5748309999999
+      },
+      {
+        "end_s": 791.573234999998,
+        "interesting": true,
+        "reason": "grabs and flips cards, places cards on table",
+        "start_s": 786.5740289999994
+      },
+      {
+        "end_s": 796.5724299999983,
+        "interesting": true,
+        "reason": "grabs a card and about to flip a card",
+        "start_s": 791.573234999998
+      },
+      {
+        "end_s": 801.571629,
+        "interesting": true,
+        "reason": "holds, flips, places and passes cards",
+        "start_s": 796.5724299999983
+      },
+      {
+        "end_s": 806.5708309999991,
+        "interesting": true,
+        "reason": "flips a card and places it on the table",
+        "start_s": 801.571629
+      },
+      {
+        "end_s": 811.5700259999994,
+        "interesting": true,
+        "reason": "flips a card on the pile of playing cards",
+        "start_s": 806.5708309999991
+      },
+      {
+        "end_s": 816.569227,
+        "interesting": true,
+        "reason": "holds card, places it, flips another card and places it",
+        "start_s": 811.5700259999994
+      },
+      {
+        "end_s": 821.5017769999995,
+        "interesting": true,
+        "reason": "grabs a card on the table with her right hand",
+        "start_s": 816.569227
+      },
+      {
+        "end_s": 823.5681059999988,
+        "interesting": true,
+        "reason": "picks up card, replaces with new card, puts card on pile",
+        "start_s": 818.568906999999
+      },
+      {
+        "end_s": 828.5673129999996,
+        "interesting": true,
+        "reason": "puts down card, draws a card from the deck",
+        "start_s": 823.5681059999988
+      },
+      {
+        "end_s": 833.5665109999991,
+        "interesting": true,
+        "reason": "places card on pile, draws a card from the deck",
+        "start_s": 828.5673129999996
+      },
+      {
+        "end_s": 838.5657069999997,
+        "interesting": true,
+        "reason": "draws a card and puts it down on the pile",
+        "start_s": 833.5665109999991
+      },
+      {
+        "end_s": 843.5649080000003,
+        "interesting": true,
+        "reason": "draws a card, puts it down, picks up face-down card",
+        "start_s": 838.5657069999997
+      },
+      {
+        "end_s": 848.5641159999996,
+        "interesting": true,
+        "reason": "flips the face-down card on the center table",
+        "start_s": 843.5649080000003
+      },
+      {
+        "end_s": 853.5633129999987,
+        "interesting": true,
+        "reason": "gestures then crouches with hands touching table; cards in play",
+        "start_s": 848.5641159999996
+      },
+      {
+        "end_s": 858.5625170000003,
+        "interesting": true,
+        "reason": "gathers the cards on the center table with both hands",
+        "start_s": 853.5633129999987
+      },
+      {
+        "end_s": 863.5617050000001,
+        "interesting": true,
+        "reason": "gathers, lifts and places cards, picks up cards",
+        "start_s": 858.5625170000003
+      },
+      {
+        "end_s": 868.5609029999996,
+        "interesting": true,
+        "reason": "picks up, gathers, puts down and arranges cards",
+        "start_s": 863.5617050000001
+      },
+      {
+        "end_s": 873.5601129999995,
+        "interesting": true,
+        "reason": "arranges, lifts and shuffles the cards",
+        "start_s": 868.5609029999996
+      },
+      {
+        "end_s": 878.5593129999997,
+        "interesting": true,
+        "reason": "shuffles the cards on the table with both hands",
+        "start_s": 873.5601129999995
+      },
+      {
+        "end_s": 883.5585080000001,
+        "interesting": true,
+        "reason": "holds deck, places cards on table (then flicks hand)",
+        "start_s": 878.5593129999997
+      },
+      {
+        "end_s": 888.5577039999989,
+        "interesting": true,
+        "reason": "moves the top card on the deck",
+        "start_s": 883.5585080000001
+      },
+      {
+        "end_s": 893.5569149999992,
+        "interesting": false,
+        "reason": "arms crossed resting on table, lifts/replaces hand; no card manipulation",
+        "start_s": 888.5577039999989
+      },
+      {
+        "end_s": 898.5561079999989,
+        "interesting": true,
+        "reason": "moves the cards toward her with her right hand",
+        "start_s": 893.5569149999992
+      },
+      {
+        "end_s": 903.5553070000005,
+        "interesting": true,
+        "reason": "moves cards, holds a card, touches another card",
+        "start_s": 898.5561079999989
+      },
+      {
+        "end_s": 908.4878509999999,
+        "interesting": true,
+        "reason": "touches and moves cards (hits remote with card while moving)",
+        "start_s": 903.5553070000005
+      },
+      {
+        "end_s": 910.5541899999989,
+        "interesting": true,
+        "reason": "organizes the cards on the table with his hand",
+        "start_s": 905.5549859999992
+      },
+      {
+        "end_s": 915.5533899999991,
+        "interesting": false,
+        "reason": "both hands resting on table during game; no card manipulation",
+        "start_s": 910.5541899999989
+      },
+      {
+        "end_s": 920.5525909999997,
+        "interesting": true,
+        "reason": "draws card, flips card, places cards on table",
+        "start_s": 915.5533899999991
+      },
+      {
+        "end_s": 925.5517870000003,
+        "interesting": false,
+        "reason": "arms resting on table; no card manipulation this span",
+        "start_s": 920.5525909999997
+      },
+      {
+        "end_s": 930.5509910000001,
+        "interesting": true,
+        "reason": "draws a card from deck and puts it down on table",
+        "start_s": 925.5517870000003
+      },
+      {
+        "end_s": 935.5501869999989,
+        "interesting": false,
+        "reason": "arms resting on table; no card manipulation this span",
+        "start_s": 930.5509910000001
+      },
+      {
+        "end_s": 940.549395,
+        "interesting": false,
+        "reason": "arms resting on table then stands and steps; idle plus locomotion",
+        "start_s": 935.5501869999989
+      },
+      {
+        "end_s": 943.5489109999999,
+        "interesting": false,
+        "reason": "walks, stops, turns and stands still; pure locomotion/idle",
+        "start_s": 940.549395
+      },
+      {
+        "end_s": 947.2149829999998,
+        "interesting": false,
+        "reason": "standing still while peer touches his arm; idle",
+        "start_s": 943.5489109999999
+      }
+    ]
+  },
+  "20230607_s1_barbara_wheeler_act0_cvxtsi": {
+    "regions": [
+      {
+        "end_s": 209.2997460000006,
+        "interesting": true,
+        "reason": "picks up whiteboard from center table",
+        "start_s": 179.304540000001
+      },
+      {
+        "end_s": 239.29493999999977,
+        "interesting": true,
+        "reason": "opening packaging of the whiteboard",
+        "start_s": 209.2997460000006
+      },
+      {
+        "end_s": 269.2901460000012,
+        "interesting": true,
+        "reason": "peeling off plastic packaging of whiteboard",
+        "start_s": 239.29493999999977
+      },
+      {
+        "end_s": 281.3548750000009,
+        "interesting": true,
+        "reason": "removing plastic cover from whiteboard",
+        "start_s": 266.35728299999937
+      },
+      {
+        "end_s": 311.3500810000005,
+        "interesting": true,
+        "reason": "draws on the whiteboard",
+        "start_s": 281.3548750000009
+      },
+      {
+        "end_s": 336.3460809999997,
+        "interesting": true,
+        "reason": "draws on the whiteboard",
+        "start_s": 311.3500810000005
+      },
+      {
+        "end_s": 356.27621999999974,
+        "interesting": true,
+        "reason": "draws on the whiteboard",
+        "start_s": 336.3460809999997
+      },
+      {
+        "end_s": 383.33857100000023,
+        "interesting": true,
+        "reason": "holds marker/whiteboard, erases drawing",
+        "start_s": 353.34335400000055
+      },
+      {
+        "end_s": 413.33375999999953,
+        "interesting": true,
+        "reason": "draws and erases on whiteboard",
+        "start_s": 383.33857100000023
+      },
+      {
+        "end_s": 443.262302000001,
+        "interesting": true,
+        "reason": "drawing on whiteboard",
+        "start_s": 413.33375999999953
+      },
+      {
+        "end_s": 470.32463800000187,
+        "interesting": true,
+        "reason": "writing on whiteboard",
+        "start_s": 440.329436
+      },
+      {
+        "end_s": 500.31983299999956,
+        "interesting": true,
+        "reason": "erases drawing on whiteboard",
+        "start_s": 470.32463800000187
+      },
+      {
+        "end_s": 530.2483820000016,
+        "interesting": true,
+        "reason": "erasing drawing on whiteboard",
+        "start_s": 500.31983299999956
+      },
+      {
+        "end_s": 557.3107180000006,
+        "interesting": true,
+        "reason": "puts cardboard down, picks it up, draws",
+        "start_s": 527.3155360000001
+      },
+      {
+        "end_s": 587.3059159999993,
+        "interesting": true,
+        "reason": "drawing on the cardboard",
+        "start_s": 557.3107180000006
+      },
+      {
+        "end_s": 617.3011220000008,
+        "interesting": true,
+        "reason": "drawing on the cardboard",
+        "start_s": 587.3059159999993
+      },
+      {
+        "end_s": 644.3634529999999,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 614.3682520000002
+      },
+      {
+        "end_s": 674.358658000001,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 644.3634529999999
+      },
+      {
+        "end_s": 704.287198,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 674.358658000001
+      },
+      {
+        "end_s": 731.3495350000012,
+        "interesting": true,
+        "reason": "erases drawing on cardboard",
+        "start_s": 701.3543350000018
+      },
+      {
+        "end_s": 761.3447340000002,
+        "interesting": true,
+        "reason": "draws on the cardboard",
+        "start_s": 731.3495350000012
+      },
+      {
+        "end_s": 791.2732799999994,
+        "interesting": true,
+        "reason": "drawing on the cardboard",
+        "start_s": 761.3447340000002
+      },
+      {
+        "end_s": 818.3356160000003,
+        "interesting": true,
+        "reason": "drawing on the whiteboard",
+        "start_s": 788.3404090000004
+      },
+      {
+        "end_s": 848.3308150000012,
+        "interesting": true,
+        "reason": "drawing on and holding whiteboard",
+        "start_s": 818.3356160000003
+      },
+      {
+        "end_s": 878.2593589999997,
+        "interesting": true,
+        "reason": "holds and draws on whiteboard",
+        "start_s": 848.3308150000012
+      },
+      {
+        "end_s": 905.3216929999999,
+        "interesting": true,
+        "reason": "draws/writes then puts marker beside whiteboard",
+        "start_s": 875.326497
+      },
+      {
+        "end_s": 935.3169010000001,
+        "interesting": true,
+        "reason": "puts down/picks up whiteboard, gets marker, erases",
+        "start_s": 905.3216929999999
+      },
+      {
+        "end_s": 965.2454400000006,
+        "interesting": true,
+        "reason": "erasing, caps marker, puts marker beside whiteboard",
+        "start_s": 935.3169010000001
+      },
+      {
+        "end_s": 992.3077709999998,
+        "interesting": true,
+        "reason": "puts whiteboard on table, opens cabinet, throws plastic in trash, closes cabinet",
+        "start_s": 962.3125730000011
+      },
+      {
+        "end_s": 1022.3029750000023,
+        "interesting": false,
+        "reason": "walks into bedroom, looks around, sits, talks; no manipulation",
+        "start_s": 992.3077709999998
+      },
+      {
+        "end_s": 1052.2981720000007,
+        "interesting": true,
+        "reason": "opens and closes closet door",
+        "start_s": 1022.3029750000023
+      },
+      {
+        "end_s": 1079.3605079999998,
+        "interesting": true,
+        "reason": "inspects/opens bedroom drawers and switch",
+        "start_s": 1049.365312
+      },
+      {
+        "end_s": 1109.355706000002,
+        "interesting": true,
+        "reason": "inspects objects by holding mirror and lamp",
+        "start_s": 1079.3605079999998
+      },
+      {
+        "end_s": 1139.2842519999995,
+        "interesting": true,
+        "reason": "opens bathroom drawers and cabinet",
+        "start_s": 1109.355706000002
+      },
+      {
+        "end_s": 1152.6821049999999,
+        "interesting": false,
+        "reason": "turns light, walks, stands still; peer touches device, no own manipulation",
+        "start_s": 1136.351391000002
+      },
+      {
+        "end_s": 184.30373700000018,
+        "interesting": false,
+        "reason": "standing and talking to peer",
+        "start_s": 179.304540000001
+      },
+      {
+        "end_s": 189.3029460000016,
+        "interesting": false,
+        "reason": "standing and talking to peer",
+        "start_s": 184.30373700000018
+      },
+      {
+        "end_s": 194.30213399999957,
+        "interesting": false,
+        "reason": "talking, turning, gesticulating hands",
+        "start_s": 189.3029460000016
+      },
+      {
+        "end_s": 199.3013350000001,
+        "interesting": true,
+        "reason": "reaches the pack of whiteboard with right hand",
+        "start_s": 194.30213399999957
+      },
+      {
+        "end_s": 204.3005460000004,
+        "interesting": true,
+        "reason": "picks up pack of whiteboard set with both hands",
+        "start_s": 199.3013350000001
+      },
+      {
+        "end_s": 209.2997460000006,
+        "interesting": false,
+        "reason": "sitting holding pack while talking and gesticulating, no manipulation",
+        "start_s": 204.3005460000004
+      },
+      {
+        "end_s": 214.2989409999991,
+        "interesting": true,
+        "reason": "tries to open the pack of whiteboard set with both hands",
+        "start_s": 209.2997460000006
+      },
+      {
+        "end_s": 219.29814199999964,
+        "interesting": true,
+        "reason": "opening/flipping the pack of whiteboard set",
+        "start_s": 214.2989409999991
+      },
+      {
+        "end_s": 224.29733699999997,
+        "interesting": true,
+        "reason": "tries to open pack, touches the pen in packaging",
+        "start_s": 219.29814199999964
+      },
+      {
+        "end_s": 229.29653599999983,
+        "interesting": false,
+        "reason": "talking and hovering hand to pretend writing, no manipulation",
+        "start_s": 224.29733699999997
+      },
+      {
+        "end_s": 234.2957400000014,
+        "interesting": false,
+        "reason": "hovering hand pretending to write, no manipulation",
+        "start_s": 229.29653599999983
+      },
+      {
+        "end_s": 234.2957400000014,
+        "interesting": false,
+        "reason": "hovering hand pretending to write, no manipulation",
+        "start_s": 229.29653599999983
+      },
+      {
+        "end_s": 239.29493999999977,
+        "interesting": false,
+        "reason": "hovering hand pretending to write, no manipulation",
+        "start_s": 234.2957400000014
+      },
+      {
+        "end_s": 244.294143000001,
+        "interesting": false,
+        "reason": "hovering hand pretending to write, no manipulation",
+        "start_s": 239.29493999999977
+      },
+      {
+        "end_s": 249.29333899999983,
+        "interesting": false,
+        "reason": "hovering hand pretending to write, no manipulation",
+        "start_s": 244.294143000001
+      },
+      {
+        "end_s": 254.2925490000016,
+        "interesting": false,
+        "reason": "touches face, hovers hand pretending to write, no manipulation",
+        "start_s": 249.29333899999983
+      },
+      {
+        "end_s": 259.2917500000003,
+        "interesting": true,
+        "reason": "tries to open the pack of whiteboard set with both hands",
+        "start_s": 254.2925490000016
+      },
+      {
+        "end_s": 264.29094799999984,
+        "interesting": true,
+        "reason": "opening the pack of whiteboard set",
+        "start_s": 259.2917500000003
+      },
+      {
+        "end_s": 269.2901460000012,
+        "interesting": true,
+        "reason": "opening the pack of whiteboard set",
+        "start_s": 264.29094799999984
+      },
+      {
+        "end_s": 271.3564779999997,
+        "interesting": true,
+        "reason": "removing plastic packaging of whiteboard with both hands",
+        "start_s": 266.35728299999937
+      },
+      {
+        "end_s": 276.35567900000024,
+        "interesting": true,
+        "reason": "removing plastic packaging of whiteboard",
+        "start_s": 271.3564779999997
+      },
+      {
+        "end_s": 281.3548750000009,
+        "interesting": true,
+        "reason": "holding whiteboard, putting plastic on table",
+        "start_s": 276.35567900000024
+      },
+      {
+        "end_s": 286.3540880000055,
+        "interesting": true,
+        "reason": "puts plastic on table, removes marker and label",
+        "start_s": 281.3548750000009
+      },
+      {
+        "end_s": 291.35327700000016,
+        "interesting": true,
+        "reason": "puts label on table, removes cap of marker",
+        "start_s": 286.3540880000055
+      },
+      {
+        "end_s": 296.35247900000104,
+        "interesting": true,
+        "reason": "puts cap on marker end, about to write",
+        "start_s": 291.35327700000016
+      },
+      {
+        "end_s": 301.35168200000044,
+        "interesting": true,
+        "reason": "writing on the board with marker",
+        "start_s": 296.35247900000104
+      },
+      {
+        "end_s": 306.3508810000003,
+        "interesting": true,
+        "reason": "writing on the board with marker",
+        "start_s": 301.35168200000044
+      },
+      {
+        "end_s": 311.3500810000005,
+        "interesting": true,
+        "reason": "writing on the board with marker",
+        "start_s": 306.3508810000003
+      },
+      {
+        "end_s": 316.3492750000005,
+        "interesting": true,
+        "reason": "writing on the board with marker",
+        "start_s": 311.3500810000005
+      },
+      {
+        "end_s": 321.34848000000056,
+        "interesting": true,
+        "reason": "writing on the board with marker",
+        "start_s": 316.3492750000005
+      },
+      {
+        "end_s": 326.3476780000001,
+        "interesting": true,
+        "reason": "writing on the board with marker",
+        "start_s": 321.34848000000056
+      },
+      {
+        "end_s": 331.3468790000006,
+        "interesting": true,
+        "reason": "writing on the board with marker",
+        "start_s": 326.3476780000001
+      },
+      {
+        "end_s": 336.3460809999997,
+        "interesting": true,
+        "reason": "writing on the board with marker",
+        "start_s": 331.3468790000006
+      },
+      {
+        "end_s": 341.3452749999997,
+        "interesting": true,
+        "reason": "writing on the board with marker",
+        "start_s": 336.3460809999997
+      },
+      {
+        "end_s": 346.3444749999999,
+        "interesting": true,
+        "reason": "writing on the board with marker",
+        "start_s": 341.3452749999997
+      },
+      {
+        "end_s": 351.34367699999893,
+        "interesting": true,
+        "reason": "writing on the board with marker",
+        "start_s": 346.3444749999999
+      },
+      {
+        "end_s": 356.27621999999974,
+        "interesting": true,
+        "reason": "writing on board then holds whiteboard in both hands",
+        "start_s": 351.34367699999893
+      },
+      {
+        "end_s": 358.34256500000083,
+        "interesting": true,
+        "reason": "manipulates grasp on whiteboard, flips/shows it",
+        "start_s": 353.34335400000055
+      },
+      {
+        "end_s": 363.3417580000005,
+        "interesting": true,
+        "reason": "flips whiteboard to show drawing",
+        "start_s": 358.34256500000083
+      },
+      {
+        "end_s": 368.34096500000123,
+        "interesting": true,
+        "reason": "attempts to draw on whiteboard with marker",
+        "start_s": 363.3417580000005
+      },
+      {
+        "end_s": 373.3401590000012,
+        "interesting": true,
+        "reason": "holds whiteboard and marker, flips marker",
+        "start_s": 368.34096500000123
+      },
+      {
+        "end_s": 378.33936300000096,
+        "interesting": true,
+        "reason": "erases drawing using marker eraser",
+        "start_s": 373.3401590000012
+      },
+      {
+        "end_s": 383.33857100000023,
+        "interesting": true,
+        "reason": "erases drawing, flips marker",
+        "start_s": 378.33936300000096
+      },
+      {
+        "end_s": 388.33775799999967,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 383.33857100000023
+      },
+      {
+        "end_s": 393.33695400000033,
+        "interesting": true,
+        "reason": "erases and draws on whiteboard",
+        "start_s": 388.33775799999967
+      },
+      {
+        "end_s": 398.3361669999995,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 393.33695400000033
+      },
+      {
+        "end_s": 403.33535800000027,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 398.3361669999995
+      },
+      {
+        "end_s": 408.33456000000115,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 403.33535800000027
+      },
+      {
+        "end_s": 413.33375999999953,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 408.33456000000115
+      },
+      {
+        "end_s": 418.33295499999986,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 413.33375999999953
+      },
+      {
+        "end_s": 423.33216100000027,
+        "interesting": true,
+        "reason": "drawing on whiteboard, lifts whiteboard",
+        "start_s": 418.33295499999986
+      },
+      {
+        "end_s": 428.3313589999998,
+        "interesting": true,
+        "reason": "puts whiteboard on thigh, draws with marker",
+        "start_s": 423.33216100000027
+      },
+      {
+        "end_s": 433.33055700000114,
+        "interesting": true,
+        "reason": "writing and drawing on whiteboard",
+        "start_s": 428.3313589999998
+      },
+      {
+        "end_s": 438.32976000000053,
+        "interesting": true,
+        "reason": "writes on whiteboard, repositions it, writes again",
+        "start_s": 433.33055700000114
+      },
+      {
+        "end_s": 443.262302000001,
+        "interesting": true,
+        "reason": "writes on whiteboard with marker",
+        "start_s": 438.32976000000053
+      },
+      {
+        "end_s": 445.3286370000005,
+        "interesting": true,
+        "reason": "writing on whiteboard with marker",
+        "start_s": 440.329436
+      },
+      {
+        "end_s": 450.32783800000107,
+        "interesting": true,
+        "reason": "writes then holds whiteboard and marker",
+        "start_s": 445.3286370000005
+      },
+      {
+        "end_s": 455.3270300000004,
+        "interesting": true,
+        "reason": "writes with marker on whiteboard",
+        "start_s": 450.32783800000107
+      },
+      {
+        "end_s": 460.32623799999965,
+        "interesting": true,
+        "reason": "writing with marker on whiteboard",
+        "start_s": 455.3270300000004
+      },
+      {
+        "end_s": 465.3254429999997,
+        "interesting": true,
+        "reason": "holds marker and whiteboard, shows whiteboard",
+        "start_s": 460.32623799999965
+      },
+      {
+        "end_s": 470.32463800000187,
+        "interesting": true,
+        "reason": "flips whiteboard with both hands to show peer",
+        "start_s": 465.3254429999997
+      },
+      {
+        "end_s": 475.3238430000001,
+        "interesting": true,
+        "reason": "flips whiteboard with both hands",
+        "start_s": 470.32463800000187
+      },
+      {
+        "end_s": 480.323042,
+        "interesting": true,
+        "reason": "shows/flips whiteboard, repositions it",
+        "start_s": 475.3238430000001
+      },
+      {
+        "end_s": 485.32223800000065,
+        "interesting": true,
+        "reason": "erases writings using marker eraser",
+        "start_s": 480.323042
+      },
+      {
+        "end_s": 490.32143499999984,
+        "interesting": true,
+        "reason": "erasing writings with marker eraser",
+        "start_s": 485.32223800000065
+      },
+      {
+        "end_s": 495.3206310000005,
+        "interesting": true,
+        "reason": "erasing writings with marker eraser",
+        "start_s": 490.32143499999984
+      },
+      {
+        "end_s": 500.31983299999956,
+        "interesting": true,
+        "reason": "erasing writings with marker eraser",
+        "start_s": 495.3206310000005
+      },
+      {
+        "end_s": 505.3190400000003,
+        "interesting": true,
+        "reason": "erasing writings with marker eraser",
+        "start_s": 500.31983299999956
+      },
+      {
+        "end_s": 510.3182369999995,
+        "interesting": true,
+        "reason": "erasing writings with marker eraser",
+        "start_s": 505.3190400000003
+      },
+      {
+        "end_s": 515.3174369999997,
+        "interesting": true,
+        "reason": "erasing writings with marker eraser",
+        "start_s": 510.3182369999995
+      },
+      {
+        "end_s": 520.316632,
+        "interesting": false,
+        "reason": "holding whiteboard and marker while talking, no active manipulation",
+        "start_s": 515.3174369999997
+      },
+      {
+        "end_s": 525.315842,
+        "interesting": false,
+        "reason": "holding whiteboard/marker while talking, regrip only",
+        "start_s": 520.316632
+      },
+      {
+        "end_s": 530.2483819999998,
+        "interesting": false,
+        "reason": "holding whiteboard while talking, regrip only",
+        "start_s": 525.315842
+      },
+      {
+        "end_s": 532.3147210000006,
+        "interesting": false,
+        "reason": "holding whiteboard and marker while looking at peer",
+        "start_s": 527.3155360000001
+      },
+      {
+        "end_s": 537.3139210000008,
+        "interesting": false,
+        "reason": "holding whiteboard, touches own face while looking at peer",
+        "start_s": 532.3147210000006
+      },
+      {
+        "end_s": 542.313121000001,
+        "interesting": false,
+        "reason": "holding whiteboard, lowers hand while looking at peer",
+        "start_s": 537.3139210000008
+      },
+      {
+        "end_s": 547.3123180000002,
+        "interesting": true,
+        "reason": "raises whiteboard and tries to draw with marker",
+        "start_s": 542.313121000001
+      },
+      {
+        "end_s": 552.3115230000003,
+        "interesting": true,
+        "reason": "starts to draw on whiteboard with marker",
+        "start_s": 547.3123180000002
+      },
+      {
+        "end_s": 557.3107180000006,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 552.3115230000003
+      },
+      {
+        "end_s": 562.3099180000008,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 557.3107180000006
+      },
+      {
+        "end_s": 567.3091139999997,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 562.3099180000008
+      },
+      {
+        "end_s": 572.3083200000001,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 567.3091139999997
+      },
+      {
+        "end_s": 577.3075120000012,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 572.3083200000001
+      },
+      {
+        "end_s": 582.3067119999996,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 577.3075120000012
+      },
+      {
+        "end_s": 587.3059159999993,
+        "interesting": true,
+        "reason": "draws and erases on whiteboard with marker",
+        "start_s": 582.3067119999996
+      },
+      {
+        "end_s": 592.3051169999999,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 587.3059159999993
+      },
+      {
+        "end_s": 597.304322,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 592.3051169999999
+      },
+      {
+        "end_s": 602.3035170000003,
+        "interesting": true,
+        "reason": "draws and erases on whiteboard with marker",
+        "start_s": 597.304322
+      },
+      {
+        "end_s": 607.3027189999993,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 602.3035170000003
+      },
+      {
+        "end_s": 612.3019189999995,
+        "interesting": true,
+        "reason": "draws and erases on whiteboard with marker",
+        "start_s": 607.3027189999993
+      },
+      {
+        "end_s": 617.3011220000008,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 612.3019189999995
+      },
+      {
+        "end_s": 619.3674460000002,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 614.3682520000002
+      },
+      {
+        "end_s": 624.3666460000004,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 619.3674460000002
+      },
+      {
+        "end_s": 629.365851999999,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 624.3666460000004
+      },
+      {
+        "end_s": 634.3650550000002,
+        "interesting": true,
+        "reason": "erasing drawing with marker",
+        "start_s": 629.365851999999
+      },
+      {
+        "end_s": 639.3642540000001,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 634.3650550000002
+      },
+      {
+        "end_s": 644.3634529999999,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 639.3642540000001
+      },
+      {
+        "end_s": 649.3626530000001,
+        "interesting": true,
+        "reason": "erasing drawing with marker",
+        "start_s": 644.3634529999999
+      },
+      {
+        "end_s": 654.3618510000015,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 649.3626530000001
+      },
+      {
+        "end_s": 659.3610559999997,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 654.3618510000015
+      },
+      {
+        "end_s": 664.3602480000009,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 659.3610559999997
+      },
+      {
+        "end_s": 669.3594519999988,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 664.3602480000009
+      },
+      {
+        "end_s": 674.3586579999992,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 669.3594519999988
+      },
+      {
+        "end_s": 679.3578479999996,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 674.3586579999992
+      },
+      {
+        "end_s": 684.3570579999996,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 679.3578479999996
+      },
+      {
+        "end_s": 689.3562529999999,
+        "interesting": true,
+        "reason": "holds whiteboard in both hands while holding marker",
+        "start_s": 684.3570579999996
+      },
+      {
+        "end_s": 694.3554609999992,
+        "interesting": false,
+        "reason": "holding whiteboard while showing drawing to peer, no manipulation",
+        "start_s": 689.3562529999999
+      },
+      {
+        "end_s": 699.3546480000005,
+        "interesting": true,
+        "reason": "transfers whiteboard from right to left hand",
+        "start_s": 694.3554609999992
+      },
+      {
+        "end_s": 704.287198,
+        "interesting": false,
+        "reason": "holding whiteboard and marker, no active manipulation",
+        "start_s": 699.3546480000005
+      },
+      {
+        "end_s": 706.353532000001,
+        "interesting": false,
+        "reason": "gestures with marker while talking, holding items",
+        "start_s": 701.354335
+      },
+      {
+        "end_s": 711.3527370000011,
+        "interesting": true,
+        "reason": "erases the writing on whiteboard with marker",
+        "start_s": 706.353532000001
+      },
+      {
+        "end_s": 716.3519510000006,
+        "interesting": true,
+        "reason": "erases writing on whiteboard with marker",
+        "start_s": 711.3527370000011
+      },
+      {
+        "end_s": 721.351138,
+        "interesting": true,
+        "reason": "erasing writing on whiteboard with marker",
+        "start_s": 716.3519510000006
+      },
+      {
+        "end_s": 726.3503259999998,
+        "interesting": true,
+        "reason": "erases, repositions whiteboard, writes with marker",
+        "start_s": 721.351138
+      },
+      {
+        "end_s": 731.3495350000012,
+        "interesting": false,
+        "reason": "holding marker and whiteboard while talking, no manipulation",
+        "start_s": 726.3503259999998
+      },
+      {
+        "end_s": 736.3487299999997,
+        "interesting": false,
+        "reason": "holding marker and whiteboard while talking, no manipulation",
+        "start_s": 731.3495350000012
+      },
+      {
+        "end_s": 741.3479360000001,
+        "interesting": true,
+        "reason": "writes on whiteboard with marker",
+        "start_s": 736.3487299999997
+      },
+      {
+        "end_s": 746.3471289999998,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 741.3479360000001
+      },
+      {
+        "end_s": 751.3463339999998,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 746.3471289999998
+      },
+      {
+        "end_s": 756.3455379999996,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 751.3463339999998
+      },
+      {
+        "end_s": 761.3447340000002,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 756.3455379999996
+      },
+      {
+        "end_s": 766.3439330000001,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 761.3447340000002
+      },
+      {
+        "end_s": 771.3431330000003,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 766.3439330000001
+      },
+      {
+        "end_s": 776.342329000001,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 771.3431330000003
+      },
+      {
+        "end_s": 781.3415359999999,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 776.342329000001
+      },
+      {
+        "end_s": 786.3407320000006,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 781.3415359999999
+      },
+      {
+        "end_s": 791.2732799999994,
+        "interesting": true,
+        "reason": "draws on whiteboard with marker",
+        "start_s": 786.3407320000006
+      },
+      {
+        "end_s": 793.3396150000008,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 788.3404090000004
+      },
+      {
+        "end_s": 798.3388140000006,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 793.3396150000008
+      },
+      {
+        "end_s": 803.3380140000008,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 798.3388140000006
+      },
+      {
+        "end_s": 808.3372170000002,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 803.3380140000008
+      },
+      {
+        "end_s": 813.3364120000006,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 808.3372170000002
+      },
+      {
+        "end_s": 818.3356160000003,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 813.3364120000006
+      },
+      {
+        "end_s": 823.3348110000006,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 818.3356160000003
+      },
+      {
+        "end_s": 828.3340110000008,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 823.3348110000006
+      },
+      {
+        "end_s": 833.3332100000007,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 828.3340110000008
+      },
+      {
+        "end_s": 838.3324100000009,
+        "interesting": true,
+        "reason": "drawing on whiteboard, lifts and regrips whiteboard",
+        "start_s": 833.3332100000007
+      },
+      {
+        "end_s": 843.3316140000006,
+        "interesting": false,
+        "reason": "holding whiteboard and marker, no active manipulation",
+        "start_s": 838.3324100000009
+      },
+      {
+        "end_s": 848.3308150000012,
+        "interesting": false,
+        "reason": "holding whiteboard and marker, no active manipulation",
+        "start_s": 843.3316140000006
+      },
+      {
+        "end_s": 853.3300049999998,
+        "interesting": true,
+        "reason": "unhands the whiteboard marker with right hand",
+        "start_s": 848.3308150000012
+      },
+      {
+        "end_s": 858.3292140000012,
+        "interesting": true,
+        "reason": "puts whiteboard on thigh, draws with marker",
+        "start_s": 853.3300049999998
+      },
+      {
+        "end_s": 863.328418000001,
+        "interesting": true,
+        "reason": "repositions whiteboard and writes with marker",
+        "start_s": 858.3292140000012
+      },
+      {
+        "end_s": 868.3276079999996,
+        "interesting": true,
+        "reason": "writes on whiteboard with marker",
+        "start_s": 863.328418000001
+      },
+      {
+        "end_s": 873.3268129999997,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 868.3276079999996
+      },
+      {
+        "end_s": 878.2593589999997,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 873.3268129999997
+      },
+      {
+        "end_s": 880.3256960000017,
+        "interesting": true,
+        "reason": "drawing on whiteboard with marker",
+        "start_s": 875.326497
+      },
+      {
+        "end_s": 885.3248990000011,
+        "interesting": true,
+        "reason": "writes on whiteboard with marker",
+        "start_s": 880.3256960000017
+      },
+      {
+        "end_s": 890.3240949999999,
+        "interesting": true,
+        "reason": "writes on whiteboard, raises and regrips whiteboard",
+        "start_s": 885.3248990000011
+      },
+      {
+        "end_s": 895.3232970000008,
+        "interesting": false,
+        "reason": "acting like writing, touches chin, talks; no real manipulation",
+        "start_s": 890.3240949999999
+      },
+      {
+        "end_s": 900.3224919999993,
+        "interesting": false,
+        "reason": "acting like writing only, no real manipulation",
+        "start_s": 895.3232970000008
+      },
+      {
+        "end_s": 905.3216929999999,
+        "interesting": true,
+        "reason": "attaches the marker on side of whiteboard with right hand",
+        "start_s": 900.3224919999993
+      },
+      {
+        "end_s": 910.1209210000015,
+        "interesting": false,
+        "reason": "holding whiteboard while talking, touches face",
+        "start_s": 905.3216929999999
+      },
+      {
+        "end_s": 915.1201199999996,
+        "interesting": true,
+        "reason": "regrips and shows whiteboard, takes hand off",
+        "start_s": 910.1209210000015
+      },
+      {
+        "end_s": 919.5194250000004,
+        "interesting": false,
+        "reason": "holding whiteboard while talking and gesticulating",
+        "start_s": 915.1201199999996
+      },
+      {
+        "end_s": 924.5186240000003,
+        "interesting": false,
+        "reason": "holding whiteboard and own knee while talking",
+        "start_s": 919.5194250000004
+      },
+      {
+        "end_s": 929.5178250000008,
+        "interesting": true,
+        "reason": "puts whiteboard on table, fixes glasses, picks up whiteboard",
+        "start_s": 924.5186240000003
+      },
+      {
+        "end_s": 934.5170260000014,
+        "interesting": true,
+        "reason": "takes marker, wipes whiteboard with eraser",
+        "start_s": 929.5178250000008
+      },
+      {
+        "end_s": 939.5162240000009,
+        "interesting": true,
+        "reason": "wiping whiteboard with marker eraser",
+        "start_s": 934.5170260000014
+      },
+      {
+        "end_s": 944.5154170000005,
+        "interesting": true,
+        "reason": "wiping whiteboard with marker eraser",
+        "start_s": 939.5162240000009
+      },
+      {
+        "end_s": 949.5146270000005,
+        "interesting": true,
+        "reason": "wiping whiteboard with marker eraser",
+        "start_s": 944.5154170000005
+      },
+      {
+        "end_s": 954.5138170000009,
+        "interesting": true,
+        "reason": "wipes whiteboard, transfers whiteboard between hands",
+        "start_s": 949.5146270000005
+      },
+      {
+        "end_s": 958.5131829999991,
+        "interesting": true,
+        "reason": "transfers whiteboard from right to left hand",
+        "start_s": 954.5138170000009
+      },
+      {
+        "end_s": 961.5127059999995,
+        "interesting": true,
+        "reason": "removes cap of marker, inserts tip in cap",
+        "start_s": 958.5131829999991
+      },
+      {
+        "end_s": 965.2454400000006,
+        "interesting": true,
+        "reason": "attaches marker to whiteboard, transfers whiteboard between hands",
+        "start_s": 961.5127059999995
+      },
+      {
+        "end_s": 967.3117700000003,
+        "interesting": true,
+        "reason": "places whiteboard on table, grabs plastic",
+        "start_s": 962.3125730000011
+      },
+      {
+        "end_s": 972.3109760000007,
+        "interesting": true,
+        "reason": "passes plastic to other hand, stands and walks",
+        "start_s": 967.3117700000003
+      },
+      {
+        "end_s": 977.310171000001,
+        "interesting": true,
+        "reason": "passes plastic to other hand while walking",
+        "start_s": 972.3109760000007
+      },
+      {
+        "end_s": 982.3093769999996,
+        "interesting": true,
+        "reason": "opens kitchen cabinet, throws plastic in trash bin",
+        "start_s": 977.310171000001
+      },
+      {
+        "end_s": 987.3085730000003,
+        "interesting": true,
+        "reason": "throws plastic, closes kitchen cabinet",
+        "start_s": 982.3093769999996
+      },
+      {
+        "end_s": 992.3077710000016,
+        "interesting": false,
+        "reason": "walking and pointing, no manipulation",
+        "start_s": 987.3085730000003
+      },
+      {
+        "end_s": 997.306971,
+        "interesting": false,
+        "reason": "walking, adjusting eyeglasses, stops; no object manipulation",
+        "start_s": 992.3077710000016
+      },
+      {
+        "end_s": 1002.3061770000004,
+        "interesting": false,
+        "reason": "standing, looking behind TV and around room",
+        "start_s": 997.306971
+      },
+      {
+        "end_s": 1007.3053720000007,
+        "interesting": false,
+        "reason": "standing then walking and turning, no manipulation",
+        "start_s": 1002.3061770000004
+      },
+      {
+        "end_s": 1012.3045750000001,
+        "interesting": false,
+        "reason": "sits down on a chair, no manipulation",
+        "start_s": 1007.3053720000007
+      },
+      {
+        "end_s": 1017.3037769999992,
+        "interesting": false,
+        "reason": "sitting with feet floating and hands raised, no manipulation",
+        "start_s": 1012.3045750000001
+      },
+      {
+        "end_s": 1022.3029750000023,
+        "interesting": false,
+        "reason": "sitting, raises and lowers hands, no manipulation",
+        "start_s": 1017.3037769999992
+      },
+      {
+        "end_s": 1027.3021669999998,
+        "interesting": false,
+        "reason": "sitting then attempts to stand up, no manipulation",
+        "start_s": 1022.3029750000023
+      },
+      {
+        "end_s": 1032.3013790000005,
+        "interesting": false,
+        "reason": "stands, taps bed; momentary tap, no object manipulation",
+        "start_s": 1027.3021669999998
+      },
+      {
+        "end_s": 1037.3005780000021,
+        "interesting": false,
+        "reason": "taps bed and walks, places hand on door knob; no manipulation",
+        "start_s": 1032.3013790000005
+      },
+      {
+        "end_s": 1042.2997720000021,
+        "interesting": true,
+        "reason": "opens and closes bedroom closet",
+        "start_s": 1037.3005780000021
+      },
+      {
+        "end_s": 1047.298976,
+        "interesting": true,
+        "reason": "attempts to open bedroom closet, touches it",
+        "start_s": 1042.2997720000021
+      },
+      {
+        "end_s": 1052.2981720000007,
+        "interesting": false,
+        "reason": "rests hand on closet, fixes glasses, walks; no manipulation",
+        "start_s": 1047.298976
+      },
+      {
+        "end_s": 1054.364506,
+        "interesting": true,
+        "reason": "switches on the light with right hand",
+        "start_s": 1049.365312
+      },
+      {
+        "end_s": 1059.363706000002,
+        "interesting": false,
+        "reason": "walking, standing, gesturing with hands",
+        "start_s": 1054.364506
+      },
+      {
+        "end_s": 1064.362906000002,
+        "interesting": true,
+        "reason": "opens the drawer with both hands",
+        "start_s": 1059.363706000002
+      },
+      {
+        "end_s": 1069.3621050000002,
+        "interesting": true,
+        "reason": "closes drawer and opens another drawer",
+        "start_s": 1064.362906000002
+      },
+      {
+        "end_s": 1074.3613050000004,
+        "interesting": true,
+        "reason": "closes drawer and opens another drawer",
+        "start_s": 1069.3621050000002
+      },
+      {
+        "end_s": 1079.3605079999998,
+        "interesting": true,
+        "reason": "closes the drawer with both hands",
+        "start_s": 1074.3613050000004
+      },
+      {
+        "end_s": 1084.3597050000008,
+        "interesting": false,
+        "reason": "standing, turning, gesturing while talking",
+        "start_s": 1079.3605079999998
+      },
+      {
+        "end_s": 1089.3589150000007,
+        "interesting": false,
+        "reason": "turning and walking sideways, no manipulation",
+        "start_s": 1084.3597050000008
+      },
+      {
+        "end_s": 1094.3581040000008,
+        "interesting": true,
+        "reason": "touches the lamp with right hand",
+        "start_s": 1089.3589150000007
+      },
+      {
+        "end_s": 1099.3573070000002,
+        "interesting": false,
+        "reason": "raises/lowers hands then walks, no manipulation",
+        "start_s": 1094.3581040000008
+      },
+      {
+        "end_s": 1104.3565070000004,
+        "interesting": false,
+        "reason": "walking and gesturing, no manipulation",
+        "start_s": 1099.3573070000002
+      },
+      {
+        "end_s": 1109.355706000002,
+        "interesting": true,
+        "reason": "attempts to hold the door with right hand",
+        "start_s": 1104.3565070000004
+      },
+      {
+        "end_s": 1114.3549070000008,
+        "interesting": true,
+        "reason": "pushes restroom door, switches on light",
+        "start_s": 1109.355706000002
+      },
+      {
+        "end_s": 1119.3541130000012,
+        "interesting": true,
+        "reason": "touches sink counter, holds door, opens drawer",
+        "start_s": 1114.3549070000008
+      },
+      {
+        "end_s": 1124.4199669999998,
+        "interesting": false,
+        "reason": "holding door but mostly gesturing with right hand while talking",
+        "start_s": 1119.3541130000012
+      },
+      {
+        "end_s": 1129.3525069999996,
+        "interesting": true,
+        "reason": "closes drawer, opens cabinet with right hand",
+        "start_s": 1124.353312000001
+      },
+      {
+        "end_s": 1134.3517089999987,
+        "interesting": false,
+        "reason": "holding door but gesturing with right hand, no manipulation",
+        "start_s": 1129.3525069999996
+      },
+      {
+        "end_s": 1139.2842519999995,
+        "interesting": true,
+        "reason": "closes cabinet, switches off light",
+        "start_s": 1134.3517089999987
+      },
+      {
+        "end_s": 1141.3505910000003,
+        "interesting": true,
+        "reason": "turns off light switch with left hand",
+        "start_s": 1136.351391000002
+      },
+      {
+        "end_s": 1146.3497910000006,
+        "interesting": false,
+        "reason": "walking in hallway then stops to talk to peer",
+        "start_s": 1141.3505910000003
+      },
+      {
+        "end_s": 1149.3493049999997,
+        "interesting": false,
+        "reason": "standing, walking backward, talking; no manipulation",
+        "start_s": 1146.3497910000006
+      },
+      {
+        "end_s": 1152.6821049999999,
+        "interesting": false,
+        "reason": "standing and talking; peer adjusts device, no own manipulation",
+        "start_s": 1149.3493049999997
+      }
+    ]
+  }
+}

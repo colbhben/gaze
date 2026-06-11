@@ -1,0 +1,8 @@
+{"datasets":{
+  "ego-exo4d":["cmu_bike01_4","fair_cooking_05_4","iiith_cooking_01_1"],
+  "egome":["CF3-A4-20240802_User1_240802093150","CF3-A7-20240802_User1_240802093940","CF3-A7-20240802_User1_240802094111"],
+  "egtea":["OP03-R01-PastaSalad-100720-102010-F002414-F002452","P02-R01-PastaSalad-1007203-1008361-F024169-F024204","OP01-R01-PastaSalad-1004110-1021110-F024057-F024548"],
+  "holoassist":["R004-7July-GoPro","R005-7July-GoPro","R013-7July-Nespresso"],
+  "nymeria":["20230607_s0_james_johnson_act2_yhbvpa","20230607_s0_james_johnson_act3_ifj2gc","20230607_s1_barbara_wheeler_act0_cvxtsi"],
+  "hd-epic":["P04-20240413-142619","P05-20240423-170021","P06-20240510-090328"]
+}}
