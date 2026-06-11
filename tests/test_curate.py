@@ -224,6 +224,55 @@ class TestDatasetFilters(unittest.TestCase):
         self.assertTrue(exceeded)  # valid 0.0 -> 0.5 gap = 0.5
 
 
+class TestPullerLocalRoot(unittest.TestCase):
+    """local_root (e.g. /nfs on the data host) reads sources IN PLACE -- no copy,
+    and the in-place source is never owned (so cleanup can't delete the mount)."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = Path(tempfile.mkdtemp(prefix="gaze_puller_test_"))
+        self.mount = self.tmp / "mount"
+        (self.mount / "sub").mkdir(parents=True)
+        self.src = self.mount / "sub" / "video.mp4"
+        self.src.write_bytes(b"x" * 1024)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_pull_reads_in_place_no_copy(self):
+        from src.gaze.curate import Puller
+        p = Puller(local_root=self.mount, workdir=self.tmp / "work")
+        got = p.pull("sub/video.mp4")
+        # returns the mount path directly, not a copy under workdir
+        self.assertEqual(got.resolve(), self.src.resolve())
+        self.assertFalse((self.tmp / "work" / "sub" / "video.mp4").exists())
+
+    def test_in_place_source_not_owned(self):
+        from src.gaze.curate import Puller
+        p = Puller(local_root=self.mount, workdir=self.tmp / "work")
+        got = p.pull("sub/video.mp4")
+        self.assertFalse(p.owns(got))  # never delete the read-only mount source
+
+    def test_workdir_outputs_are_owned(self):
+        from src.gaze.curate import Puller
+        p = Puller(local_root=self.mount, workdir=self.tmp / "work")
+        (p.workdir / "seg0.mp4").write_bytes(b"y")
+        self.assertTrue(p.owns(p.workdir / "seg0.mp4"))
+
+    def test_missing_local_source_raises(self):
+        from src.gaze.curate import Puller
+        p = Puller(local_root=self.mount, workdir=self.tmp / "work")
+        with self.assertRaises(FileNotFoundError):
+            p.pull("sub/nope.mp4")
+
+    def test_exists_and_glob_local(self):
+        from src.gaze.curate import Puller
+        p = Puller(local_root=self.mount, workdir=self.tmp / "work")
+        self.assertTrue(p.exists("sub/video.mp4"))
+        self.assertFalse(p.exists("sub/nope.mp4"))
+        self.assertEqual(p.glob("sub/*.mp4"), ["sub/video.mp4"])
+
+
 class TestPathHelpers(unittest.TestCase):
     def test_path_get_list_index(self):
         rec = {"Step timestamp": [1.5, 9.0]}

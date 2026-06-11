@@ -549,8 +549,9 @@ def pull_and_trim(
         raise RuntimeError(f"ffmpeg trim failed for {data.slug}: {r.stderr[-800:]}")
 
     # Delete the big full mp4 (keep only small ones <5MB, e.g. egome/egtea).
+    # NEVER delete an in-place local_root/nfs source -- only our own scp'd temp copy.
     try:
-        if full.exists() and full.stat().st_size > 5_000_000:
+        if puller.owns(full) and full.exists() and full.stat().st_size > 5_000_000:
             full.unlink()
     except OSError:
         pass

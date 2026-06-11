@@ -1329,8 +1329,9 @@ def extract_episode(
     bundle.emitted = not reasons
     bundle.emit_reason = None if bundle.emitted else "; ".join(reasons)
 
-    # --- delete large pulled mp4s --- #
-    if pulled_mp4 is not None and not keep_mp4:
+    # --- delete large pulled mp4s (only our own scp'd temp copies, never the
+    #     in-place local_root/nfs source, which is read-only) --- #
+    if pulled_mp4 is not None and not keep_mp4 and puller.owns(pulled_mp4):
         try:
             if pulled_mp4.exists() and pulled_mp4.stat().st_size > 5_000_000:
                 pulled_mp4.unlink()

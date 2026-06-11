@@ -1271,8 +1271,9 @@ def _build_molmoact_episode(
         ))
 
     # Delete the big pulled source (keep small ones like egome/egtea harmlessly).
+    # NEVER delete an in-place local_root/nfs source -- only our own scp'd temp copy.
     try:
-        if full_src.exists() and full_src.stat().st_size > 5_000_000:
+        if puller.owns(full_src) and full_src.exists() and full_src.stat().st_size > 5_000_000:
             full_src.unlink()
     except OSError:
         pass

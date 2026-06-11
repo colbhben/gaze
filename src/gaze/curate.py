@@ -110,19 +110,44 @@ class Puller:
         return out
 
     def pull(self, rel: str, *, binary: bool = True) -> Path:
-        """Copy a single source file local; return the local path (cached)."""
+        """Make a source file readable locally; return its path (cached).
+
+        When ``local_root`` is set (the source is already on a locally-visible mount,
+        e.g. ``/nfs`` on the data host where the FULL run executes), the file is read
+        IN PLACE -- we return ``local_root/rel`` directly with NO copy. This avoids
+        duplicating multi-GB mp4s during the full extraction; ffmpeg/ffprobe read the
+        mount directly. The returned path is then NOT owned by this Puller (see
+        :meth:`owns`), so callers must never delete it -- the mount is read-only.
+
+        Otherwise (ssh mode) the file is scp'd into ``workdir`` and cached there; that
+        copy IS owned and may be deleted by the caller after use.
+        """
+        if self.local_root:
+            src = self.local_root / rel
+            if not src.exists():
+                raise FileNotFoundError(f"source not found on local mount: {src}")
+            return src
         dest = self.workdir / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
         if dest.exists() and dest.stat().st_size > 0:
             return dest
-        if self.local_root:
-            shutil.copy2(self.local_root / rel, dest)
-        else:
-            subprocess.run(
-                ["scp", "-q", f"{self.ssh_host}:{self.remote_path(rel)}", str(dest)],
-                check=True,
-            )
+        subprocess.run(
+            ["scp", "-q", f"{self.ssh_host}:{self.remote_path(rel)}", str(dest)],
+            check=True,
+        )
         return dest
+
+    def owns(self, path: str | Path) -> bool:
+        """True if ``path`` is a temp copy this Puller created under ``workdir``.
+
+        Used to gate destructive cleanup: a pulled scp copy under ``workdir`` is safe
+        to delete, but an in-place ``local_root`` source (the read-only mount) is NOT.
+        """
+        try:
+            Path(path).resolve().relative_to(self.workdir.resolve())
+            return True
+        except (ValueError, OSError):
+            return False
 
     def read_text(self, rel: str, *, max_bytes: int | None = None) -> str:
         """Read a (small) source text file without caching a full copy."""
