@@ -246,28 +246,43 @@ def resample_track_linear(
 # =========================================================================== #
 # Projected gaze track in source pixels (reuses the validated overlay projection).
 # =========================================================================== #
-def projected_gaze_track(data: EpisodeData, puller: Puller) -> tuple[list[float], list[float], list[float], list[bool]]:
-    """Project every gaze sample to source-mp4 pixels on the video clock.
+def projected_gaze_track(
+    data: EpisodeData, puller: Puller, *, project_max_hz: float | None = None,
+) -> tuple[list[float], list[float], list[float], list[bool]]:
+    """Project gaze samples to source-mp4 pixels on the video clock.
 
     Returns ascending ``(times_s, xs_px, ys_px, in_frame)`` keeping only samples
     that reconciled to a video-clock time AND projected to a pixel. Reuses
     ``overlay.build_projection_context`` (loads calibration once) + ``project_one``.
+
+    Projection can be EXPENSIVE for Aria CPF (projectaria_tools per-sample: ~60s for
+    a 30k-sample nymeria take). Since the projected track is only ever linearly
+    resampled onto a low-fps grid downstream, ``project_max_hz`` subsamples the raw
+    rows by time to at most that rate BEFORE projecting (e.g. 12 Hz for a 5 fps grid
+    -> ~5x fewer projections, accurate interpolation preserved). None = project all.
     """
     gaze_times = reconciled_gaze_times(data)
     ctx = build_projection_context(data, puller)
     w = data.video.get("width")
     h = data.video.get("height")
+    min_dt = (1.0 / project_max_hz) if project_max_hz else 0.0
     triples: list[tuple[float, float, float, bool]] = []
-    for row, tv in zip(data.gaze_rows, gaze_times):
-        if tv is None:
+    # rows are time-ordered after reconciliation; subsample by time before projecting.
+    pairs = sorted(
+        ((tv, row) for row, tv in zip(data.gaze_rows, gaze_times) if tv is not None),
+        key=lambda p: p[0],
+    )
+    last_t = None
+    for tv, row in pairs:
+        if min_dt and last_t is not None and (tv - last_t) < min_dt:
             continue
         proj = project_one(row, ctx)
         if proj is None:
             continue
+        last_t = tv
         x_px, y_px = proj
         inf = bool(w and h and 0 <= x_px <= w and 0 <= y_px <= h)
         triples.append((tv, x_px, y_px, inf))
-    triples.sort(key=lambda r: r[0])
     times = [r[0] for r in triples]
     xs = [r[1] for r in triples]
     ys = [r[2] for r in triples]
@@ -846,19 +861,26 @@ def build_training_manifest(
                 local_root=puller.local_root,
                 workdir=out_root / "_work" / _safe(f"{slug}__{episode_id}"),
             )
-            return _build_molmoact_episode(
+            import sys as _sys
+            print(f"[curate] start {slug}:{episode_id}", file=_sys.stderr, flush=True)
+            res = _build_molmoact_episode(
                 slug, episode_id, extra, out_root, ep_puller,
                 fps=fps, resolution=resolution, max_frames=max_frames,
                 max_clip_s=max_clip_s, merge_gap_s=merge_gap_s, min_clip_s=min_clip_s,
                 prompt=prompt, reuse_bundle=reuse_bundle,
                 interesting=interesting_maps.get(slug),
             )
+            print(f"[curate] done  {slug}:{episode_id} clips={len(res[0])}", file=_sys.stderr, flush=True)
+            return res
 
         if n_workers == 1 or len(jobs) <= 1:
             results = [run_job(j) for j in jobs]
         else:
+            results = []
             with concurrent.futures.ThreadPoolExecutor(max_workers=min(n_workers, len(jobs))) as ex:
-                results = list(ex.map(run_job, jobs))
+                futs = {ex.submit(run_job, j): j for j in jobs}
+                for fut in concurrent.futures.as_completed(futs):
+                    results.append(fut.result())
         for examples, rep in results:
             all_examples.extend(examples)
             rows_report.append(rep)
@@ -1096,8 +1118,10 @@ def _build_molmoact_episode(
         return [], {"dataset": slug, "episode": episode_id, "segments": 0,
                     "note": "no annotation-bounded segments"}
 
-    # Project the gaze track once (source px, video clock).
-    times, xs, ys, inf = projected_gaze_track(data, puller)
+    # Project the gaze track once (source px, video clock). Subsample raw samples to
+    # ~2.5x the grid fps before projecting (Aria CPF projection is ~60s for 30k
+    # samples; we only resample to `fps` downstream, so projecting all is wasteful).
+    times, xs, ys, inf = projected_gaze_track(data, puller, project_max_hz=max(8.0, 2.0 * fps))
     # Resample to the canonical fps grid over the whole episode (video clock).
     grid_dur = duration_s or (segments[-1]["end_s"] if segments else 0.0)
     resampled = resample_track_linear(
