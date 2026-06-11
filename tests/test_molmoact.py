@@ -231,7 +231,7 @@ class TestHierarchicalChop(unittest.TestCase):
         ]
 
     def test_coarse_fits_used_else_descend(self):
-        segs = chop_by_channels(self._channels(), max_clip_s=20, min_clip_s=1.0, duration_s=100)
+        segs = chop_by_channels(self._channels(), max_clip_s=20, drop_shorter_than_s=1.0, duration_s=100)
         by_ch = [(s["channel"], round(s["start_s"], 1), round(s["end_s"], 1)) for s in segs]
         # the 0-15 coarse span fits (<=20) -> used as a coarse clip with its text
         self.assertIn(("coarse", 0.0, 15.0), by_ch)
@@ -241,7 +241,7 @@ class TestHierarchicalChop(unittest.TestCase):
         self.assertTrue(all(s["end_s"] - s["start_s"] <= 20 + 1e-6 for s in segs))
 
     def test_clip_carries_driving_channel_text(self):
-        segs = chop_by_channels(self._channels(), max_clip_s=20, min_clip_s=1.0, duration_s=100)
+        segs = chop_by_channels(self._channels(), max_clip_s=20, drop_shorter_than_s=1.0, duration_s=100)
         coarse0 = next(s for s in segs if s["channel"] == "coarse" and s["start_s"] == 0.0)
         self.assertEqual(coarse0["text"], "grabs gopro")
         fine0 = next(s for s in segs if s["channel"] == "fine")
@@ -252,7 +252,7 @@ class TestHierarchicalChop(unittest.TestCase):
             {"name": "only", "kind": "interval", "mean_dur": 50.0,
              "spans": [{"start_s": 0.0, "end_s": 50.0, "text": "long"}]},
         ]
-        segs = chop_by_channels(chans, max_clip_s=20, min_clip_s=1.0, duration_s=50)
+        segs = chop_by_channels(chans, max_clip_s=20, drop_shorter_than_s=1.0, duration_s=50)
         self.assertTrue(all(s["end_s"] - s["start_s"] <= 20 + 1e-6 for s in segs))
         self.assertTrue(all(s["channel"] == "only" and s["text"] == "long" for s in segs))
         self.assertGreaterEqual(len(segs), 3)  # 50s / 20 -> 3 pieces
@@ -336,7 +336,7 @@ class TestChopIntegration(unittest.TestCase):
             {"start_s": 98.0, "end_s": 128.0, "point_s": None},
             {"start_s": 128.0, "end_s": 160.0, "point_s": None},
         ]
-        segs = chop_into_segments(spans, max_clip_s=20, merge_gap_s=2.0, min_clip_s=1.0, duration_s=1001)
+        segs = chop_into_segments(spans, max_clip_s=20, merge_gap_s=2.0, drop_shorter_than_s=1.0, duration_s=1001)
         self.assertTrue(segs)
         self.assertGreaterEqual(segs[0]["start_s"], 98.0)
         self.assertTrue(all(s["end_s"] - s["start_s"] <= 20 + 1e-6 for s in segs))

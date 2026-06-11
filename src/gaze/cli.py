@@ -439,7 +439,7 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
     build_training.add_argument("--max-frames", metavar="N", type=int, default=0, help="(molmoact2) OPTIONAL cap: 0/unset = one gaze point per video frame (gaze_hz==fps, no cap). N>0 caps clips to N/fps seconds. Default: 0 (unlimited).")
     build_training.add_argument("--max-clip-duration-s", metavar="S", type=float, default=20.0, help="(molmoact2) max clip/segment length in seconds; long takes split at annotation bounds. Default: 20.")
     build_training.add_argument("--merge-gap-s", metavar="S", type=float, default=1.0, help="(molmoact2) merge annotation spans separated by <= this gap. Default: 1.")
-    build_training.add_argument("--min-clip-s", metavar="S", type=float, default=1.0, help="(molmoact2) drop chopped segments shorter than this. Default: 1.")
+    build_training.add_argument("--drop-shorter-than-s", metavar="S", type=float, default=1.0, help="(molmoact2) drop chopped segments shorter than this. Default: 1.")
     build_training.add_argument("--min-duration-s", metavar="S", type=float, default=0.0, help="(molmoact2) coalesce a clip shorter than this with the next clip(s) (text -> numbered list), up to --max-clip-duration-s. 0/unset = disabled. Default: 0.")
     build_training.add_argument("--prompt", metavar="TEXT", default="Point to where the camera wearer is looking.", help="(molmoact2) gaze prompt text.")
     build_training.add_argument("--workers", metavar="N", type=int, help="(molmoact2) parallel episodes; default: CPU count.")
@@ -862,7 +862,7 @@ def cmd_curate_build_training(args: argparse.Namespace) -> int:
         window_s=args.window_seconds,
         max_clip_s=args.max_clip_duration_s,
         merge_gap_s=args.merge_gap_s,
-        min_clip_s=args.min_clip_s,
+        drop_shorter_than_s=args.drop_shorter_than_s,
         min_duration_s=args.min_duration_s,
         max_frames=args.max_frames,
         prompt=args.prompt,

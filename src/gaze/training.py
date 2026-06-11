@@ -316,7 +316,7 @@ def chop_into_segments(
     *,
     max_clip_s: float,
     merge_gap_s: float = 1.0,
-    min_clip_s: float = 0.5,
+    drop_shorter_than_s: float = 0.5,
     duration_s: float | None = None,
 ) -> list[dict[str, Any]]:
     """Chop an episode into annotation-bounded clip segments on the video clock.
@@ -330,16 +330,16 @@ def chop_into_segments(
       * any merged region longer than ``max_clip_s`` is split into <= ``max_clip_s``
         sub-segments, preferring to cut at an interior span boundary near the cut point
         (falling back to a hard cut at ``max_clip_s``),
-      * segments shorter than ``min_clip_s`` are dropped.
+      * segments shorter than ``drop_shorter_than_s`` are dropped.
 
     ``duration_s`` (video length) clamps the final segment end. Point annotations
-    (no end) contribute a [point - min_clip_s/2, point + min_clip_s/2] sliver so they
+    (no end) contribute a [point - drop_shorter_than_s/2, point + drop_shorter_than_s/2] sliver so they
     are not lost.
     """
     # 1. Normalize each span to an [a, b] interval on the video clock.
     intervals: list[tuple[float, float]] = []
     boundaries: set[float] = set()
-    half = min_clip_s / 2.0
+    half = drop_shorter_than_s / 2.0
     for s in spans:
         a = s.get("start_s")
         b = s.get("end_s")
@@ -349,7 +349,7 @@ def chop_into_segments(
         elif p is not None:
             lo, hi = float(p) - half, float(p) + half
         elif a is not None:
-            lo, hi = float(a), float(a) + min_clip_s
+            lo, hi = float(a), float(a) + drop_shorter_than_s
         else:
             continue
         if duration_s is not None:
@@ -383,13 +383,13 @@ def chop_into_segments(
         while hi - start > max_clip_s + 1e-6:
             hard_cut = start + max_clip_s
             # prefer the latest span boundary in (start, hard_cut] that leaves a
-            # segment >= min_clip_s; else hard cut.
-            candidates = [b for b in sorted_bounds if start + min_clip_s <= b <= hard_cut]
+            # segment >= drop_shorter_than_s; else hard cut.
+            candidates = [b for b in sorted_bounds if start + drop_shorter_than_s <= b <= hard_cut]
             cut = candidates[-1] if candidates else hard_cut
-            if cut - start >= min_clip_s:
+            if cut - start >= drop_shorter_than_s:
                 segments.append({"start_s": round(start, 6), "end_s": round(cut, 6)})
             start = cut
-        if hi - start >= min_clip_s:
+        if hi - start >= drop_shorter_than_s:
             segments.append({"start_s": round(start, 6), "end_s": round(hi, 6)})
     return segments
 
@@ -428,7 +428,7 @@ def chop_by_channels(
     channels: list[dict[str, Any]],
     *,
     max_clip_s: float,
-    min_clip_s: float = 1.0,
+    drop_shorter_than_s: float = 1.0,
     duration_s: float | None = None,
     _range: tuple[float, float] | None = None,
     _level: int = 0,
@@ -444,7 +444,7 @@ def chop_by_channels(
         restricted to that span's time range; if no finer channel exists, the span
         is hard-cut into <= ``max_clip_s`` pieces (carrying the coarse text).
     Each returned segment is ``{start_s, end_s, channel, text}``. Segments shorter
-    than ``min_clip_s`` are dropped.
+    than ``drop_shorter_than_s`` are dropped.
     """
     if not channels:
         return []
@@ -454,7 +454,7 @@ def chop_by_channels(
     segs: list[dict[str, Any]] = []
     for s in coarse["spans"]:
         lo, hi = max(s["start_s"], rng_lo), min(s["end_s"], rng_hi)
-        if hi - lo < min_clip_s:
+        if hi - lo < drop_shorter_than_s:
             continue
         length = hi - lo
         if length <= max_clip_s + 1e-6:
@@ -462,21 +462,21 @@ def chop_by_channels(
                          "channel": coarse["name"], "text": s["text"]})
         elif finer:
             # descend: re-chop this too-long span with finer channels
-            sub = chop_by_channels(finer, max_clip_s=max_clip_s, min_clip_s=min_clip_s,
+            sub = chop_by_channels(finer, max_clip_s=max_clip_s, drop_shorter_than_s=drop_shorter_than_s,
                                    duration_s=duration_s, _range=(lo, hi), _level=_level + 1)
             if sub:
                 segs.extend(sub)
             else:
                 # finer channels had no coverage here -> hard-cut with coarse text
-                segs.extend(_hard_cut(lo, hi, max_clip_s, min_clip_s, coarse["name"], s["text"]))
+                segs.extend(_hard_cut(lo, hi, max_clip_s, drop_shorter_than_s, coarse["name"], s["text"]))
         else:
             # finest channel, still too long -> hard-cut, carry the (finest) text
-            segs.extend(_hard_cut(lo, hi, max_clip_s, min_clip_s, coarse["name"], s["text"]))
+            segs.extend(_hard_cut(lo, hi, max_clip_s, drop_shorter_than_s, coarse["name"], s["text"]))
     segs.sort(key=lambda r: r["start_s"])
     return segs
 
 
-def _hard_cut(lo: float, hi: float, max_clip_s: float, min_clip_s: float,
+def _hard_cut(lo: float, hi: float, max_clip_s: float, drop_shorter_than_s: float,
               channel: str, text: str) -> list[dict[str, Any]]:
     out = []
     start = lo
@@ -484,7 +484,7 @@ def _hard_cut(lo: float, hi: float, max_clip_s: float, min_clip_s: float,
         out.append({"start_s": round(start, 6), "end_s": round(start + max_clip_s, 6),
                     "channel": channel, "text": text})
         start += max_clip_s
-    if hi - start >= min_clip_s:
+    if hi - start >= drop_shorter_than_s:
         out.append({"start_s": round(start, 6), "end_s": round(hi, 6), "channel": channel, "text": text})
     return out
 
@@ -862,7 +862,7 @@ def build_training_manifest(
     # MolmoAct2 / chopping knobs
     max_clip_s: float = 20.0,
     merge_gap_s: float = 1.0,
-    min_clip_s: float = 1.0,
+    drop_shorter_than_s: float = 1.0,
     min_duration_s: float = 0.0,
     max_frames: int = ma.DEFAULT_MAX_FRAMES,
     prompt: str = ma.DEFAULT_PROMPT,
@@ -952,7 +952,7 @@ def build_training_manifest(
             res = _build_molmoact_episode(
                 slug, episode_id, extra, out_root, ep_puller,
                 fps=fps, resolution=resolution, max_frames=max_frames,
-                max_clip_s=max_clip_s, merge_gap_s=merge_gap_s, min_clip_s=min_clip_s,
+                max_clip_s=max_clip_s, merge_gap_s=merge_gap_s, drop_shorter_than_s=drop_shorter_than_s,
                 min_duration_s=min_duration_s,
                 prompt=prompt, reuse_bundle=reuse_bundle,
                 interesting=interesting_maps.get(slug),
@@ -979,7 +979,7 @@ def build_training_manifest(
                 "output_format": "molmoact2", "fps": fps, "resolution": resolution,
                 "gaze_hz": fps, "points_per_video_frame": 1,
                 "max_frames": max_frames or "unlimited", "max_clip_s": max_clip_s,
-                "merge_gap_s": merge_gap_s, "min_clip_s": min_clip_s,
+                "merge_gap_s": merge_gap_s, "drop_shorter_than_s": drop_shorter_than_s,
                 "min_duration_s": min_duration_s, "workers": n_workers,
             },
         )
@@ -1160,7 +1160,7 @@ def _build_molmoact_episode(
     max_frames: int,
     max_clip_s: float,
     merge_gap_s: float,
-    min_clip_s: float,
+    drop_shorter_than_s: float,
     min_duration_s: float,
     prompt: str,
     reuse_bundle: bool,
@@ -1209,7 +1209,7 @@ def _build_molmoact_episode(
     # Hierarchical chop: coarsest channel that fits <= max_clip; else descend to finer.
     # Each segment carries the channel + text of the span that drove its boundaries.
     segments = chop_by_channels(
-        channels, max_clip_s=eff_max_clip_s, min_clip_s=min_clip_s, duration_s=duration_s or None,
+        channels, max_clip_s=eff_max_clip_s, drop_shorter_than_s=drop_shorter_than_s, duration_s=duration_s or None,
     )
     # Coalesce too-short clips with following clip(s) up to min_duration_s (text ->
     # numbered list). Disabled when min_duration_s <= 0.
