@@ -5,11 +5,18 @@ Builds ``Molmo2VideoPoint``-style training rows (confirmed against
 predict where the camera wearer is looking, per frame, over a short video clip.
 
 Confirmed MolmoAct2 / Molmo2 video-point format (from source):
-  * multi-frame video; video pointing standardizes on 2 fps (0.5 s grid);
+  * multi-frame video; the video-POINTING/track path defaults to 6 fps
+    (``TrackingDataset.VIDEO_FPS = 6``; 2 fps is the general-video path, not ours).
+    The only fps rule is integer divisibility -- ``sampling_fps`` must divide
+    ``video_fps`` (trivially true at our 1:1 ``gaze_hz == video_fps``), capped at
+    ``MAX_VIDEO_FPS = 10``. There is NO 0.5 s timestamp grid / divisibility assert
+    (verified against allenai/molmo2 ``olmo/data/video_loader.py`` +
+    ``*_video_track_datasets.py``, 2026-06-11);
   * per-frame frames preprocessed to 378x378 aspect-preserving (resize+pad);
   * points stored as RAW PIXEL ``{"x": float, "y": float}`` (one list per frame),
     NOT normalized and NOT <point> tokens (the model tokenizes internally);
-  * ``timestamps`` clip-relative on the ``1/fps`` grid;
+  * ``timestamps`` clip-relative plain float seconds = frame ``j`` at ``j/fps``
+    (no grid snapping);
   * example = ``message_list`` chat (user: text + {"type":"video"}; assistant: answer)
     with ``metadata{clip_start_time, clip_end_time}`` and ``style:"video_point"``.
 

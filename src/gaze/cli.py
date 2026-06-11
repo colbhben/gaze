@@ -425,7 +425,8 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
             "clips. output-format=qwen keeps the legacy fixed sliding-window single-point profile."
         ),
         epilog=(
-            "MolmoAct2 defaults: 2 fps, 378x378, max clip 20s, one gaze point per video frame.\n"
+            "Defaults: 2 fps (Molmo2 video-pointing path is natively 6 fps; any int <=10 is loader-valid),\n"
+            "378x378, max clip 20s, one gaze point per video frame.\n"
             "Examples:\n"
             "  gaze curate build-training-manifest\n"
             "  gaze curate build-training-manifest --datasets nymeria --interesting-map nymeria=/tmp/nym_map.json\n"
@@ -435,7 +436,7 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
     )
     build_training.add_argument("--output-format", choices=["molmoact2", "qwen"], default="molmoact2", help="Manifest format; default: molmoact2.")
     build_training.add_argument("--profile", metavar="NAME", default="qwen3-vl-gaze-5hz-392px", help="(qwen) canonical profile name.")
-    build_training.add_argument("--fps", metavar="HZ", type=float, default=2.0, help="Canonical sampling fps; ALL datasets resample down to this. Default: 2 (MolmoAct2).")
+    build_training.add_argument("--fps", metavar="HZ", type=float, default=2.0, help="Canonical sampling fps; ALL datasets resample down to this. Default: 2. NOTE: Molmo2's video-pointing/track path is natively 6 fps (TrackingDataset.VIDEO_FPS=6); any integer <=10 is loader-valid (no 0.5s grid constraint). Consider --fps 6 to match Molmo2's in-distribution pointing rate.")
     build_training.add_argument("--max-frames", metavar="N", type=int, default=0, help="(molmoact2) OPTIONAL cap: 0/unset = one gaze point per video frame (gaze_hz==fps, no cap). N>0 caps clips to N/fps seconds. Default: 0 (unlimited).")
     build_training.add_argument("--max-clip-duration-s", metavar="S", type=float, default=20.0, help="(molmoact2) max clip/segment length in seconds; long takes split at annotation bounds. Default: 20.")
     build_training.add_argument("--merge-gap-s", metavar="S", type=float, default=1.0, help="(molmoact2) merge annotation spans separated by <= this gap. Default: 1.")
