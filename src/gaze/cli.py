@@ -418,13 +418,14 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
         description=(
             "Default output-format=molmoact2: chop each episode into annotation-bounded clip "
             "SEGMENTS (capped at --max-clip-duration-s), materialize each as a resolution^2 @ fps "
-            "mp4, sample per-frame gaze (pixel points on the padded frame), and emit Molmo2VideoPoint "
-            "rows (message_list + per-frame points + timestamps), variable length padded to "
-            "--max-frames. dataset_filters (cull / exclude globs / gaze-gap) are honored. "
-            "output-format=qwen keeps the legacy fixed sliding-window single-point profile."
+            "mp4, and emit Molmo2VideoPoint rows (message_list + per-frame points + timestamps) "
+            "with gaze_hz == video_fps: EXACTLY ONE pixel gaze point per video frame (1:1, variable "
+            "length, no cap/pad). --max-frames>0 optionally caps clip length. dataset_filters "
+            "(cull / exclude globs / gaze-gap) are honored. --min-duration-s coalesces too-short "
+            "clips. output-format=qwen keeps the legacy fixed sliding-window single-point profile."
         ),
         epilog=(
-            "MolmoAct2 defaults: 2 fps, 378x378, max 8 frames, max clip 20s, per-frame pixel points.\n"
+            "MolmoAct2 defaults: 2 fps, 378x378, max clip 20s, one gaze point per video frame.\n"
             "Examples:\n"
             "  gaze curate build-training-manifest\n"
             "  gaze curate build-training-manifest --datasets nymeria --interesting-map nymeria=/tmp/nym_map.json\n"
@@ -435,10 +436,11 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
     build_training.add_argument("--output-format", choices=["molmoact2", "qwen"], default="molmoact2", help="Manifest format; default: molmoact2.")
     build_training.add_argument("--profile", metavar="NAME", default="qwen3-vl-gaze-5hz-392px", help="(qwen) canonical profile name.")
     build_training.add_argument("--fps", metavar="HZ", type=float, default=2.0, help="Canonical sampling fps; ALL datasets resample down to this. Default: 2 (MolmoAct2).")
-    build_training.add_argument("--max-frames", metavar="N", type=int, default=8, help="(molmoact2) max frames per clip; clips pad up to this for batch consistency. Default: 8.")
+    build_training.add_argument("--max-frames", metavar="N", type=int, default=0, help="(molmoact2) OPTIONAL cap: 0/unset = one gaze point per video frame (gaze_hz==fps, no cap). N>0 caps clips to N/fps seconds. Default: 0 (unlimited).")
     build_training.add_argument("--max-clip-duration-s", metavar="S", type=float, default=20.0, help="(molmoact2) max clip/segment length in seconds; long takes split at annotation bounds. Default: 20.")
     build_training.add_argument("--merge-gap-s", metavar="S", type=float, default=1.0, help="(molmoact2) merge annotation spans separated by <= this gap. Default: 1.")
-    build_training.add_argument("--min-clip-s", metavar="S", type=float, default=1.0, help="(molmoact2) drop segments shorter than this. Default: 1.")
+    build_training.add_argument("--min-clip-s", metavar="S", type=float, default=1.0, help="(molmoact2) drop chopped segments shorter than this. Default: 1.")
+    build_training.add_argument("--min-duration-s", metavar="S", type=float, default=0.0, help="(molmoact2) coalesce a clip shorter than this with the next clip(s) (text -> numbered list), up to --max-clip-duration-s. 0/unset = disabled. Default: 0.")
     build_training.add_argument("--prompt", metavar="TEXT", default="Point to where the camera wearer is looking.", help="(molmoact2) gaze prompt text.")
     build_training.add_argument("--workers", metavar="N", type=int, help="(molmoact2) parallel episodes; default: CPU count.")
     build_training.add_argument("--num-frames", metavar="N", type=int, default=16, help="(qwen) frames per clip; default: 16.")
@@ -861,6 +863,7 @@ def cmd_curate_build_training(args: argparse.Namespace) -> int:
         max_clip_s=args.max_clip_duration_s,
         merge_gap_s=args.merge_gap_s,
         min_clip_s=args.min_clip_s,
+        min_duration_s=args.min_duration_s,
         max_frames=args.max_frames,
         prompt=args.prompt,
         interesting_maps=interesting_maps,

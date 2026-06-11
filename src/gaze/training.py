@@ -489,6 +489,75 @@ def _hard_cut(lo: float, hi: float, max_clip_s: float, min_clip_s: float,
     return out
 
 
+def _numbered_text(texts: list[str]) -> str:
+    """Combine multiple annotation texts into a single numbered-list label.
+
+    One text -> returned unchanged; many -> "1) A 2) B 3) C". Empty/blank texts are
+    skipped; consecutive duplicates are collapsed (a coalesced run of the same action
+    reads as one item rather than "1) walk 2) walk").
+    """
+    clean: list[str] = []
+    for t in texts:
+        s = str(t).strip() if t is not None else ""
+        if not s:
+            continue
+        if clean and clean[-1] == s:
+            continue
+        clean.append(s)
+    if not clean:
+        return ""
+    if len(clean) == 1:
+        return clean[0]
+    return " ".join(f"{i + 1}) {t}" for i, t in enumerate(clean))
+
+
+def coalesce_short_segments(
+    segments: list[dict[str, Any]],
+    *,
+    min_duration_s: float,
+    max_clip_s: float,
+) -> list[dict[str, Any]]:
+    """Coalesce too-short clips with the following clip(s) to reach ``min_duration_s``.
+
+    When a segment's duration ``(end_s - start_s)`` is below ``min_duration_s`` we
+    extend it to absorb the NEXT segment(s) in time order, combining their texts into
+    a numbered list (:func:`_numbered_text`). Coalescing stops once the merged clip
+    reaches ``min_duration_s`` or absorbing the next would exceed ``max_clip_s`` (the
+    hard ceiling always wins). A trailing short segment with nothing left to merge is
+    kept as-is. ``min_duration_s <= 0`` disables this (returns ``segments`` unchanged).
+
+    The merged segment keeps the FIRST segment's driving ``channel``; its ``text`` is
+    the numbered concatenation of every absorbed segment's text. Operates on the
+    already-chopped, video-clock segment list; assumes ``segments`` is sorted by start.
+    """
+    if min_duration_s <= 0 or not segments:
+        return segments
+    segs = sorted(segments, key=lambda s: s["start_s"])
+    out: list[dict[str, Any]] = []
+    i = 0
+    n = len(segs)
+    while i < n:
+        cur = dict(segs[i])
+        texts = [cur.get("text", "")]
+        j = i + 1
+        # Absorb following segments while we're still short AND the merge fits.
+        while (cur["end_s"] - cur["start_s"]) < min_duration_s - 1e-6 and j < n:
+            nxt = segs[j]
+            if (nxt["end_s"] - cur["start_s"]) > max_clip_s + 1e-6:
+                break  # absorbing would blow past the max-clip ceiling
+            cur["end_s"] = nxt["end_s"]
+            texts.append(nxt.get("text", ""))
+            j += 1
+        cur["text"] = _numbered_text(texts)
+        if j > i + 1:
+            cur["coalesced"] = j - i  # how many source segments merged (provenance)
+        cur["start_s"] = round(cur["start_s"], 6)
+        cur["end_s"] = round(cur["end_s"], 6)
+        out.append(cur)
+        i = j if j > i else i + 1
+    return out
+
+
 # =========================================================================== #
 # Annotation unification + active-at-anchor lookup (active_interval sample_mode).
 # =========================================================================== #
@@ -556,6 +625,20 @@ def _run(cmd: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True)
 
 
+def _probe_nframes(path: Path) -> int:
+    """Exact decoded frame count of an mp4 (so frame<->gaze-point mapping is 1:1).
+
+    Counts packets on the video stream (accurate for the short, freshly-encoded clips
+    we emit; the index read is cheap). Returns 0 on failure.
+    """
+    r = _run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_packets",
+              "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", str(path)])
+    try:
+        return int((r.stdout or "0").strip().split(",")[0])
+    except (ValueError, IndexError):
+        return 0
+
+
 def resample_segment_from_local(
     full_src: Path,
     out_path: Path,
@@ -570,7 +653,8 @@ def resample_segment_from_local(
     Single ffmpeg pass: seek to ``start_s``, take ``seg_len`` seconds, resample to
     ``side``x``side`` aspect-preserving pad at ``fps``, h264. Used by the molmoact2
     path which pulls the big source ONCE and trims every segment from it (vs the
-    per-segment re-pull the legacy window path did).
+    per-segment re-pull the legacy window path did). Returns the EXACT encoded frame
+    count (``nb_frames``) so the gaze emitter can place one point per real video frame.
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
     vf = (
@@ -588,7 +672,8 @@ def resample_segment_from_local(
         raise RuntimeError(f"segment resample failed: {r.stderr[-600:]}")
     meta = ov._probe(out_path)
     return {"path": str(out_path), "width": meta["width"], "height": meta["height"],
-            "fps": fps, "duration_s": meta.get("duration"), "start_s": start_s}
+            "fps": fps, "duration_s": meta.get("duration"), "start_s": start_s,
+            "nb_frames": _probe_nframes(out_path)}
 
 
 def resample_episode_video(
@@ -778,6 +863,7 @@ def build_training_manifest(
     max_clip_s: float = 20.0,
     merge_gap_s: float = 1.0,
     min_clip_s: float = 1.0,
+    min_duration_s: float = 0.0,
     max_frames: int = ma.DEFAULT_MAX_FRAMES,
     prompt: str = ma.DEFAULT_PROMPT,
     interesting_maps: dict[str, dict[str, Any]] | None = None,
@@ -867,6 +953,7 @@ def build_training_manifest(
                 slug, episode_id, extra, out_root, ep_puller,
                 fps=fps, resolution=resolution, max_frames=max_frames,
                 max_clip_s=max_clip_s, merge_gap_s=merge_gap_s, min_clip_s=min_clip_s,
+                min_duration_s=min_duration_s,
                 prompt=prompt, reuse_bundle=reuse_bundle,
                 interesting=interesting_maps.get(slug),
             )
@@ -890,8 +977,10 @@ def build_training_manifest(
             schema=ma.MOLMOACT_SCHEMA,
             report_meta={
                 "output_format": "molmoact2", "fps": fps, "resolution": resolution,
-                "max_frames": max_frames, "max_clip_s": max_clip_s,
-                "merge_gap_s": merge_gap_s, "min_clip_s": min_clip_s, "workers": n_workers,
+                "gaze_hz": fps, "points_per_video_frame": 1,
+                "max_frames": max_frames or "unlimited", "max_clip_s": max_clip_s,
+                "merge_gap_s": merge_gap_s, "min_clip_s": min_clip_s,
+                "min_duration_s": min_duration_s, "workers": n_workers,
             },
         )
 
@@ -1072,6 +1161,7 @@ def _build_molmoact_episode(
     max_clip_s: float,
     merge_gap_s: float,
     min_clip_s: float,
+    min_duration_s: float,
     prompt: str,
     reuse_bundle: bool,
     interesting: dict[str, Any] | None,
@@ -1109,10 +1199,23 @@ def _build_molmoact_episode(
     if ep_interesting:
         channels = _filter_channels_interesting(channels, ep_interesting)
 
+    # Optional Molmo fixed-length cap: max_frames>0 means no clip may exceed
+    # max_frames/fps seconds (keeps the 1:1 frame<->point map within the cap). The
+    # tighter of (user max_clip_s, frame cap) wins.
+    eff_max_clip_s = max_clip_s
+    if max_frames and max_frames > 0:
+        eff_max_clip_s = min(max_clip_s, max_frames / fps)
+
     # Hierarchical chop: coarsest channel that fits <= max_clip; else descend to finer.
     # Each segment carries the channel + text of the span that drove its boundaries.
     segments = chop_by_channels(
-        channels, max_clip_s=max_clip_s, min_clip_s=min_clip_s, duration_s=duration_s or None,
+        channels, max_clip_s=eff_max_clip_s, min_clip_s=min_clip_s, duration_s=duration_s or None,
+    )
+    # Coalesce too-short clips with following clip(s) up to min_duration_s (text ->
+    # numbered list). Disabled when min_duration_s <= 0.
+    n_before_coalesce = len(segments)
+    segments = coalesce_short_segments(
+        segments, min_duration_s=min_duration_s, max_clip_s=eff_max_clip_s,
     )
     if not segments:
         return [], {"dataset": slug, "episode": episode_id, "segments": 0,
@@ -1141,7 +1244,7 @@ def _build_molmoact_episode(
         seg_len = seg_end - seg_start
         video_rel = f"videos/{slug}/{_safe(episode_id)}__seg{k}.mp4"
         try:
-            resample_segment_from_local(
+            vmeta = resample_segment_from_local(
                 full_src, out_root / video_rel,
                 start_s=seg_start, seg_len=seg_len, fps=fps, side=resolution,
             )
@@ -1149,9 +1252,12 @@ def _build_molmoact_episode(
             examples.append({"dataset": slug, "episode_id": episode_id, "seg_index": k,
                              "error": f"video: {exc}"})
             continue
+        # gaze_hz == video_fps: one gaze point per REAL video frame. Use the EXACT
+        # encoded frame count so points[j] <-> video frame j is a true 1:1 index map.
+        n_frames = vmeta.get("nb_frames") or int(round(seg_len * fps))
         frames, num_real = ma.sample_segment_frames(
             resampled.times_s, resampled.px, resampled.py, resampled.in_frame, resampled.valid,
-            seg_start_s=seg_start, seg_end_s=seg_end, fps=fps, max_frames=max_frames, pad=pad,
+            seg_start_s=seg_start, seg_end_s=seg_end, fps=fps, n_frames=n_frames, pad=pad,
         )
         if num_real == 0:
             continue
@@ -1159,7 +1265,7 @@ def _build_molmoact_episode(
         examples.append(ma.build_molmoact_row(
             dataset=slug, episode_id=episode_id, seg_index=k, video_rel=video_rel,
             seg_start_s=seg_start, seg_end_s=seg_end, frames=frames, num_real=num_real,
-            fps=fps, max_frames=max_frames, side=resolution,
+            fps=fps, side=resolution,
             annotation_text=seg.get("text"), annotation_channel=seg.get("channel"),
             prompt=prompt,
         ))
@@ -1172,9 +1278,15 @@ def _build_molmoact_episode(
         pass
 
     real = [e for e in examples if "error" not in e]
+    n_coalesced = sum(1 for s in segments if s.get("coalesced"))
+    frame_counts = [e.get("num_frames", 0) for e in real]
     rep = {
         "dataset": slug, "episode": episode_id,
         "segments": len(segments), "clips": len(real),
+        "segments_before_coalesce": n_before_coalesce, "coalesced_segments": n_coalesced,
+        "frames_min": min(frame_counts) if frame_counts else 0,
+        "frames_max": max(frame_counts) if frame_counts else 0,
+        "frames_total": sum(frame_counts),
         "source_dims": f"{src_w}x{src_h}", "duration_s": round(duration_s, 3),
         "projection": data.projection_method, "gaze_space": data.gaze_space,
         "interesting_filtered": interesting is not None,

@@ -13,7 +13,12 @@ from src.gaze.molmoact import (
     px_to_padded_px,
     sample_segment_frames,
 )
-from src.gaze.training import chop_into_segments, chop_by_channels
+from src.gaze.training import (
+    chop_into_segments,
+    chop_by_channels,
+    coalesce_short_segments,
+    _numbered_text,
+)
 
 
 class TestPadGeometry(unittest.TestCase):
@@ -38,110 +43,176 @@ class TestPadGeometry(unittest.TestCase):
 
 
 class TestSampleSegmentFrames(unittest.TestCase):
+    """gaze_hz == video_fps: one gaze point per real video frame (1:1, no cap/pad)."""
+
     def _grid(self, n, fps=2.0):
         gt = [i / fps for i in range(n)]
         gpx = [100.0 + i * 10 for i in range(n)]
         gpy = [100.0 + i * 5 for i in range(n)]
         return gt, gpx, gpy, [True] * n, [True] * n
 
-    def test_short_segment_pads(self):
+    def test_one_point_per_video_frame(self):
+        # 3s segment @2fps encoded to 6 frames -> exactly 6 points, all real.
         gt, gpx, gpy, gin, gv = self._grid(21)  # 0..10s @2fps
         pad = PadTransform(1408, 1408, 378)
         frames, num_real = sample_segment_frames(
             gt, gpx, gpy, gin, gv, seg_start_s=2.0, seg_end_s=5.0,
-            fps=2.0, max_frames=8, pad=pad,
+            fps=2.0, n_frames=6, pad=pad,
         )
-        self.assertEqual(num_real, 6)          # 2.0,2.5,3.0,3.5,4.0,4.5
-        self.assertEqual(len(frames), 8)       # padded to max_frames
-        self.assertTrue(all(frames[i].valid for i in range(6)))
-        self.assertFalse(any(frames[i].valid for i in range(6, 8)))
+        self.assertEqual(len(frames), 6)       # exactly n_frames, no pad
+        self.assertEqual(num_real, 6)
+        self.assertTrue(all(f.valid for f in frames))
+        # frame j is at clip-relative j/fps
+        self.assertAlmostEqual(frames[0].t_s, 0.0)
+        self.assertAlmostEqual(frames[1].t_s, 0.5)
+        self.assertAlmostEqual(frames[-1].t_s, 2.5)
 
-    def test_long_segment_caps(self):
+    def test_no_cap_long_segment(self):
+        # 20s segment @2fps -> 40 frames; NO cap, all 40 emitted (gaze_hz==fps).
         gt, gpx, gpy, gin, gv = self._grid(41)  # 0..20s @2fps
         pad = PadTransform(1408, 1408, 378)
         frames, num_real = sample_segment_frames(
             gt, gpx, gpy, gin, gv, seg_start_s=0.0, seg_end_s=20.0,
-            fps=2.0, max_frames=8, pad=pad,
+            fps=2.0, n_frames=40, pad=pad,
         )
-        self.assertEqual(num_real, 8)          # capped
-        self.assertEqual(len(frames), 8)
+        self.assertEqual(len(frames), 40)
+        self.assertEqual(num_real, 40)
 
-    def test_invalid_samples_masked(self):
+    def test_frame_alignment_uses_segment_start(self):
+        # gaze grid value at video-clock time = seg_start + j/fps. px = 100 + 10*grid_idx.
+        gt, gpx, gpy, gin, gv = self._grid(41)
+        pad = PadTransform(1408, 1408, 378)
+        frames, _ = sample_segment_frames(
+            gt, gpx, gpy, gin, gv, seg_start_s=2.0, seg_end_s=5.0,
+            fps=2.0, n_frames=6, pad=pad,
+        )
+        # seg_start=2.0 @2fps -> grid index base=4; frame0 reads grid[4] (px=140).
+        # px maps through pad (square source, side 378): x_px = 140/1408*378.
+        self.assertAlmostEqual(frames[0].x_px, round(140.0 / 1408 * 378, 1), places=1)
+        self.assertAlmostEqual(frames[1].x_px, round(150.0 / 1408 * 378, 1), places=1)
+
+    def test_invalid_samples_masked_keep_slot(self):
         gt, gpx, gpy, gin, gv = self._grid(11)
-        gv[4] = False  # invalid sample at index 4 (t=2.0)
+        gv[2] = False  # invalid grid sample at index 2 (t=1.0)
         pad = PadTransform(1408, 1408, 378)
         frames, num_real = sample_segment_frames(
             gt, gpx, gpy, gin, gv, seg_start_s=1.0, seg_end_s=4.0,
-            fps=2.0, max_frames=8, pad=pad,
+            fps=2.0, n_frames=6, pad=pad,
         )
-        # the t=2.0 frame should be present but invalid (point None)
-        invalid = [f for f in frames[:num_real] if not f.valid]
-        self.assertTrue(any(abs(f.t_s - 1.0) < 1e-6 for f in invalid))
+        # frame0 (seg_start=1.0 -> grid idx 2) is invalid but keeps its slot.
+        self.assertEqual(len(frames), 6)
+        self.assertFalse(frames[0].valid)
+        self.assertIsNone(frames[0].x_px)
+        self.assertEqual(num_real, 5)
 
-    def test_empty_segment(self):
-        gt, gpx, gpy, gin, gv = self._grid(5)
+    def test_frames_past_grid_end_are_masked(self):
+        # request more frames than the grid covers -> trailing slots masked, kept.
+        gt, gpx, gpy, gin, gv = self._grid(5)  # grid only to t=2.0
         pad = PadTransform(1408, 1408, 378)
         frames, num_real = sample_segment_frames(
-            gt, gpx, gpy, gin, gv, seg_start_s=50.0, seg_end_s=55.0,
-            fps=2.0, max_frames=8, pad=pad,
+            gt, gpx, gpy, gin, gv, seg_start_s=0.0, seg_end_s=5.0,
+            fps=2.0, n_frames=10, pad=pad,
+        )
+        self.assertEqual(len(frames), 10)
+        self.assertEqual(num_real, 5)          # grid had 5 samples
+        self.assertFalse(any(f.valid for f in frames[5:]))
+
+    def test_empty_grid(self):
+        pad = PadTransform(1408, 1408, 378)
+        frames, num_real = sample_segment_frames(
+            [], [], [], [], [], seg_start_s=0.0, seg_end_s=5.0,
+            fps=2.0, n_frames=10, pad=pad,
         )
         self.assertEqual(num_real, 0)
         self.assertEqual(frames, [])
 
+    def test_zero_frames(self):
+        gt, gpx, gpy, gin, gv = self._grid(5)
+        pad = PadTransform(1408, 1408, 378)
+        frames, num_real = sample_segment_frames(
+            gt, gpx, gpy, gin, gv, seg_start_s=0.0, seg_end_s=5.0,
+            fps=2.0, n_frames=0, pad=pad,
+        )
+        self.assertEqual(frames, [])
+        self.assertEqual(num_real, 0)
+
 
 class TestBuildRow(unittest.TestCase):
-    def test_row_shape(self):
+    def test_row_shape_one_point_per_frame(self):
         gt = [i / 2.0 for i in range(13)]
         gpx = [200.0 + i * 30 for i in range(13)]
         gpy = [200.0 + i * 20 for i in range(13)]
         pad = PadTransform(1408, 1408, 378)
+        # 3s @2fps -> 6 frames, all valid (gaze_hz == video_fps, no cap/pad).
         frames, num_real = sample_segment_frames(
             gt, gpx, gpy, [True] * 13, [True] * 13,
-            seg_start_s=0.0, seg_end_s=3.0, fps=2.0, max_frames=8, pad=pad,
+            seg_start_s=0.0, seg_end_s=3.0, fps=2.0, n_frames=6, pad=pad,
         )
         row = build_molmoact_row(
             dataset="ego-exo4d", episode_id="cmu_bike01_2", seg_index=0,
             video_rel="videos/ego-exo4d/cmu_bike01_2__seg0.mp4",
             seg_start_s=0.0, seg_end_s=3.0, frames=frames, num_real=num_real,
-            fps=2.0, max_frames=8, side=378,
+            fps=2.0, side=378,
             annotation_text="installs a wheel", prompt="Point to where the camera wearer is looking.",
         )
         self.assertEqual(row["style"], "video_point")
-        self.assertEqual(row["num_frames"], 8)
-        self.assertEqual(len(row["points"]), 8)
-        self.assertEqual(len(row["timestamps"]), 8)
-        self.assertEqual(len(row["frame_mask"]), 8)
+        # num_frames == num points == len(frames); no fixed padding
+        self.assertEqual(row["num_frames"], 6)
+        self.assertEqual(len(row["points"]), 6)
+        self.assertEqual(len(row["timestamps"]), 6)
+        self.assertEqual(len(row["frame_mask"]), 6)
+        self.assertEqual(row["num_frames_real"], num_real)
         self.assertEqual(sum(row["frame_mask"]), num_real)
-        # real frames carry one pixel point in [0,378]; pad frames are []
-        for k in range(num_real):
+        # every frame carries one pixel point in [0,378] (all valid here)
+        for k in range(6):
             self.assertEqual(len(row["points"][k]), 1)
             p = row["points"][k][0]
             self.assertTrue(0 <= p["x"] <= 378 and 0 <= p["y"] <= 378)
-        for k in range(num_real, 8):
-            self.assertEqual(row["points"][k], [])
         # message_list chat shape
         self.assertEqual([m["role"] for m in row["message_list"]], ["user", "assistant"])
         self.assertEqual([c["type"] for c in row["message_list"][0]["content"]], ["text", "video"])
         self.assertEqual(row["metadata"]["clip_start_time"], 0.0)
         self.assertEqual(row["metadata"]["clip_end_time"], 3.0)
 
-    def test_timestamps_on_half_second_grid(self):
+    def test_invalid_frame_has_empty_point_and_mask0(self):
+        gt = [i / 2.0 for i in range(9)]
+        gpx = [100.0] * 9
+        gpy = [100.0] * 9
+        gv = [True] * 9
+        gv[1] = False  # grid idx 1 invalid
+        pad = PadTransform(1408, 1408, 378)
+        frames, num_real = sample_segment_frames(
+            gt, gpx, gpy, [True] * 9, gv,
+            seg_start_s=0.0, seg_end_s=3.0, fps=2.0, n_frames=6, pad=pad,
+        )
+        row = build_molmoact_row(
+            dataset="d", episode_id="e", seg_index=0, video_rel="v.mp4",
+            seg_start_s=0.0, seg_end_s=3.0, frames=frames, num_real=num_real,
+            fps=2.0, side=378, annotation_text=None, prompt="p",
+        )
+        self.assertEqual(len(row["points"]), 6)
+        self.assertEqual(row["points"][1], [])         # invalid frame: empty
+        self.assertEqual(row["frame_mask"][1], 0)
+        self.assertEqual(row["frame_mask"][0], 1)
+        self.assertEqual(sum(row["frame_mask"]), num_real)
+
+    def test_timestamps_match_frame_index_over_fps(self):
         gt = [i / 2.0 for i in range(9)]
         gpx = [100.0] * 9
         gpy = [100.0] * 9
         pad = PadTransform(1408, 1408, 378)
         frames, num_real = sample_segment_frames(
             gt, gpx, gpy, [True] * 9, [True] * 9,
-            seg_start_s=1.0, seg_end_s=4.0, fps=2.0, max_frames=8, pad=pad,
+            seg_start_s=1.0, seg_end_s=4.0, fps=2.0, n_frames=6, pad=pad,
         )
         row = build_molmoact_row(
             dataset="d", episode_id="e", seg_index=0, video_rel="v.mp4",
             seg_start_s=1.0, seg_end_s=4.0, frames=frames, num_real=num_real,
-            fps=2.0, max_frames=8, side=378, annotation_text=None, prompt="p",
+            fps=2.0, side=378, annotation_text=None, prompt="p",
         )
-        # every timestamp is a multiple of 0.5 (the MolmoAct2 grid)
-        for t in row["timestamps"]:
-            self.assertAlmostEqual((t / 0.5) - round(t / 0.5), 0.0, places=6)
+        # timestamp of frame j == j/fps (clip-relative)
+        for j, t in enumerate(row["timestamps"]):
+            self.assertAlmostEqual(t, j / 2.0, places=6)
 
 
 class TestHierarchicalChop(unittest.TestCase):
@@ -188,6 +259,74 @@ class TestHierarchicalChop(unittest.TestCase):
 
     def test_empty_channels(self):
         self.assertEqual(chop_by_channels([], max_clip_s=20, duration_s=10), [])
+
+
+class TestNumberedText(unittest.TestCase):
+    def test_single_unchanged(self):
+        self.assertEqual(_numbered_text(["wash a plate"]), "wash a plate")
+
+    def test_multiple_numbered(self):
+        self.assertEqual(_numbered_text(["A", "B", "C"]), "1) A 2) B 3) C")
+
+    def test_blanks_skipped(self):
+        self.assertEqual(_numbered_text(["A", "", None, "B"]), "1) A 2) B")
+
+    def test_consecutive_dupes_collapsed(self):
+        self.assertEqual(_numbered_text(["walk", "walk", "talk"]), "1) walk 2) talk")
+
+    def test_all_blank(self):
+        self.assertEqual(_numbered_text(["", None]), "")
+
+
+class TestCoalesceShortSegments(unittest.TestCase):
+    def _segs(self, spans):
+        # spans: list of (start, end, text)
+        return [{"start_s": a, "end_s": b, "channel": "c", "text": t} for a, b, t in spans]
+
+    def test_disabled_when_zero(self):
+        segs = self._segs([(0, 1, "A"), (1, 2, "B")])
+        out = coalesce_short_segments(segs, min_duration_s=0.0, max_clip_s=20)
+        self.assertEqual(out, segs)
+
+    def test_merges_short_into_next(self):
+        # two 1s clips, min 2s -> merge into one 2s clip with numbered text
+        segs = self._segs([(0, 1, "A"), (1, 2, "B")])
+        out = coalesce_short_segments(segs, min_duration_s=2.0, max_clip_s=20)
+        self.assertEqual(len(out), 1)
+        self.assertAlmostEqual(out[0]["start_s"], 0.0)
+        self.assertAlmostEqual(out[0]["end_s"], 2.0)
+        self.assertEqual(out[0]["text"], "1) A 2) B")
+        self.assertEqual(out[0]["coalesced"], 2)
+
+    def test_keeps_long_enough_alone(self):
+        segs = self._segs([(0, 3, "A"), (3, 6, "B")])
+        out = coalesce_short_segments(segs, min_duration_s=2.0, max_clip_s=20)
+        self.assertEqual(len(out), 2)
+        self.assertNotIn("coalesced", out[0])
+
+    def test_absorbs_multiple_until_min(self):
+        # four 1s clips, min 3s -> first absorbs 2 more (0..3), then a trailing 1s clip
+        segs = self._segs([(0, 1, "A"), (1, 2, "B"), (2, 3, "C"), (3, 4, "D")])
+        out = coalesce_short_segments(segs, min_duration_s=3.0, max_clip_s=20)
+        self.assertAlmostEqual(out[0]["end_s"] - out[0]["start_s"], 3.0)
+        self.assertEqual(out[0]["text"], "1) A 2) B 3) C")
+        # D (trailing 1s) cannot reach 3s but is still kept
+        self.assertAlmostEqual(out[-1]["start_s"], 3.0)
+        self.assertAlmostEqual(out[-1]["end_s"], 4.0)
+
+    def test_respects_max_clip_ceiling(self):
+        # min 5s but max_clip 2s -> never merge past 2s
+        segs = self._segs([(0, 1, "A"), (1, 2, "B"), (2, 3, "C")])
+        out = coalesce_short_segments(segs, min_duration_s=5.0, max_clip_s=2.0)
+        for s in out:
+            self.assertLessEqual(s["end_s"] - s["start_s"], 2.0 + 1e-6)
+
+    def test_gap_between_clips_preserved_in_span(self):
+        # clips with a gap: merging extends end to absorbed clip's end (covers the gap)
+        segs = self._segs([(0, 1, "A"), (5, 6, "B")])
+        out = coalesce_short_segments(segs, min_duration_s=2.0, max_clip_s=20)
+        self.assertEqual(len(out), 1)
+        self.assertAlmostEqual(out[0]["end_s"], 6.0)
 
 
 class TestChopIntegration(unittest.TestCase):

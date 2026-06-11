@@ -17,10 +17,15 @@ Design decisions (user-confirmed):
   * per-frame gaze targets (gaze is dynamic);
   * canonical fps is user-defined; ALL datasets resample DOWN to it (sources are
     24-30 fps, always >= canonical);
-  * variable-length clips PADDED to ``max_frames`` for a consistent batch tensor
-    shape, with a per-frame ``frame_mask`` (1=real, 0=pad) and ``num_frames_real``;
-    padded frames repeat the last real frame and carry ``valid:false`` points so
-    loss/attention ignore them.
+  * gaze_hz == video_fps: we emit EXACTLY ONE gaze point per real video frame
+    (1:1, variable length, NO cap and NO padding). The on-disk clip is encoded at
+    the canonical fps and ``points[j]`` is the gaze at video frame ``j``. The
+    training intent is to feed the first frame (t0) -- or first chunk -- of gaze and
+    predict t0 gaze from the future frames + prompt, so a fixed ``max_frames`` /
+    padding-to-max convention is intentionally PUNTED (see ``--max-frames`` below for
+    an optional cap). Frames whose gaze is invalid/out-of-frame carry an empty point
+    list (masked from loss) but still occupy their frame slot, so frame<->point
+    alignment is never broken.
 
 We keep the normalized ``[0,1]`` and integer ``0-1000`` forms per frame in a
 ``provenance`` sidecar (user: "match MolmoAct2 + keep normalized").
@@ -36,10 +41,12 @@ from .curate import PadTransform, clamp01, to_bins
 
 DEFAULT_PROMPT = "Point to where the camera wearer is looking."
 DEFAULT_FPS = 2.0
-DEFAULT_MAX_FRAMES = 8
+# 0 / None => unlimited (one gaze point per video frame). A positive value caps the
+# clip to that many frames (via an effective max-clip duration of max_frames/fps),
+# preserving the 1:1 frame<->point mapping. Kept as an optional knob for Molmo's
+# fixed-length conventions, which are otherwise punted.
+DEFAULT_MAX_FRAMES = 0
 DEFAULT_RESOLUTION = 378
-# MolmoAct2 video pointing asserts timestamps on a 0.5 s grid; 1/fps must divide it.
-TIMESTAMP_GRID_S = 0.5
 
 
 @dataclass
@@ -77,63 +84,57 @@ def sample_segment_frames(
     seg_start_s: float,
     seg_end_s: float,
     fps: float,
-    max_frames: int,
+    n_frames: int,
     pad: PadTransform,
 ) -> tuple[list[FrameGaze], int]:
-    """Sample one clip segment's per-frame gaze, capped + padded to ``max_frames``.
+    """Sample one gaze point per REAL video frame (gaze_hz == video_fps, 1:1).
 
-    ``grid_*`` is the episode's gaze resampled onto the canonical fps grid (video
-    clock). We take grid points in ``[seg_start_s, seg_end_s)``, cap to ``max_frames``
-    (uniformly subsampling if longer), convert source px -> padded-frame px, then PAD
-    up to ``max_frames`` by repeating the last real frame with ``valid=False``.
+    The on-disk clip is encoded at the canonical ``fps`` and has exactly ``n_frames``
+    frames (probed from the mp4 by the caller, so the alignment is exact and never
+    off-by-one). Video frame ``j`` is at clip-relative time ``j/fps`` == video-clock
+    time ``seg_start_s + j/fps``; we read the gaze from the episode's canonical-fps
+    grid (``grid_*``, video clock) at that frame's time and convert source px ->
+    padded-frame px.
 
-    Returns ``(frames, num_real)`` where ``frames`` has exactly ``max_frames`` entries
-    and the first ``num_real`` are real (mask=1), the rest padding (mask=0).
+    There is NO cap and NO padding: the returned ``frames`` list has exactly
+    ``n_frames`` entries, one per video frame. Frames whose gaze is invalid/out-of-FOV
+    keep their slot (so frame<->point indices stay aligned) but carry no point. The
+    second tuple element is the count of frames that carry a real (valid) gaze point.
     """
-    # indices of grid points inside the segment
-    idxs = [i for i, t in enumerate(grid_times) if seg_start_s <= t < seg_end_s]
-    if not idxs:
+    if n_frames <= 0 or not grid_times:
         return [], 0
-    # cap: uniformly subsample to max_frames if the segment yields more
-    if len(idxs) > max_frames:
-        step = len(idxs) / max_frames
-        idxs = [idxs[int(k * step)] for k in range(max_frames)]
+    n_grid = len(grid_times)
+    dt = 1.0 / fps
+    # grid index of video-clock time seg_start (the grid is uniform at i*dt from 0).
+    base = int(round(seg_start_s * fps))
 
     frames: list[FrameGaze] = []
-    for i in idxs:
-        # clip-relative time snapped to the 1/fps grid
-        t_rel = round((grid_times[i] - seg_start_s) / (1.0 / fps)) * (1.0 / fps)
-        xs, ys = grid_px[i], grid_py[i]
-        valid = bool(grid_valid[i] and xs is not None and ys is not None)
+    num_real = 0
+    for j in range(n_frames):
+        gi = base + j
+        t_rel = round(j * dt, 3)
+        if 0 <= gi < n_grid:
+            xs, ys = grid_px[gi], grid_py[gi]
+            valid = bool(grid_valid[gi] and xs is not None and ys is not None)
+        else:
+            xs = ys = None
+            valid = False
         if valid:
             x_pad, y_pad = px_to_padded_px(pad, xs, ys)
             xn, yn = pad.px_to_norm(xs, ys)
             xn, yn = clamp01(xn), clamp01(yn)
             frames.append(FrameGaze(
-                t_s=round(t_rel, 3), x_px=round(x_pad, 1), y_px=round(y_pad, 1),
-                valid=True, in_frame=bool(grid_in[i]),
+                t_s=t_rel, x_px=round(x_pad, 1), y_px=round(y_pad, 1),
+                valid=True, in_frame=bool(grid_in[gi]),
                 x_norm=round(xn, 6), y_norm=round(yn, 6),
                 x_1000=to_bins(xn), y_1000=to_bins(yn),
             ))
+            num_real += 1
         else:
             frames.append(FrameGaze(
-                t_s=round(t_rel, 3), x_px=None, y_px=None,
+                t_s=t_rel, x_px=None, y_px=None,
                 valid=False, in_frame=False,
                 x_norm=None, y_norm=None, x_1000=None, y_1000=None,
-            ))
-    num_real = len(frames)
-
-    # pad up to max_frames by repeating the last real frame (mask handled by caller)
-    if num_real and num_real < max_frames:
-        last = frames[-1]
-        dt = 1.0 / fps
-        for k in range(num_real, max_frames):
-            frames.append(FrameGaze(
-                t_s=round(last.t_s + (k - num_real + 1) * dt, 3),
-                x_px=last.x_px, y_px=last.y_px,
-                valid=False, in_frame=False,
-                x_norm=last.x_norm, y_norm=last.y_norm,
-                x_1000=last.x_1000, y_1000=last.y_1000,
             ))
     return frames, num_real
 
@@ -149,7 +150,6 @@ def build_molmoact_row(
     frames: list[FrameGaze],
     num_real: int,
     fps: float,
-    max_frames: int,
     side: int,
     annotation_text: str | None,
     prompt: str,
@@ -157,28 +157,33 @@ def build_molmoact_row(
 ) -> dict[str, Any]:
     """Assemble one Molmo2VideoPoint-style manifest row for a clip segment.
 
-    The on-disk gaze target is per-frame raw PIXEL ``{"x","y"}`` on the ``side`` frame
-    (the form ``Molmo2VideoPoint`` reads). ``frame_mask`` + ``num_frames_real`` carry
-    the variable-length-padded-to-``max_frames`` structure for batching. Normalized +
-    0-1000 forms are kept under ``provenance`` for portability/validation.
+    gaze_hz == video_fps: ``points`` has exactly one entry per VIDEO FRAME (1:1, no
+    cap, no padding); ``points[j]`` is the gaze at frame ``j``, as a raw PIXEL
+    ``{"x","y"}`` on the ``side`` frame (the form ``Molmo2VideoPoint`` reads), or an
+    empty list when that frame's gaze is invalid/out-of-FOV (masked from loss). The
+    training label is ``points[0]`` (t0 gaze) or the first chunk ``points[:k]``.
+
+    ``num_frames`` == ``len(points)`` (variable per clip); ``frame_mask[j]`` is 1 iff
+    frame ``j`` carries a real gaze point, 0 otherwise; ``num_frames_real`` counts the
+    1s. Normalized + 0-1000 forms are kept under ``provenance`` for validation.
     """
     points: list[list[dict[str, float]]] = []   # per-frame list of {x,y} (pixel)
     timestamps: list[float] = []
     frame_mask: list[int] = []
     prov_norm: list[list[float] | None] = []
     prov_1000: list[list[int] | None] = []
-    for k, fg in enumerate(frames):
+    for fg in frames:
         timestamps.append(fg.t_s)
-        is_real = k < num_real and fg.valid
-        frame_mask.append(1 if k < num_real else 0)
-        if fg.x_px is not None and fg.y_px is not None and is_real:
+        if fg.valid and fg.x_px is not None and fg.y_px is not None:
             points.append([{"x": fg.x_px, "y": fg.y_px}])
             prov_norm.append([fg.x_norm, fg.y_norm])
             prov_1000.append([fg.x_1000, fg.y_1000])
+            frame_mask.append(1)
         else:
             points.append([])              # no gaze label for this frame
             prov_norm.append(None)
             prov_1000.append(None)
+            frame_mask.append(0)
 
     answer = _format_answer(points, timestamps)
     user_text = prompt if not annotation_text else f"{prompt} (context: {annotation_text})"
@@ -199,11 +204,11 @@ def build_molmoact_row(
                 {"type": "text", "text": answer},
             ]},
         ],
-        "points": points,                 # list-per-frame of {x,y} pixel on `side` frame
-        "timestamps": timestamps,         # clip-relative, 1/fps grid
-        "frame_mask": frame_mask,         # 1=real frame, 0=pad
-        "num_frames_real": num_real,
-        "num_frames": max_frames,
+        "points": points,                 # list-per-frame of {x,y} pixel on `side` frame (1:1 w/ video frames)
+        "timestamps": timestamps,         # clip-relative, 1/fps grid (== frame j at j/fps)
+        "frame_mask": frame_mask,         # 1=frame carries a real gaze point, 0=masked (no/invalid gaze)
+        "num_frames_real": num_real,      # count of frames with a real gaze point
+        "num_frames": len(points),        # total frames == total points (gaze_hz == video_fps)
         "fps": fps,
         "resolution": side,
         "metadata": {
@@ -244,19 +249,21 @@ MOLMOACT_SCHEMA: dict[str, Any] = {
         "style": "always 'video_point'",
         "video": "relative path to the side x side @ fps mp4 segment clip",
         "message_list": "chat: user{text, {type:video}} / assistant{text answer}",
-        "points": "list-per-frame of [{x,y}] RAW PIXEL on the padded `resolution` frame; [] = no gaze that frame",
-        "timestamps": "list[float] clip-relative seconds on the 1/fps grid",
-        "frame_mask": "list[int] 1=real frame, 0=pad-to-max_frames",
-        "num_frames_real": "count of real (non-pad) frames",
-        "num_frames": "max_frames (padded tensor length)",
-        "fps": "canonical sampling fps (all datasets resampled down to this)",
+        "points": "list-per-frame of [{x,y}] RAW PIXEL on the padded `resolution` frame; [] = no/invalid gaze that frame. EXACTLY ONE entry per video frame (1:1).",
+        "timestamps": "list[float] clip-relative seconds; frame j is at j/fps",
+        "frame_mask": "list[int] 1=frame carries a real gaze point, 0=masked (no/invalid gaze)",
+        "num_frames_real": "count of frames with a real gaze point (sum of frame_mask)",
+        "num_frames": "total frames == total points (variable per clip)",
+        "fps": "canonical sampling fps == gaze hz (all datasets resampled down to this)",
         "resolution": "square side (378 for MolmoAct2)",
-        "metadata": "{clip_start_time, clip_end_time, annotation_text}",
+        "metadata": "{clip_start_time, clip_end_time, annotation_text, annotation_channel}",
         "provenance": "{points_norm [0,1], points_1000 0-1000, label} per frame",
     },
     "notes": [
+        "gaze_hz == video_fps: one gaze point per real video frame (1:1), variable length, NO cap and NO padding.",
         "Points are PIXEL on the padded resolution frame (Molmo2VideoPoint reads raw x,y; model tokenizes internally).",
-        "Variable-length clips padded to num_frames; use frame_mask + num_frames_real to ignore padding in loss.",
-        "Per-frame targets; frames with invalid/out-of-frame gaze have points=[] (masked from loss).",
+        "Training label = points[0] (t0 gaze) or first chunk points[:k]; predict t0 given future frames + prompt.",
+        "Frames with invalid/out-of-frame gaze have points=[] and frame_mask=0 (masked from loss) but keep their slot so frame<->point indices stay aligned.",
+        "Molmo's fixed max_frames / padding-to-max conventions are punted (see --max-frames optional cap).",
     ],
 }
