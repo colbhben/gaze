@@ -828,9 +828,18 @@ def build_training_manifest(
 
         n_workers = max(1, workers if workers else (os.cpu_count() or 4))
 
+        # Per-episode positional tokens (derived from each episode id) must NOT be
+        # inherited from the sample episode when iterating a multi-episode list -- else
+        # e.g. egtea's sample session leaks onto every other episode's video path.
+        per_episode_keys = {"session", "participant", "take_name", "take_uid", "stem", "video_uid"}
+        multi = bool(episode_lists)
+
         def run_job(job: tuple[str, str]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
             slug, episode_id = job
-            extra = {k: v for k, v in sample_map[slug].items() if k != "episode_id"}
+            extra = {
+                k: v for k, v in sample_map[slug].items()
+                if k != "episode_id" and not (multi and k in per_episode_keys)
+            }
             # Each episode gets its OWN Puller workdir so parallel pulls/trims never collide.
             ep_puller = Puller(
                 ssh_host=puller.ssh_host, remote_root=puller.remote_root,
