@@ -403,9 +403,19 @@ def channels_by_granularity(data: EpisodeData) -> list[dict[str, Any]]:
     Returns ``[{name, kind, spans:[{start_s,end_s,text}]}]`` sorted by descending
     mean span duration (the coarsest = whole-take narration first, finest = atomic
     actions last). Only spans with non-empty text and a real [start,end] are kept.
+
+    Channels marked ``"clip_role": "context"`` in the recipe are EXCLUDED here: they
+    are coarse summaries (e.g. nymeria ``activity_summary``) whose bundled text mixes
+    several activities (conversation + TV + a bit of manipulation), so letting them
+    DRIVE clip boundaries/labels leaks conversational/passive text into the dataset.
+    They remain available as overlay context via ``reconciled_annotations``; only the
+    chopper ignores them, so clips are driven by the finer action channel(s).
     """
+    context_only = _context_channels(data)
     channels: list[dict[str, Any]] = []
     for ch in reconciled_annotations(data):
+        if ch["name"] in context_only:
+            continue
         spans = []
         for s in ch["segments"]:
             text = s.get("text")
@@ -422,6 +432,16 @@ def channels_by_granularity(data: EpisodeData) -> list[dict[str, Any]]:
         channels.append({"name": ch["name"], "kind": ch["kind"], "spans": spans, "mean_dur": mean_dur})
     channels.sort(key=lambda c: c["mean_dur"], reverse=True)  # coarsest first
     return channels
+
+
+def _context_channels(data: EpisodeData) -> set[str]:
+    """Names of recipe annotation channels marked ``clip_role: context`` (never drive
+    clips). Default (no flag) = driver. Reads the recipe's ``annotations`` list."""
+    out: set[str] = set()
+    for ch in (data.recipe.get("annotations") or []):
+        if ch.get("clip_role") == "context":
+            out.add(ch.get("name"))
+    return out
 
 
 def chop_by_channels(
@@ -1131,16 +1151,30 @@ def _intersect_interesting(spans: list[dict[str, Any]], interesting: dict[str, A
 def _filter_channels_interesting(channels: list[dict[str, Any]], interesting: dict[str, Any]) -> list[dict[str, Any]]:
     """Drop each channel's spans that don't overlap an interesting region.
 
-    Applies the same overlap test as ``_intersect_interesting`` per channel, so the
-    hierarchical chopper only ever sees interesting spans (at every granularity).
-    Channels left with no spans are removed.
+    CHANNEL-AWARE gating (fixes the conversational leak): each annotation channel is
+    filtered against the interesting regions FROM ITS OWN CHANNEL only. The classifier
+    labels every channel's spans; pooling them let a coarse ``activity_summary`` region
+    keep fine ``atomic_action`` idle/transitional sub-spans (standing, listening,
+    gesticulating) that fall inside it -> conversation leaked into the clips. Matching
+    channel-to-channel means a fine span survives only if the classifier marked a fine
+    span (overlapping it) interesting.
+
+    Back-compat: if the map's regions carry no ``channel`` (older maps) we fall back to
+    the legacy any-channel overlap so existing maps still work.
     """
-    regions = [(r["start_s"], r["end_s"]) for r in interesting.get("regions", [])
-               if r.get("interesting") and r.get("start_s") is not None and r.get("end_s") is not None]
-    if not regions:
+    all_regions = [r for r in interesting.get("regions", [])
+                   if r.get("interesting") and r.get("start_s") is not None and r.get("end_s") is not None]
+    if not all_regions:
         return []
+    has_channel = any(r.get("channel") is not None for r in all_regions)
+
     out = []
     for ch in channels:
+        if has_channel:
+            regions = [(r["start_s"], r["end_s"]) for r in all_regions
+                       if r.get("channel") == ch["name"]]
+        else:
+            regions = [(r["start_s"], r["end_s"]) for r in all_regions]
         kept = [s for s in ch["spans"]
                 if any(s["start_s"] < rb and s["end_s"] > ra for ra, rb in regions)]
         if kept:

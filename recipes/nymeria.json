@@ -120,7 +120,8 @@
       "join": {
         "by": "stem",
         "comment": "One csv per take in this dir; coarse ~30s spans. Text column header is literally 'Describe my activity'."
-      }
+      },
+      "clip_role": "context"
     },
     {
       "name": "atomic_action",

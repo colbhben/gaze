@@ -36,8 +36,15 @@ DEFAULT_MODEL = os.environ.get(
 )
 
 
-def call_bedrock(prompt: str, model_id: str, region: str | None = None, max_tokens: int = 4096) -> str:
-    """Invoke a Claude model on Bedrock and return the text response."""
+# Spans per model call. Each verdict (with a short reason) is ~40-70 output tokens, so
+# a chunk of 60 spans stays well under max_tokens and never truncates mid-array (the
+# bug that silently zeroed long takes). Large takes are split into ceil(N/60) chunks.
+SPANS_PER_CHUNK = 60
+MAX_TOKENS = 8192
+
+
+def call_bedrock(prompt: str, model_id: str, region: str | None = None, max_tokens: int = MAX_TOKENS) -> tuple[str, str | None]:
+    """Invoke a Claude model on Bedrock; return (text, stop_reason)."""
     import boto3  # lazy: only needed for the real run
 
     client = boto3.client("bedrock-runtime", region_name=region or os.environ.get("AWS_REGION", "us-east-1"))
@@ -48,7 +55,32 @@ def call_bedrock(prompt: str, model_id: str, region: str | None = None, max_toke
     }
     resp = client.invoke_model(modelId=model_id, body=json.dumps(body))
     payload = json.loads(resp["body"].read())
-    return "".join(block.get("text", "") for block in payload.get("content", []))
+    text = "".join(block.get("text", "") for block in payload.get("content", []))
+    return text, payload.get("stop_reason")
+
+
+def _chunk_record(rec: dict, size: int = SPANS_PER_CHUNK) -> list[dict]:
+    """Split a take into <=size-span sub-records, preserving original span indices."""
+    spans = rec["spans"]
+    return [{"take_id": rec["take_id"], "spans": spans[i : i + size]}
+            for i in range(0, len(spans), size)] or [rec]
+
+
+def classify_record(rec: dict, model: str, region: str | None) -> dict[int, dict]:
+    """Classify ALL spans of one take, chunked so no response truncates. Re-splits a
+    chunk that still hits max_tokens (defensive). Returns merged {span_index: verdict}."""
+    verdicts: dict[int, dict] = {}
+    pending = _chunk_record(rec)
+    while pending:
+        chunk = pending.pop(0)
+        text, stop = call_bedrock(classify_prompt(chunk), model, region=region)
+        if stop == "max_tokens" and len(chunk["spans"]) > 1:
+            mid = len(chunk["spans"]) // 2
+            pending.insert(0, {"take_id": chunk["take_id"], "spans": chunk["spans"][mid:]})
+            pending.insert(0, {"take_id": chunk["take_id"], "spans": chunk["spans"][:mid]})
+            continue
+        verdicts.update(parse_verdicts(text))
+    return verdicts
 
 
 def main(argv: list[str]) -> int:
@@ -58,6 +90,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--model", default=DEFAULT_MODEL, help=f"Bedrock model id; default {DEFAULT_MODEL}")
     ap.add_argument("--region", default=None, help="AWS region")
     ap.add_argument("--limit", type=int, default=None, help="only classify the first N takes")
+    ap.add_argument("--workers", type=int, default=8, help="parallel takes; default 8")
     ap.add_argument("--dry-run", action="store_true", help="print prompts + cost estimate, no model call")
     args = ap.parse_args(argv)
 
@@ -67,25 +100,31 @@ def main(argv: list[str]) -> int:
 
     if args.dry_run:
         total_spans = sum(len(r["spans"]) for r in records)
-        print(f"[dry-run] {len(records)} takes, {total_spans} spans; model={args.model}")
+        total_chunks = sum(len(_chunk_record(r)) for r in records)
+        print(f"[dry-run] {len(records)} takes, {total_spans} spans, {total_chunks} model calls; model={args.model}")
         if records:
-            print("--- sample prompt (take 0) ---")
-            print(classify_prompt(records[0])[:1200])
+            print("--- sample prompt (take 0, chunk 0) ---")
+            print(classify_prompt(_chunk_record(records[0])[0])[:1400])
         return 0
 
+    import concurrent.futures
     out_map: dict[str, dict] = {}
-    for k, rec in enumerate(records):
-        prompt = classify_prompt(rec)
+    done = 0
+
+    def work(rec):
         try:
-            text = call_bedrock(prompt, args.model, region=args.region)
-            verdicts = parse_verdicts(text)
+            verdicts = classify_record(rec, args.model, args.region)
         except Exception as exc:  # noqa
             print(f"warn: take {rec['take_id']} failed: {exc}", file=sys.stderr)
             verdicts = {}
-        fmap = build_filter_map(rec, verdicts)
-        out_map[rec["take_id"]] = {"regions": fmap["regions"]}
-        n_int = sum(1 for r in fmap["regions"] if r["interesting"])
-        print(f"[{k + 1}/{len(records)}] {rec['take_id']}: {n_int}/{len(fmap['regions'])} interesting", flush=True)
+        return rec, build_filter_map(rec, verdicts)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.workers)) as ex:
+        for rec, fmap in ex.map(work, records):
+            out_map[rec["take_id"]] = {"regions": fmap["regions"]}
+            done += 1
+            n_int = sum(1 for r in fmap["regions"] if r["interesting"])
+            print(f"[{done}/{len(records)}] {rec['take_id']}: {n_int}/{len(fmap['regions'])} interesting", flush=True)
 
     Path(args.out).write_text(json.dumps(out_map, indent=2, sort_keys=True), encoding="utf-8")
     print(f"wrote {len(out_map)} takes -> {args.out}")

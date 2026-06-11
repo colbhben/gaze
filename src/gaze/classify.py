@@ -28,20 +28,36 @@ from typing import Any
 
 
 INTERESTING_RUBRIC = (
-    "INTERESTING = the camera wearer is actively MANIPULATING objects with their "
-    "hands: picking up / putting down / handling / using objects, cleaning, "
-    "preparing food, playing board/table games, opening/closing or searching "
-    "through drawers-cabinets-appliances, assembling/operating tools. There must be "
-    "a hands-on object-manipulation component.\n"
-    "NOT INTERESTING (exclude even if other things happen in the span):\n"
-    "  - conversational periods (talking/gesturing to a peer with no hands-on manipulation),\n"
-    "  - static/idle periods (standing or sitting still, just looking around),\n"
-    "  - PURE locomotion with no manipulation (walking/moving between areas, even if "
-    "the person then sits or talks),\n"
-    "  - passive watching (e.g. watching TV, or using a remote merely to browse/watch).\n"
-    "A span that is mostly walking-then-talking, or sitting-and-chatting, or "
-    "searching-for-a-movie-on-TV is NOT interesting. Only mark interesting when there "
-    "is genuine hands-on manipulation of physical objects."
+    "Judge EACH span by what THAT span's own text says the HANDS are doing. Posture "
+    "(standing/sitting/kneeling/crouching/leaning/walking) is neutral -- it neither "
+    "makes a span interesting nor disqualifies it. Look past the posture to the hand "
+    "action.\n"
+    "\n"
+    "INTERESTING (mark true) IF the span describes the camera wearer's hands ACTIVELY "
+    "manipulating a physical object: picking up / putting down / moving / placing / "
+    "handling an object, USING or OPERATING a tool or instrument (e.g. measuring with a "
+    "tape measure, using a screwdriver), cleaning, wiping, preparing/cutting/pouring "
+    "food or drink, washing, assembling, opening/closing or searching "
+    "drawers-cabinets-appliances, playing a board/table game. A tool/object being "
+    "actively USED counts even if the person is standing or walking while doing it "
+    "(e.g. 'picks up the tape measure and measures the door' = INTERESTING).\n"
+    "\n"
+    "NOT INTERESTING (mark false), even if an object is named or hands are near it:\n"
+    "  - conversation: talking, chatting, listening, gesturing/gesticulating to a peer;\n"
+    "  - idle hands: 'resting both hands', 'hands on lap/knees', arms at side, just "
+    "looking around -- no object being acted on;\n"
+    "  - pure locomotion with no hand action: walking/turning between areas;\n"
+    "  - passive media: watching TV, or using a remote merely to browse/search/navigate "
+    "a TV or screen;\n"
+    "  - merely HOLDING a static object while idle/talking/watching with no further "
+    "action (e.g. 'holding a glass while chatting', 'resting a hand on a pillow').\n"
+    "\n"
+    "Decision rule: ask 'is a hand actively doing something TO an object in this span?' "
+    "If yes -> interesting (the surrounding posture/conversation is irrelevant). If the "
+    "hands are only idle, gesturing, holding-without-acting, or driving a TV remote -> "
+    "not interesting. For a mixed span, judge by the hand action: 'sits and chats, then "
+    "grabs the remote to search the TV' -> NOT interesting (remote-for-browsing); "
+    "'sits on the sofa and folds the laundry' -> INTERESTING (active manipulation)."
 )
 
 
@@ -116,9 +132,13 @@ def parse_verdicts(text: str) -> dict[int, dict[str, Any]]:
 def build_filter_map(record: dict[str, Any], verdicts: dict[int, dict[str, Any]]) -> dict[str, Any]:
     """Combine a take's spans with per-span verdicts into the consume-side map.
 
-    Output: ``{"regions": [{start_s, end_s, interesting, reason}, ...]}`` on the
-    same clock the spans carried. Spans missing a verdict default to NOT interesting
-    (conservative -- we'd rather drop an unlabeled region than train on noise).
+    Output: ``{"regions": [{start_s, end_s, channel, interesting, reason}, ...]}`` on
+    the same clock the spans carried. The ``channel`` is preserved so the consume side
+    can gate each annotation channel against ITS OWN channel's verdicts (a coarse
+    ``activity_summary`` region must not keep fine ``atomic_action`` idle sub-spans --
+    that cross-granularity bleed was the conversational-leak source). Spans missing a
+    verdict default to NOT interesting (conservative -- we'd rather drop an unlabeled
+    region than train on noise).
     """
     regions: list[dict[str, Any]] = []
     for s in record["spans"]:
@@ -128,6 +148,7 @@ def build_filter_map(record: dict[str, Any], verdicts: dict[int, dict[str, Any]]
         regions.append({
             "start_s": s["start_s"],
             "end_s": s["end_s"],
+            "channel": s.get("channel"),
             "interesting": bool(v["interesting"]),
             "reason": v.get("reason", ""),
         })
@@ -139,11 +160,51 @@ def _extract_json_array(text: str) -> list[Any]:
     # strip code fences if present
     text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.MULTILINE).strip()
     start = text.find("[")
+    if start == -1:
+        return []
     end = text.rfind("]")
-    if start == -1 or end == -1 or end < start:
-        return []
-    try:
-        val = json.loads(text[start : end + 1])
-        return val if isinstance(val, list) else []
-    except json.JSONDecodeError:
-        return []
+    if end != -1 and end > start:
+        try:
+            val = json.loads(text[start : end + 1])
+            if isinstance(val, list):
+                return val
+        except json.JSONDecodeError:
+            pass
+    # Salvage a TRUNCATED array (e.g. the model hit max_tokens mid-array): parse every
+    # complete top-level {...} object after the opening '['. Without this, a truncated
+    # response silently parses to [] -> every span defaults to NOT interesting, which
+    # is exactly the failure mode that zeroed out long nymeria takes.
+    return _parse_objects(text[start + 1:])
+
+
+def _parse_objects(body: str) -> list[Any]:
+    """Parse each complete top-level JSON object in ``body`` (truncation-tolerant)."""
+    out: list[Any] = []
+    depth = 0
+    in_str = False
+    esc = False
+    obj_start = None
+    for i, ch in enumerate(body):
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+        elif ch == "{":
+            if depth == 0:
+                obj_start = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and obj_start is not None:
+                try:
+                    out.append(json.loads(body[obj_start : i + 1]))
+                except json.JSONDecodeError:
+                    pass
+                obj_start = None
+    return out

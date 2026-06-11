@@ -65,6 +65,51 @@ class TestFilterMap(unittest.TestCase):
         self.assertFalse(fmap["regions"][0]["interesting"])  # unlabeled -> default not
         self.assertTrue(fmap["regions"][1]["interesting"])
 
+    def test_regions_carry_channel(self):
+        rec = export_annotation_spans(_bundle(), "take1")
+        fmap = build_filter_map(rec, {1: {"interesting": True, "reason": "pan"}})
+        for r in fmap["regions"]:
+            self.assertEqual(r["channel"], "atomic_action")  # channel preserved for gating
+
+
+class TestChannelAwareFilter(unittest.TestCase):
+    """The consume-side fix: each channel filters against ITS OWN interesting regions,
+    so a coarse activity_summary region can't keep fine atomic_action idle spans."""
+
+    def _channels(self):
+        return [
+            {"name": "activity_summary", "kind": "interval", "spans": [
+                {"start_s": 0.0, "end_s": 30.0, "text": "sitting on sofa, sometimes handling objects"},
+            ]},
+            {"name": "atomic_action", "kind": "interval", "spans": [
+                {"start_s": 2.0, "end_s": 7.0, "text": "C is sitting still, listening"},   # idle
+                {"start_s": 7.0, "end_s": 12.0, "text": "C grabs the cup and pours water"}, # manip
+            ]},
+        ]
+
+    def test_coarse_interesting_does_not_keep_fine_idle(self):
+        from src.gaze.training import _filter_channels_interesting
+        # activity_summary[0..30] interesting; atomic span1 (grab/pour) interesting; atomic span0 (idle) NOT
+        imap = {"regions": [
+            {"start_s": 0.0, "end_s": 30.0, "channel": "activity_summary", "interesting": True},
+            {"start_s": 2.0, "end_s": 7.0, "channel": "atomic_action", "interesting": False},
+            {"start_s": 7.0, "end_s": 12.0, "channel": "atomic_action", "interesting": True},
+        ]}
+        out = _filter_channels_interesting(self._channels(), imap)
+        atomic = next(c for c in out if c["name"] == "atomic_action")
+        texts = [s["text"] for s in atomic["spans"]]
+        # the idle atomic span is DROPPED even though it overlaps the interesting activity region
+        self.assertNotIn("C is sitting still, listening", texts)
+        self.assertIn("C grabs the cup and pours water", texts)
+
+    def test_legacy_map_without_channel_falls_back(self):
+        from src.gaze.training import _filter_channels_interesting
+        imap = {"regions": [{"start_s": 0.0, "end_s": 30.0, "interesting": True}]}  # no channel
+        out = _filter_channels_interesting(self._channels(), imap)
+        # back-compat: any-channel overlap keeps both atomic spans
+        atomic = next(c for c in out if c["name"] == "atomic_action")
+        self.assertEqual(len(atomic["spans"]), 2)
+
 
 if __name__ == "__main__":
     unittest.main()
