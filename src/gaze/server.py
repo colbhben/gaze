@@ -231,9 +231,12 @@ def viewer_html() -> str:
     <div class="navbar">
       <button id="prevBtn" title="Previous (← or k)">◀ Prev</button>
       <button id="nextBtn" title="Next (→ or j)">Next ▶</button>
+      <button id="speedDown" title="Slower ([ or -)">−</button>
+      <span id="speed" title="Playback speed (applies to all clips)">1.00×</span>
+      <button id="speedUp" title="Faster (] or +)">+</button>
       <h2 id="title" style="margin:0 0 0 8px; font-size:16px;">Select an episode</h2>
     </div>
-    <div class="hint">Keys: space play/pause · ←/k prev · →/j next · / focus search</div>
+    <div class="hint">Keys: space play/pause · ←/k prev · →/j next · [ / ] speed · / focus search</div>
     <div class="stage no-video" id="stage"><video id="video" controls></video><div class="fallback" id="fallback">No playable video for this episode</div><canvas id="overlay"></canvas></div>
     <div class="now" id="currentAnnotation"><span class="muted">No annotation selected</span></div>
     <table><thead><tr><th>start_s</th><th>end_s</th><th>label</th><th>text</th></tr></thead><tbody id="annotations"></tbody></table>
@@ -245,6 +248,9 @@ def viewer_html() -> str:
     const countEl = document.querySelector('#count');
     const prevBtn = document.querySelector('#prevBtn');
     const nextBtn = document.querySelector('#nextBtn');
+    const speedEl = document.querySelector('#speed');
+    const speedDown = document.querySelector('#speedDown');
+    const speedUp = document.querySelector('#speedUp');
     const stage = document.querySelector('#stage');
     const video = document.querySelector('#video');
     const fallback = document.querySelector('#fallback');
@@ -258,6 +264,7 @@ def viewer_html() -> str:
     let annotations = [];
     let mediaState = 'empty';
     let episodeDuration = 0;
+    let playbackRate = 1.0;     // GLOBAL playback speed; carries across clip switches
     let frameSide = 0;  // square pixel side for x_px/y_px gaze (e.g. 378); 0 = unknown
     let syntheticStart = performance.now();
     let loadToken = 0;
@@ -270,13 +277,19 @@ def viewer_html() -> str:
     }
     video.addEventListener('loadedmetadata', () => {
       setMediaState('video');
+      video.playbackRate = playbackRate;   // re-apply the global speed to the new clip
       // Match the stage to the video's aspect ratio so the overlay maps 1:1 (square
       // molmo2 clips, 4:3 egtea/egome, etc.) -- avoids letterbox + dot drift.
       if (video.videoWidth && video.videoHeight) {
         stage.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
       }
     });
-    video.addEventListener('canplay', () => setMediaState('video'));
+    video.addEventListener('canplay', () => { setMediaState('video'); video.playbackRate = playbackRate; });
+    // The browser resets playbackRate to 1.0 on a new source; if it differs from our
+    // global rate (e.g. user changed speed mid-load), snap it back.
+    video.addEventListener('ratechange', () => {
+      if (Math.abs(video.playbackRate - playbackRate) > 1e-3) video.playbackRate = playbackRate;
+    });
     video.addEventListener('error', () => setMediaState('no-video', 'No playable video for this episode'));
     video.addEventListener('timeupdate', updateCurrentAnnotation);
     video.addEventListener('seeked', updateCurrentAnnotation);
@@ -292,6 +305,9 @@ def viewer_html() -> str:
       searchEl.oninput = renderEpisodeList;
       prevBtn.onclick = () => step(-1);
       nextBtn.onclick = () => step(1);
+      speedDown.onclick = () => bumpRate(-RATE_STEP);
+      speedUp.onclick = () => bumpRate(RATE_STEP);
+      setRate(playbackRate);   // initialize the indicator
       renderEpisodeList();
     }
     function renderEpisodeList() {
@@ -338,6 +354,13 @@ def viewer_html() -> str:
       if (mediaState !== 'video') return;
       if (video.paused) video.play(); else video.pause();
     }
+    const MIN_RATE = 0.25, MAX_RATE = 4.0, RATE_STEP = 0.25;
+    function setRate(r) {
+      playbackRate = Math.min(MAX_RATE, Math.max(MIN_RATE, Math.round(r / RATE_STEP) * RATE_STEP));
+      video.playbackRate = playbackRate;   // applies to the current clip immediately
+      speedEl.textContent = playbackRate.toFixed(2) + '×';
+    }
+    function bumpRate(delta) { setRate(playbackRate + delta); }
     document.addEventListener('keydown', (e) => {
       if (e.target === searchEl) { if (e.key === 'Escape') searchEl.blur(); return; }
       if (e.key === 'ArrowRight' || e.key === 'j') { e.preventDefault(); step(1); }
@@ -350,6 +373,10 @@ def viewer_html() -> str:
         e.preventDefault();
         togglePlay();
       }
+      // Playback speed in 0.25 steps; GLOBAL (carries across clip switches). ']'/'+'/'='
+      // faster, '['/'-' slower.
+      else if (e.key === ']' || e.key === '+' || e.key === '=') { e.preventDefault(); bumpRate(RATE_STEP); }
+      else if (e.key === '[' || e.key === '-') { e.preventDefault(); bumpRate(-RATE_STEP); }
     });
     async function loadEpisode(id) {
       const token = ++loadToken;
