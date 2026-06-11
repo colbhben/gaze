@@ -187,11 +187,21 @@ def viewer_html() -> str:
   <title>Gaze Viewer</title>
   <style>
     :root { color-scheme: light dark; font-family: ui-sans-serif, system-ui, sans-serif; }
-    body { margin: 0; display: grid; grid-template-columns: 320px 1fr; min-height: 100vh; }
-    aside { border-right: 1px solid #9995; padding: 16px; overflow: auto; }
-    main { padding: 16px; display: grid; gap: 12px; align-content: start; }
-    button { width: 100%; text-align: left; padding: 8px; margin: 4px 0; border: 1px solid #9996; background: transparent; border-radius: 6px; }
-    select { width: 100%; padding: 7px; margin: 0 0 12px; border: 1px solid #9996; border-radius: 6px; background: Canvas; color: CanvasText; }
+    body { margin: 0; display: grid; grid-template-columns: 340px 1fr; height: 100vh; overflow: hidden; }
+    aside { border-right: 1px solid #9995; display: flex; flex-direction: column; min-height: 0; }
+    .sidebar-head { padding: 12px 14px 8px; border-bottom: 1px solid #9994; position: sticky; top: 0; background: Canvas; z-index: 3; }
+    .sidebar-head h1 { font-size: 16px; margin: 0 0 8px; }
+    .episode-list { overflow-y: auto; flex: 1 1 auto; padding: 6px 8px 16px; min-height: 0; }
+    main { padding: 16px; display: grid; gap: 12px; align-content: start; overflow-y: auto; height: 100vh; }
+    button.ep { display: block; width: 100%; text-align: left; padding: 6px 8px; margin: 3px 0; border: 1px solid #9996; background: transparent; border-radius: 6px; font-size: 12px; line-height: 1.3; cursor: pointer; word-break: break-all; }
+    button.ep:hover { border-color: #ff4757aa; }
+    button.ep.selected { background: #ff475722; border-color: #ff4757; font-weight: 600; }
+    button.ep .ep-sub { color: #888; font-weight: 400; font-size: 11px; }
+    select, input[type=search] { width: 100%; padding: 7px; margin: 0 0 8px; border: 1px solid #9996; border-radius: 6px; background: Canvas; color: CanvasText; box-sizing: border-box; font-size: 13px; }
+    .navbar { display: flex; gap: 8px; align-items: center; }
+    .navbar button { flex: 0 0 auto; padding: 6px 12px; border: 1px solid #9996; background: transparent; border-radius: 6px; cursor: pointer; }
+    .navbar button:disabled { opacity: 0.4; cursor: default; }
+    .count { font-size: 12px; color: #888; margin: 2px 0 8px; }
     .stage { position: relative; width: min(100%, 960px); aspect-ratio: 16 / 9; background: #111; overflow: hidden; }
     video, canvas, .fallback { position: absolute; inset: 0; width: 100%; height: 100%; }
     video { display: block; object-fit: contain; }
@@ -201,15 +211,29 @@ def viewer_html() -> str:
     .stage.no-video .fallback { display: grid; }
     .now { width: min(100%, 960px); border: 1px solid #9994; padding: 10px; border-radius: 6px; min-height: 44px; }
     .muted { color: #777; }
+    .hint { font-size: 11px; color: #999; }
     .active-row { outline: 2px solid #ff4757; outline-offset: -2px; }
     table { border-collapse: collapse; width: min(100%, 960px); }
     td, th { border: 1px solid #9994; padding: 4px 6px; font-size: 13px; }
   </style>
 </head>
 <body>
-  <aside><h1>Episodes</h1><select id="datasetFilter"></select><div id="episodes"></div></aside>
+  <aside>
+    <div class="sidebar-head">
+      <h1>Episodes</h1>
+      <select id="datasetFilter"></select>
+      <input type="search" id="search" placeholder="Filter episodes (id substring)…" autocomplete="off">
+      <div class="count" id="count"></div>
+    </div>
+    <div class="episode-list" id="episodes"></div>
+  </aside>
   <main>
-    <h2 id="title">Select an episode</h2>
+    <div class="navbar">
+      <button id="prevBtn" title="Previous (← or k)">◀ Prev</button>
+      <button id="nextBtn" title="Next (→ or j)">Next ▶</button>
+      <h2 id="title" style="margin:0 0 0 8px; font-size:16px;">Select an episode</h2>
+    </div>
+    <div class="hint">Keys: ←/k prev · →/j next · / focus search</div>
     <div class="stage no-video" id="stage"><video id="video" controls></video><div class="fallback" id="fallback">No playable video for this episode</div><canvas id="overlay"></canvas></div>
     <div class="now" id="currentAnnotation"><span class="muted">No annotation selected</span></div>
     <table><thead><tr><th>start_s</th><th>end_s</th><th>label</th><th>text</th></tr></thead><tbody id="annotations"></tbody></table>
@@ -217,6 +241,10 @@ def viewer_html() -> str:
   <script>
     const episodesEl = document.querySelector('#episodes');
     const datasetFilter = document.querySelector('#datasetFilter');
+    const searchEl = document.querySelector('#search');
+    const countEl = document.querySelector('#count');
+    const prevBtn = document.querySelector('#prevBtn');
+    const nextBtn = document.querySelector('#nextBtn');
     const stage = document.querySelector('#stage');
     const video = document.querySelector('#video');
     const fallback = document.querySelector('#fallback');
@@ -224,6 +252,8 @@ def viewer_html() -> str:
     const canvas = document.querySelector('#overlay');
     const ctx = canvas.getContext('2d');
     let episodes = [];
+    let visibleEpisodes = [];   // current filtered+searched list (nav order)
+    let currentId = null;       // selected episode id
     let gaze = [];
     let annotations = [];
     let mediaState = 'empty';
@@ -253,23 +283,67 @@ def viewer_html() -> str:
     async function loadEpisodes() {
       const payload = await json('/api/episodes');
       episodes = payload.episodes;
-      const datasets = [...new Set(episodes.map(ep => ep.dataset).filter(Boolean))].sort();
-      datasetFilter.innerHTML = '<option value="">All datasets</option>' + datasets.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
+      const counts = {};
+      episodes.forEach(ep => { if (ep.dataset) counts[ep.dataset] = (counts[ep.dataset] || 0) + 1; });
+      const datasets = Object.keys(counts).sort();
+      datasetFilter.innerHTML = `<option value="">All datasets (${episodes.length})</option>` +
+        datasets.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)} (${counts[name]})</option>`).join('');
       datasetFilter.onchange = renderEpisodeList;
+      searchEl.oninput = renderEpisodeList;
+      prevBtn.onclick = () => step(-1);
+      nextBtn.onclick = () => step(1);
       renderEpisodeList();
     }
     function renderEpisodeList() {
       const selected = datasetFilter.value;
+      const q = (searchEl.value || '').trim().toLowerCase();
+      visibleEpisodes = episodes.filter(ep =>
+        (!selected || ep.dataset === selected) &&
+        (!q || String(ep.id).toLowerCase().includes(q)));
+      countEl.textContent = `${visibleEpisodes.length} of ${episodes.length} episode(s)`;
       episodesEl.innerHTML = '';
-      episodes.filter(ep => !selected || ep.dataset === selected).forEach(ep => {
+      const frag = document.createDocumentFragment();
+      visibleEpisodes.forEach(ep => {
         const button = document.createElement('button');
-        button.textContent = `${ep.id} (${ep.modalities || ''})`;
+        button.className = 'ep' + (ep.id === currentId ? ' selected' : '');
+        button.dataset.id = ep.id;
+        button.innerHTML = `${escapeHtml(ep.id)}<br><span class="ep-sub">${escapeHtml(ep.modalities || '')}</span>`;
         button.onclick = () => loadEpisode(ep.id);
-        episodesEl.appendChild(button);
+        frag.appendChild(button);
       });
+      episodesEl.appendChild(frag);
+      updateNavButtons();
     }
+    function updateNavButtons() {
+      const i = visibleEpisodes.findIndex(ep => ep.id === currentId);
+      prevBtn.disabled = !(i > 0);
+      nextBtn.disabled = !(i >= 0 && i < visibleEpisodes.length - 1);
+    }
+    function step(delta) {
+      if (!visibleEpisodes.length) return;
+      let i = visibleEpisodes.findIndex(ep => ep.id === currentId);
+      if (i < 0) { i = delta > 0 ? -1 : visibleEpisodes.length; }
+      const ni = i + delta;
+      if (ni < 0 || ni >= visibleEpisodes.length) return;
+      loadEpisode(visibleEpisodes[ni].id);
+    }
+    function markSelected() {
+      [...episodesEl.querySelectorAll('button.ep')].forEach(b =>
+        b.classList.toggle('selected', b.dataset.id === currentId));
+      const sel = episodesEl.querySelector('button.ep.selected');
+      if (sel) sel.scrollIntoView({ block: 'nearest' });
+      updateNavButtons();
+    }
+    document.addEventListener('keydown', (e) => {
+      if (e.target === searchEl) { if (e.key === 'Escape') searchEl.blur(); return; }
+      if (e.key === 'ArrowRight' || e.key === 'j') { e.preventDefault(); step(1); }
+      else if (e.key === 'ArrowLeft' || e.key === 'k') { e.preventDefault(); step(-1); }
+      else if (e.key === '/') { e.preventDefault(); searchEl.focus(); }
+    });
     async function loadEpisode(id) {
       const token = ++loadToken;
+      currentId = id;
+      markSelected();
       document.querySelector('#title').textContent = id;
       document.querySelector('#annotations').innerHTML = '';
       currentAnnotation.innerHTML = '<span class="muted">Loading annotations</span>';
