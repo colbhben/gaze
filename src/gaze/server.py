@@ -233,7 +233,7 @@ def viewer_html() -> str:
       <button id="nextBtn" title="Next (→ or j)">Next ▶</button>
       <h2 id="title" style="margin:0 0 0 8px; font-size:16px;">Select an episode</h2>
     </div>
-    <div class="hint">Keys: ←/k prev · →/j next · / focus search</div>
+    <div class="hint">Keys: space play/pause · ←/k prev · →/j next · / focus search</div>
     <div class="stage no-video" id="stage"><video id="video" controls></video><div class="fallback" id="fallback">No playable video for this episode</div><canvas id="overlay"></canvas></div>
     <div class="now" id="currentAnnotation"><span class="muted">No annotation selected</span></div>
     <table><thead><tr><th>start_s</th><th>end_s</th><th>label</th><th>text</th></tr></thead><tbody id="annotations"></tbody></table>
@@ -271,7 +271,7 @@ def viewer_html() -> str:
     video.addEventListener('loadedmetadata', () => {
       setMediaState('video');
       // Match the stage to the video's aspect ratio so the overlay maps 1:1 (square
-      // molmoact2 clips, 4:3 egtea/egome, etc.) -- avoids letterbox + dot drift.
+      // molmo2 clips, 4:3 egtea/egome, etc.) -- avoids letterbox + dot drift.
       if (video.videoWidth && video.videoHeight) {
         stage.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
       }
@@ -334,11 +334,22 @@ def viewer_html() -> str:
       if (sel) sel.scrollIntoView({ block: 'nearest' });
       updateNavButtons();
     }
+    function togglePlay() {
+      if (mediaState !== 'video') return;
+      if (video.paused) video.play(); else video.pause();
+    }
     document.addEventListener('keydown', (e) => {
       if (e.target === searchEl) { if (e.key === 'Escape') searchEl.blur(); return; }
       if (e.key === 'ArrowRight' || e.key === 'j') { e.preventDefault(); step(1); }
       else if (e.key === 'ArrowLeft' || e.key === 'k') { e.preventDefault(); step(-1); }
       else if (e.key === '/') { e.preventDefault(); searchEl.focus(); }
+      else if (e.key === ' ' || e.code === 'Space') {
+        // Space toggles play/pause. preventDefault stops the page from scrolling and,
+        // when the <video controls> element is focused, stops the browser's own Space
+        // handler from also toggling (which would cancel ours out).
+        e.preventDefault();
+        togglePlay();
+      }
     });
     async function loadEpisode(id) {
       const token = ++loadToken;
@@ -440,7 +451,7 @@ def viewer_html() -> str:
     }
     function gazeNorm(row) {
       // Normalize a gaze row to [0,1] on the VIDEO FRAME, supporting both forms:
-      //   x_norm/y_norm (rectify/canonical) or x_px/y_px on a `frameSide` square (molmoact2).
+      //   x_norm/y_norm (rectify/canonical) or x_px/y_px on a `frameSide` square (molmo2).
       if (!row) return null;
       if (row.x_norm != null && row.y_norm != null) return { x: row.x_norm, y: row.y_norm };
       if (row.x_px != null && row.y_px != null) {
