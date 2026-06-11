@@ -54,9 +54,9 @@ splits/
 .idea/
 .vscode/
 .codex/
-
-# Docs
-docs/
+CLAUDE.md
+.beads/
+.claude/
 
 # Priviliged
 download_links/ego-exo4d.txt

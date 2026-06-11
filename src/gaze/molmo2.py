@@ -1,10 +1,10 @@
-"""MolmoAct2 / Molmo2 video-point finetuning manifest emitter.
+"""Molmo2 video-point finetuning manifest emitter.
 
 Builds ``Molmo2VideoPoint``-style training rows (confirmed against
 ``allenai/molmo2`` ``olmo/data/molmo2_datasets.py``) for the gaze task:
 predict where the camera wearer is looking, per frame, over a short video clip.
 
-Confirmed MolmoAct2 / Molmo2 video-point format (from source):
+Confirmed Molmo2 video-point format (from source):
   * multi-frame video; the video-POINTING/track path defaults to 6 fps
     (``TrackingDataset.VIDEO_FPS = 6``; 2 fps is the general-video path, not ours).
     The only fps rule is integer divisibility -- ``sampling_fps`` must divide
@@ -35,7 +35,7 @@ Design decisions (user-confirmed):
     alignment is never broken.
 
 We keep the normalized ``[0,1]`` and integer ``0-1000`` forms per frame in a
-``provenance`` sidecar (user: "match MolmoAct2 + keep normalized").
+``provenance`` sidecar (user: "match Molmo2 + keep normalized").
 """
 from __future__ import annotations
 
@@ -146,7 +146,7 @@ def sample_segment_frames(
     return frames, num_real
 
 
-def build_molmoact_row(
+def build_molmo2_row(
     *,
     dataset: str,
     episode_id: str,
@@ -239,7 +239,7 @@ def build_molmoact_row(
 def _format_answer(points: list[list[dict[str, float]]], timestamps: list[float]) -> str:
     """Human-readable assistant answer enumerating per-frame gaze points.
 
-    For pure ``video_point`` style MolmoAct2 templates the exact wording downstream
+    For pure ``video_point`` style Molmo2 templates the exact wording downstream
     in its ``data_formatter.py``; we still emit a faithful, machine-parseable answer
     so the manifest is self-contained and inspectable.
     """
@@ -253,7 +253,7 @@ def _format_answer(points: list[list[dict[str, float]]], timestamps: list[float]
     return "Gaze per frame -> " + "; ".join(parts)
 
 
-MOLMOACT_SCHEMA: dict[str, Any] = {
+MOLMO2_SCHEMA: dict[str, Any] = {
     "$comment": "Molmo2VideoPoint-style gaze finetuning rows (allenai/molmo2).",
     "fields": {
         "id": "<dataset>:<episode_id>#seg<k>",
@@ -266,7 +266,7 @@ MOLMOACT_SCHEMA: dict[str, Any] = {
         "num_frames_real": "count of frames with a real gaze point (sum of frame_mask)",
         "num_frames": "total frames == total points (variable per clip)",
         "fps": "canonical sampling fps == gaze hz (all datasets resampled down to this)",
-        "resolution": "square side (378 for MolmoAct2)",
+        "resolution": "square side (378 for Molmo2)",
         "metadata": "{clip_start_time, clip_end_time, annotation_text (default), annotation_channel, auxiliary_annotations:[{channel,text,start_s,end_s,overlap_s}]}",
         "provenance": "{points_norm [0,1], points_1000 0-1000, label} per frame",
     },

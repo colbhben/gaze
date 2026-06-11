@@ -414,9 +414,9 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
 
     build_training = curate_sub.add_parser(
         "build-training-manifest",
-        help="Build a MolmoAct2 (or Qwen) gaze training manifest from annotation-bounded clips.",
+        help="Build a Molmo2 (or Qwen) gaze training manifest from annotation-bounded clips.",
         description=(
-            "Default output-format=molmoact2: chop each episode into annotation-bounded clip "
+            "Default output-format=molmo2: chop each episode into annotation-bounded clip "
             "SEGMENTS (capped at --max-clip-duration-s), materialize each as a resolution^2 @ fps "
             "mp4, and emit Molmo2VideoPoint rows (message_list + per-frame points + timestamps) "
             "with gaze_hz == video_fps: EXACTLY ONE pixel gaze point per video frame (1:1, variable "
@@ -434,19 +434,19 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    build_training.add_argument("--output-format", choices=["molmoact2", "qwen"], default="molmoact2", help="Manifest format; default: molmoact2.")
+    build_training.add_argument("--output-format", choices=["molmo2", "qwen"], default="molmo2", help="Manifest format; default: molmo2.")
     build_training.add_argument("--profile", metavar="NAME", default="qwen3-vl-gaze-5hz-392px", help="(qwen) canonical profile name.")
     build_training.add_argument("--fps", metavar="HZ", type=float, default=2.0, help="Canonical sampling fps; ALL datasets resample down to this. Default: 2. NOTE: Molmo2's video-pointing/track path is natively 6 fps (TrackingDataset.VIDEO_FPS=6); any integer <=10 is loader-valid (no 0.5s grid constraint). Consider --fps 6 to match Molmo2's in-distribution pointing rate.")
-    build_training.add_argument("--max-frames", metavar="N", type=int, default=0, help="(molmoact2) OPTIONAL cap: 0/unset = one gaze point per video frame (gaze_hz==fps, no cap). N>0 caps clips to N/fps seconds. Default: 0 (unlimited).")
-    build_training.add_argument("--max-clip-duration-s", metavar="S", type=float, default=20.0, help="(molmoact2) max clip/segment length in seconds; long takes split at annotation bounds. Default: 20.")
-    build_training.add_argument("--merge-gap-s", metavar="S", type=float, default=1.0, help="(molmoact2) merge annotation spans separated by <= this gap. Default: 1.")
-    build_training.add_argument("--drop-shorter-than-s", metavar="S", type=float, default=1.0, help="(molmoact2) drop chopped segments shorter than this. Default: 1.")
-    build_training.add_argument("--min-duration-s", metavar="S", type=float, default=0.0, help="(molmoact2) coalesce a clip shorter than this with the next clip(s) (text -> numbered list), up to --max-clip-duration-s. 0/unset = disabled. Default: 0.")
-    build_training.add_argument("--prompt", metavar="TEXT", default="Point to where the camera wearer is looking.", help="(molmoact2) gaze prompt text.")
-    build_training.add_argument("--workers", metavar="N", type=int, help="(molmoact2) parallel episodes; default: CPU count.")
+    build_training.add_argument("--max-frames", metavar="N", type=int, default=0, help="(molmo2) OPTIONAL cap: 0/unset = one gaze point per video frame (gaze_hz==fps, no cap). N>0 caps clips to N/fps seconds. Default: 0 (unlimited).")
+    build_training.add_argument("--max-clip-duration-s", metavar="S", type=float, default=20.0, help="(molmo2) max clip/segment length in seconds; long takes split at annotation bounds. Default: 20.")
+    build_training.add_argument("--merge-gap-s", metavar="S", type=float, default=1.0, help="(molmo2) merge annotation spans separated by <= this gap. Default: 1.")
+    build_training.add_argument("--drop-shorter-than-s", metavar="S", type=float, default=1.0, help="(molmo2) drop chopped segments shorter than this. Default: 1.")
+    build_training.add_argument("--min-duration-s", metavar="S", type=float, default=0.0, help="(molmo2) coalesce a clip shorter than this with the next clip(s) (text -> numbered list), up to --max-clip-duration-s. 0/unset = disabled. Default: 0.")
+    build_training.add_argument("--prompt", metavar="TEXT", default="Point to where the camera wearer is looking.", help="(molmo2) gaze prompt text.")
+    build_training.add_argument("--workers", metavar="N", type=int, help="(molmo2) parallel episodes; default: CPU count.")
     build_training.add_argument("--num-frames", metavar="N", type=int, default=16, help="(qwen) frames per clip; default: 16.")
     build_training.add_argument("--stride", metavar="N", type=int, default=8, help="(qwen) anchor hop in frames; default: 8.")
-    build_training.add_argument("--resolution", metavar="PX", type=int, default=378, help="Square padded video side in pixels; default: 378 (MolmoAct2).")
+    build_training.add_argument("--resolution", metavar="PX", type=int, default=378, help="Square padded video side in pixels; default: 378 (Molmo2).")
     build_training.add_argument("--temporality", choices=["causal", "centered", "future"], default="causal", help="(qwen) clip window vs anchor; default: causal.")
     build_training.add_argument("--window-seconds", metavar="N", type=float, default=30.0, help="(qwen) max source seconds to trim+resample per episode; default: 30.")
     build_training.add_argument("--out-root", metavar="PATH", default="/tmp/gaze_training_manifest", help="Output root; default: /tmp/gaze_training_manifest.")
@@ -482,7 +482,7 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
 
     viewer = curate_sub.add_parser(
         "viewer-layout",
-        help="Convert a molmoact2 training manifest into the gaze-serve viewer layout.",
+        help="Convert a molmo2 training manifest into the gaze-serve viewer layout.",
         description=(
             "Each manifest row (a clip segment) becomes one viewer episode with the segment mp4 "
             "as video + a per-frame gaze table + annotation text, plus a manifest.parquet the "
@@ -490,7 +490,7 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    viewer.add_argument("--manifest-root", metavar="PATH", required=True, help="molmoact2 build output root (has manifest.jsonl + videos/).")
+    viewer.add_argument("--manifest-root", metavar="PATH", required=True, help="molmo2 build output root (has manifest.jsonl + videos/).")
     viewer.add_argument("--out-root", metavar="PATH", required=True, help="Viewer-layout output root.")
     viewer.set_defaults(func=cmd_curate_viewer_layout)
 
@@ -800,9 +800,9 @@ def cmd_curate_export_annotations(args: argparse.Namespace) -> int:
 
 
 def cmd_curate_viewer_layout(args: argparse.Namespace) -> int:
-    from .smoke import molmoact_to_viewer_layout
+    from .smoke import molmo2_to_viewer_layout
 
-    report = molmoact_to_viewer_layout(args.manifest_root, args.out_root)
+    report = molmo2_to_viewer_layout(args.manifest_root, args.out_root)
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0
 

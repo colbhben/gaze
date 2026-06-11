@@ -1,4 +1,4 @@
-"""Unit tests for the MolmoAct2 video-point emitter (synthetic, no remote/video)."""
+"""Unit tests for the Molmo2 video-point emitter (synthetic, no remote/video)."""
 from __future__ import annotations
 
 import sys
@@ -8,8 +8,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.gaze.curate import PadTransform
-from src.gaze.molmoact import (
-    build_molmoact_row,
+from src.gaze.molmo2 import (
+    build_molmo2_row,
     px_to_padded_px,
     sample_segment_frames,
 )
@@ -148,7 +148,7 @@ class TestBuildRow(unittest.TestCase):
             gt, gpx, gpy, [True] * 13, [True] * 13,
             seg_start_s=0.0, seg_end_s=3.0, fps=2.0, n_frames=6, pad=pad,
         )
-        row = build_molmoact_row(
+        row = build_molmo2_row(
             dataset="ego-exo4d", episode_id="cmu_bike01_2", seg_index=0,
             video_rel="videos/ego-exo4d/cmu_bike01_2__seg0.mp4",
             seg_start_s=0.0, seg_end_s=3.0, frames=frames, num_real=num_real,
@@ -185,7 +185,7 @@ class TestBuildRow(unittest.TestCase):
             gt, gpx, gpy, [True] * 9, gv,
             seg_start_s=0.0, seg_end_s=3.0, fps=2.0, n_frames=6, pad=pad,
         )
-        row = build_molmoact_row(
+        row = build_molmo2_row(
             dataset="d", episode_id="e", seg_index=0, video_rel="v.mp4",
             seg_start_s=0.0, seg_end_s=3.0, frames=frames, num_real=num_real,
             fps=2.0, side=378, annotation_text=None, prompt="p",
@@ -205,7 +205,7 @@ class TestBuildRow(unittest.TestCase):
             gt, gpx, gpy, [True] * 9, [True] * 9,
             seg_start_s=1.0, seg_end_s=4.0, fps=2.0, n_frames=6, pad=pad,
         )
-        row = build_molmoact_row(
+        row = build_molmo2_row(
             dataset="d", episode_id="e", seg_index=0, video_rel="v.mp4",
             seg_start_s=1.0, seg_end_s=4.0, frames=frames, num_real=num_real,
             fps=2.0, side=378, annotation_text=None, prompt="p",

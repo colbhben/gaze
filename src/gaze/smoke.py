@@ -251,10 +251,10 @@ def _flatten_annotations(channels: list[dict[str, Any]]) -> list[dict[str, Any]]
 
 
 # --------------------------------------------------------------------------- #
-# MolmoAct2 manifest -> gaze-serve viewer layout (one viewer-episode per segment).
+# Molmo2 manifest -> gaze-serve viewer layout (one viewer-episode per segment).
 # --------------------------------------------------------------------------- #
-def molmoact_to_viewer_layout(manifest_root: str | Path, out_root: str | Path) -> dict[str, Any]:
-    """Convert a molmoact2 manifest root into the canonical layout `gaze serve` reads.
+def molmo2_to_viewer_layout(manifest_root: str | Path, out_root: str | Path) -> dict[str, Any]:
+    """Convert a molmo2 manifest root into the canonical layout `gaze serve` reads.
 
     Each manifest row (a clip SEGMENT) becomes one viewer episode under
     ``episodes/<dataset>/<episode_id>__seg<k>/`` with the segment mp4 as ``video``,

@@ -430,7 +430,7 @@ def _dotted_get(row: dict[str, Any], key: str) -> Any:
 
 
 # --------------------------------------------------------------------------- #
-# Pad-transform geometry (shared by training.py and molmoact.py). Matches ffmpeg
+# Pad-transform geometry (shared by training.py and molmo2.py). Matches ffmpeg
 # scale=W:H:force_original_aspect_ratio=decrease,pad=side:side:(ow-iw)/2:(oh-ih)/2.
 # Lives here (the contract base) so both downstream modules import it without a cycle.
 # --------------------------------------------------------------------------- #

@@ -201,6 +201,8 @@ def viewer_html() -> str:
     .navbar { display: flex; gap: 8px; align-items: center; }
     .navbar button { flex: 0 0 auto; padding: 6px 12px; border: 1px solid #9996; background: transparent; border-radius: 6px; cursor: pointer; }
     .navbar button:disabled { opacity: 0.4; cursor: default; }
+    .navbar button.on { background: #2ecc7133; border-color: #2ecc71; font-weight: 600; }
+    #speed { min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; }
     .count { font-size: 12px; color: #888; margin: 2px 0 8px; }
     .stage { position: relative; width: min(100%, 960px); aspect-ratio: 16 / 9; background: #111; overflow: hidden; }
     video, canvas, .fallback { position: absolute; inset: 0; width: 100%; height: 100%; }
@@ -234,9 +236,10 @@ def viewer_html() -> str:
       <button id="speedDown" title="Slower ([ or -)">−</button>
       <span id="speed" title="Playback speed (applies to all clips)">1.00×</span>
       <button id="speedUp" title="Faster (] or +)">+</button>
+      <button id="autoAdvanceBtn" title="Auto-advance to next clip when current ends (a)">Auto-advance: OFF</button>
       <h2 id="title" style="margin:0 0 0 8px; font-size:16px;">Select an episode</h2>
     </div>
-    <div class="hint">Keys: space play/pause · ←/k prev · →/j next · [ / ] speed · / focus search</div>
+    <div class="hint">Keys: space play/pause · ←/k prev · →/j next · [ / ] speed · a auto-advance · / focus search</div>
     <div class="stage no-video" id="stage"><video id="video" controls></video><div class="fallback" id="fallback">No playable video for this episode</div><canvas id="overlay"></canvas></div>
     <div class="now" id="currentAnnotation"><span class="muted">No annotation selected</span></div>
     <table><thead><tr><th>start_s</th><th>end_s</th><th>label</th><th>text</th></tr></thead><tbody id="annotations"></tbody></table>
@@ -251,6 +254,7 @@ def viewer_html() -> str:
     const speedEl = document.querySelector('#speed');
     const speedDown = document.querySelector('#speedDown');
     const speedUp = document.querySelector('#speedUp');
+    const autoAdvanceBtn = document.querySelector('#autoAdvanceBtn');
     const stage = document.querySelector('#stage');
     const video = document.querySelector('#video');
     const fallback = document.querySelector('#fallback');
@@ -265,6 +269,7 @@ def viewer_html() -> str:
     let mediaState = 'empty';
     let episodeDuration = 0;
     let playbackRate = 1.0;     // GLOBAL playback speed; carries across clip switches
+    let autoAdvance = false;    // when a clip ends, auto-load the next clip (toggle: 'a')
     let frameSide = 0;  // square pixel side for x_px/y_px gaze (e.g. 378); 0 = unknown
     let syntheticStart = performance.now();
     let loadToken = 0;
@@ -284,7 +289,13 @@ def viewer_html() -> str:
         stage.style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
       }
     });
-    video.addEventListener('canplay', () => { setMediaState('video'); video.playbackRate = playbackRate; });
+    video.addEventListener('canplay', () => {
+      setMediaState('video');
+      video.playbackRate = playbackRate;
+      // Autoplay the clip as soon as it's selected (clips have no audio track, so the
+      // browser's autoplay policy permits this). play() rejects if blocked -> ignore.
+      video.play().catch(() => {});
+    });
     // The browser resets playbackRate to 1.0 on a new source; if it differs from our
     // global rate (e.g. user changed speed mid-load), snap it back.
     video.addEventListener('ratechange', () => {
@@ -293,6 +304,8 @@ def viewer_html() -> str:
     video.addEventListener('error', () => setMediaState('no-video', 'No playable video for this episode'));
     video.addEventListener('timeupdate', updateCurrentAnnotation);
     video.addEventListener('seeked', updateCurrentAnnotation);
+    // Auto-advance: when a clip ends, move to the next one (if the mode is on).
+    video.addEventListener('ended', () => { if (autoAdvance) step(1); });
     async function loadEpisodes() {
       const payload = await json('/api/episodes');
       episodes = payload.episodes;
@@ -307,7 +320,9 @@ def viewer_html() -> str:
       nextBtn.onclick = () => step(1);
       speedDown.onclick = () => bumpRate(-RATE_STEP);
       speedUp.onclick = () => bumpRate(RATE_STEP);
-      setRate(playbackRate);   // initialize the indicator
+      autoAdvanceBtn.onclick = () => setAutoAdvance(!autoAdvance);
+      setRate(playbackRate);          // initialize the speed indicator
+      setAutoAdvance(autoAdvance);    // initialize the auto-advance indicator (OFF)
       renderEpisodeList();
     }
     function renderEpisodeList() {
@@ -361,6 +376,11 @@ def viewer_html() -> str:
       speedEl.textContent = playbackRate.toFixed(2) + '×';
     }
     function bumpRate(delta) { setRate(playbackRate + delta); }
+    function setAutoAdvance(on) {
+      autoAdvance = !!on;
+      autoAdvanceBtn.textContent = 'Auto-advance: ' + (autoAdvance ? 'ON' : 'OFF');
+      autoAdvanceBtn.classList.toggle('on', autoAdvance);
+    }
     document.addEventListener('keydown', (e) => {
       if (e.target === searchEl) { if (e.key === 'Escape') searchEl.blur(); return; }
       if (e.key === 'ArrowRight' || e.key === 'j') { e.preventDefault(); step(1); }
@@ -377,6 +397,8 @@ def viewer_html() -> str:
       // faster, '['/'-' slower.
       else if (e.key === ']' || e.key === '+' || e.key === '=') { e.preventDefault(); bumpRate(RATE_STEP); }
       else if (e.key === '[' || e.key === '-') { e.preventDefault(); bumpRate(-RATE_STEP); }
+      // 'a' toggles auto-advance to the next clip when the current one ends.
+      else if (e.key === 'a') { e.preventDefault(); setAutoAdvance(!autoAdvance); }
     });
     async function loadEpisode(id) {
       const token = ++loadToken;
