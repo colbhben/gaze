@@ -268,7 +268,7 @@
       "additionalProperties": false,
       "properties": {
         "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_]*$" },
-        "clip_role": { "enum": ["driver", "context"], "description": "driver (default) = this channel can drive clip boundaries/labels; context = coarse summary used only for overlay context, never drives clips (avoids bundled-text leakage)." },
+        "clip_role": { "enum": ["driver", "context", "disabled"], "description": "driver (default) = this channel can drive clip boundaries/labels; context = used only as auxiliary/overlay context, never drives clips (avoids bundled-text leakage); disabled = excluded entirely (not a driver, not auxiliary), e.g. ego-exo4d expert commentary." },
         "select": { "$ref": "#/$defs/select" },
         "reader": { "enum": ["csv", "tsv", "json", "json_by_key", "pandas_pickle"] },
         "kind": { "enum": ["interval", "point"] },

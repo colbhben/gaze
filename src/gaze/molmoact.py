@@ -154,6 +154,7 @@ def build_molmoact_row(
     annotation_text: str | None,
     prompt: str,
     annotation_channel: str | None = None,
+    auxiliary_annotations: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Assemble one Molmo2VideoPoint-style manifest row for a clip segment.
 
@@ -214,8 +215,11 @@ def build_molmoact_row(
         "metadata": {
             "clip_start_time": round(seg_start_s, 3),
             "clip_end_time": round(seg_end_s, 3),
-            "annotation_text": annotation_text,
+            "annotation_text": annotation_text,         # DEFAULT annotation (drove this clip)
             "annotation_channel": annotation_channel,
+            # AUXILIARY annotations: every other channel temporally covering this clip
+            # (item 4). Each: {channel, text, start_s, end_s (clip-relative), overlap_s}.
+            "auxiliary_annotations": auxiliary_annotations or [],
         },
         "provenance": {
             "points_norm": prov_norm,     # per-frame [x_norm,y_norm] in [0,1] or null
@@ -256,7 +260,7 @@ MOLMOACT_SCHEMA: dict[str, Any] = {
         "num_frames": "total frames == total points (variable per clip)",
         "fps": "canonical sampling fps == gaze hz (all datasets resampled down to this)",
         "resolution": "square side (378 for MolmoAct2)",
-        "metadata": "{clip_start_time, clip_end_time, annotation_text, annotation_channel}",
+        "metadata": "{clip_start_time, clip_end_time, annotation_text (default), annotation_channel, auxiliary_annotations:[{channel,text,start_s,end_s,overlap_s}]}",
         "provenance": "{points_norm [0,1], points_1000 0-1000, label} per frame",
     },
     "notes": [

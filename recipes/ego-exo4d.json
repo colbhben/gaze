@@ -101,7 +101,8 @@
       "filter": {
         "drop_where": "rejected==true"
       },
-      "split_field": "split"
+      "split_field": "split",
+      "clip_role": "driver"
     },
     {
       "name": "expert",
@@ -136,7 +137,8 @@
       },
       "filter": {
         "drop_where": "error==true"
-      }
+      },
+      "clip_role": "disabled"
     }
   ],
   "epoch_sync": {
@@ -161,10 +163,25 @@
   },
   "dataset_filters": {
     "exclude_episode_globs": [
-      "cmu_soccer*", "iiith_guitar*", "iiith_soccer*", "iiith_piano*", "indiana_music*",
-      "nus_cpr*", "nus_soccer*", "sfu_basketball*", "unc_basketball*", "unc_music*",
-      "unc_soccer*", "uniandes_basketball*", "uniandes_dance*", "upenn*Violin*",
-      "upenn*Dance*", "upenn*Piano*", "upenn*Guitar*", "utokyo_cpr*", "utokyo_soccer*"
+      "cmu_soccer*",
+      "iiith_guitar*",
+      "iiith_soccer*",
+      "iiith_piano*",
+      "indiana_music*",
+      "nus_cpr*",
+      "nus_soccer*",
+      "sfu_basketball*",
+      "unc_basketball*",
+      "unc_music*",
+      "unc_soccer*",
+      "uniandes_basketball*",
+      "uniandes_dance*",
+      "upenn*Violin*",
+      "upenn*Dance*",
+      "upenn*Piano*",
+      "upenn*Guitar*",
+      "utokyo_cpr*",
+      "utokyo_soccer*"
     ]
   },
   "metadata": {

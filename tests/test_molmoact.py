@@ -304,21 +304,30 @@ class TestCoalesceShortSegments(unittest.TestCase):
         self.assertEqual(len(out), 2)
         self.assertNotIn("coalesced", out[0])
 
-    def test_absorbs_multiple_until_min(self):
-        # four 1s clips, min 3s -> first absorbs 2 more (0..3), then a trailing 1s clip
+    def test_absorbs_multiple_until_min_then_drops_trailing(self):
+        # four 1s clips, min 3s -> first absorbs 2 more (0..3); trailing 1s clip D
+        # cannot reach 3s and is DROPPED (item 3: never ship sub-min clips).
         segs = self._segs([(0, 1, "A"), (1, 2, "B"), (2, 3, "C"), (3, 4, "D")])
         out = coalesce_short_segments(segs, min_duration_s=3.0, max_clip_s=20)
+        self.assertEqual(len(out), 1)
         self.assertAlmostEqual(out[0]["end_s"] - out[0]["start_s"], 3.0)
         self.assertEqual(out[0]["text"], "1) A 2) B 3) C")
-        # D (trailing 1s) cannot reach 3s but is still kept
-        self.assertAlmostEqual(out[-1]["start_s"], 3.0)
-        self.assertAlmostEqual(out[-1]["end_s"], 4.0)
 
-    def test_respects_max_clip_ceiling(self):
-        # min 5s but max_clip 2s -> never merge past 2s
+    def test_drop_unmergeable_single_short_clip(self):
+        # one isolated 1s clip, min 3s, nothing to merge -> DROPPED by default
+        segs = self._segs([(0, 1, "A")])
+        self.assertEqual(coalesce_short_segments(segs, min_duration_s=3.0, max_clip_s=20), [])
+        # keep when drop_unmergeable=False
+        kept = coalesce_short_segments(segs, min_duration_s=3.0, max_clip_s=20, drop_unmergeable=False)
+        self.assertEqual(len(kept), 1)
+
+    def test_respects_max_clip_ceiling_drops_unfillable(self):
+        # min 5s but max_clip 2s -> can never reach 5s -> all dropped by default
         segs = self._segs([(0, 1, "A"), (1, 2, "B"), (2, 3, "C")])
         out = coalesce_short_segments(segs, min_duration_s=5.0, max_clip_s=2.0)
-        for s in out:
+        self.assertEqual(out, [])
+        kept = coalesce_short_segments(segs, min_duration_s=5.0, max_clip_s=2.0, drop_unmergeable=False)
+        for s in kept:
             self.assertLessEqual(s["end_s"] - s["start_s"], 2.0 + 1e-6)
 
     def test_gap_between_clips_preserved_in_span(self):
@@ -327,6 +336,79 @@ class TestCoalesceShortSegments(unittest.TestCase):
         out = coalesce_short_segments(segs, min_duration_s=2.0, max_clip_s=20)
         self.assertEqual(len(out), 1)
         self.assertAlmostEqual(out[0]["end_s"], 6.0)
+
+
+class TestChannelRolesAndPoints(unittest.TestCase):
+    """Point-channel widening + clip_role (driver/context/disabled) + auxiliary attach."""
+
+    def _data(self, annos, recipe_annos):
+        from src.gaze.overlay import EpisodeData
+        return EpisodeData(
+            slug="syn", episode_id="ep",
+            video={"fps": 30.0, "width": 1408, "height": 1408, "duration_s": 100.0, "path": "x.mp4"},
+            gaze_space="already_2d", gaze_rows=[], annotations=annos,
+            epoch_sync={"annotations": {"transform": "as_is"}},
+            projection_method="already_2d", projection={},
+            recipe={"root": "x", "annotations": recipe_annos}, tok={},
+        )
+
+    def test_point_channel_widened_to_interval(self):
+        from src.gaze.training import channels_by_granularity
+        data = self._data(
+            [{"name": "atomic", "kind": "point", "segments": [
+                {"start_s": None, "end_s": None, "point_s": 10.0, "text": "grabs wheel"}]}],
+            [{"name": "atomic", "clip_role": "driver"}],
+        )
+        chans = channels_by_granularity(data, point_window_s=1.0)
+        self.assertEqual(len(chans), 1)
+        sp = chans[0]["spans"][0]
+        self.assertAlmostEqual(sp["start_s"], 9.0)   # point -/+ window
+        self.assertAlmostEqual(sp["end_s"], 11.0)
+
+    def test_disabled_channel_excluded_everywhere(self):
+        from src.gaze.training import channels_by_granularity, auxiliary_channel_spans
+        data = self._data(
+            [{"name": "atomic", "kind": "point", "segments": [
+                {"start_s": None, "end_s": None, "point_s": 10.0, "text": "grabs wheel"}]},
+             {"name": "expert", "kind": "interval", "segments": [
+                {"start_s": 0.0, "end_s": 50.0, "point_s": None, "text": "expert says..."}]}],
+            [{"name": "atomic", "clip_role": "driver"}, {"name": "expert", "clip_role": "disabled"}],
+        )
+        chans = [c["name"] for c in channels_by_granularity(data)]
+        self.assertEqual(chans, ["atomic"])                 # expert not a driver
+        aux = {s["channel"] for s in auxiliary_channel_spans(data)}
+        self.assertEqual(aux, {"atomic"})                    # expert not auxiliary either
+
+    def test_context_channel_is_auxiliary_not_driver(self):
+        from src.gaze.training import channels_by_granularity, auxiliary_channel_spans
+        data = self._data(
+            [{"name": "atomic_action", "kind": "interval", "segments": [
+                {"start_s": 5.0, "end_s": 8.0, "point_s": None, "text": "stirs pot"}]},
+             {"name": "activity_summary", "kind": "interval", "segments": [
+                {"start_s": 0.0, "end_s": 30.0, "point_s": None, "text": "cooking"}]}],
+            [{"name": "atomic_action", "clip_role": "driver"},
+             {"name": "activity_summary", "clip_role": "context"}],
+        )
+        drivers = {c["name"] for c in channels_by_granularity(data)}
+        self.assertEqual(drivers, {"atomic_action"})         # context doesn't drive
+        aux = {s["channel"] for s in auxiliary_channel_spans(data)}
+        self.assertEqual(aux, {"atomic_action", "activity_summary"})  # but IS auxiliary
+
+    def test_annotations_covering_clip_default_excluded(self):
+        from src.gaze.training import annotations_covering_clip
+        aux = [
+            {"channel": "atomic_action", "text": "stirs pot", "start_s": 5.0, "end_s": 8.0},
+            {"channel": "activity_summary", "text": "cooking dinner", "start_s": 0.0, "end_s": 30.0},
+        ]
+        # clip [5,8] driven by atomic_action "stirs pot" -> default excluded, activity aux kept
+        cov = annotations_covering_clip(aux, 5.0, 8.0, driver_channel="atomic_action", driver_text="stirs pot")
+        chans = [c["channel"] for c in cov]
+        self.assertIn("activity_summary", chans)
+        self.assertNotIn("atomic_action", chans)             # the driver is the default
+        # times are clip-relative
+        a = next(c for c in cov if c["channel"] == "activity_summary")
+        self.assertAlmostEqual(a["start_s"], 0.0)            # max(0, 0-5)=0
+        self.assertAlmostEqual(a["end_s"], 3.0)              # min(3, 30-5)=3
 
 
 class TestChopIntegration(unittest.TestCase):

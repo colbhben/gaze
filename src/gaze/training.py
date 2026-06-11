@@ -397,50 +397,137 @@ def chop_into_segments(
 # =========================================================================== #
 # Hierarchical multi-channel chopping (coarsest channel that fits; else descend).
 # =========================================================================== #
-def channels_by_granularity(data: EpisodeData) -> list[dict[str, Any]]:
-    """Per-channel reconciled interval spans, ordered COARSEST -> FINEST.
+# A point annotation (no duration, e.g. ego-exo4d atomic_descriptions) is widened to a
+# small interval centred on the event so it can DRIVE a clip; the clip then grows to
+# min_duration_s via coalescing. Half-width on each side of the point.
+POINT_WINDOW_S = 1.0
 
-    Returns ``[{name, kind, spans:[{start_s,end_s,text}]}]`` sorted by descending
-    mean span duration (the coarsest = whole-take narration first, finest = atomic
-    actions last). Only spans with non-empty text and a real [start,end] are kept.
 
-    Channels marked ``"clip_role": "context"`` in the recipe are EXCLUDED here: they
-    are coarse summaries (e.g. nymeria ``activity_summary``) whose bundled text mixes
-    several activities (conversation + TV + a bit of manipulation), so letting them
-    DRIVE clip boundaries/labels leaks conversational/passive text into the dataset.
-    They remain available as overlay context via ``reconciled_annotations``; only the
-    chopper ignores them, so clips are driven by the finer action channel(s).
+def channels_by_granularity(data: EpisodeData, *, point_window_s: float = POINT_WINDOW_S) -> list[dict[str, Any]]:
+    """Per-channel reconciled spans, ordered COARSEST -> FINEST, for chop DRIVING.
+
+    Returns ``[{name, kind, role, spans:[{start_s,end_s,text}]}]`` sorted by descending
+    mean span duration (coarsest first). Only spans with non-empty text are kept.
+
+    Channel ``clip_role`` (recipe-driven):
+      * ``driver`` (default): drives clip boundaries/labels.
+      * ``context``: NOT returned here (never drives), but still attached to clips as
+        AUXILIARY annotation (see ``auxiliary_channel_spans``). e.g. nymeria
+        activity_summary -- its bundled text would leak conversation if it drove clips.
+      * ``disabled``: excluded entirely (neither driver nor auxiliary). e.g. ego-exo4d
+        expert commentary, which we do not want in the dataset at all.
+
+    POINT channels (``kind == "point"``, e.g. ego-exo4d atomic_descriptions) carry no
+    duration; each point is widened to ``[point - point_window_s, point + point_window_s]``
+    so it can drive a (short) clip that coalescing then grows to min_duration.
     """
-    context_only = _context_channels(data)
+    roles = _channel_roles(data)
     channels: list[dict[str, Any]] = []
     for ch in reconciled_annotations(data):
-        if ch["name"] in context_only:
-            continue
-        spans = []
-        for s in ch["segments"]:
-            text = s.get("text")
-            a, b = s.get("start_s"), s.get("end_s")
-            if text is None or str(text).strip() == "":
-                continue
-            if a is None or b is None or b <= a:
-                continue
-            spans.append({"start_s": float(a), "end_s": float(b), "text": str(text)})
+        role = roles.get(ch["name"], "driver")
+        if role in ("context", "disabled"):
+            continue  # context = auxiliary only (added later); disabled = dropped
+        spans = _channel_spans(ch, point_window_s)
         if not spans:
             continue
-        spans.sort(key=lambda s: s["start_s"])
         mean_dur = sum(s["end_s"] - s["start_s"] for s in spans) / len(spans)
-        channels.append({"name": ch["name"], "kind": ch["kind"], "spans": spans, "mean_dur": mean_dur})
+        channels.append({"name": ch["name"], "kind": ch["kind"], "role": role,
+                         "spans": spans, "mean_dur": mean_dur})
     channels.sort(key=lambda c: c["mean_dur"], reverse=True)  # coarsest first
     return channels
 
 
+def _channel_spans(ch: dict[str, Any], point_window_s: float) -> list[dict[str, Any]]:
+    """Reconciled segments -> [{start_s,end_s,text}] intervals (points widened)."""
+    spans = []
+    for s in ch["segments"]:
+        text = s.get("text")
+        if text is None or str(text).strip() == "":
+            continue
+        a, b, p = s.get("start_s"), s.get("end_s"), s.get("point_s")
+        if a is not None and b is not None and b > a:
+            lo, hi = float(a), float(b)
+        elif p is not None:                       # point event -> widen to a window
+            lo, hi = float(p) - point_window_s, float(p) + point_window_s
+        elif a is not None and (b is None or b <= a):  # open/zero-length start -> window
+            lo, hi = float(a), float(a) + 2 * point_window_s
+        else:
+            continue
+        if hi <= lo:
+            continue
+        spans.append({"start_s": lo, "end_s": hi, "text": str(text)})
+    spans.sort(key=lambda s: s["start_s"])
+    return spans
+
+
+def _channel_roles(data: EpisodeData) -> dict[str, str]:
+    """Map recipe annotation channel name -> clip_role (default 'driver')."""
+    return {ch.get("name"): ch.get("clip_role", "driver")
+            for ch in (data.recipe.get("annotations") or [])}
+
+
 def _context_channels(data: EpisodeData) -> set[str]:
-    """Names of recipe annotation channels marked ``clip_role: context`` (never drive
-    clips). Default (no flag) = driver. Reads the recipe's ``annotations`` list."""
-    out: set[str] = set()
-    for ch in (data.recipe.get("annotations") or []):
-        if ch.get("clip_role") == "context":
-            out.add(ch.get("name"))
+    """Names of channels marked ``clip_role: context`` (auxiliary only, never drive)."""
+    return {n for n, r in _channel_roles(data).items() if r == "context"}
+
+
+def auxiliary_channel_spans(data: EpisodeData, *, point_window_s: float = POINT_WINDOW_S) -> list[dict[str, Any]]:
+    """All annotation spans usable as AUXILIARY context for a clip (item 4).
+
+    Returns a flat list ``[{start_s,end_s,channel,text}]`` from every channel whose
+    role is ``driver`` OR ``context`` (NOT ``disabled``). Points widened like the
+    driver path. Used to attach every temporally-containing channel to each clip.
+    """
+    roles = _channel_roles(data)
+    out: list[dict[str, Any]] = []
+    for ch in reconciled_annotations(data):
+        if roles.get(ch["name"], "driver") == "disabled":
+            continue
+        for s in _channel_spans(ch, point_window_s):
+            out.append({"start_s": s["start_s"], "end_s": s["end_s"],
+                        "channel": ch["name"], "text": s["text"]})
+    return out
+
+
+def annotations_covering_clip(
+    aux_spans: list[dict[str, Any]],
+    seg_start_s: float,
+    seg_end_s: float,
+    *,
+    driver_channel: str | None,
+    driver_text: str | None,
+    min_overlap_frac: float = 0.5,
+) -> list[dict[str, Any]]:
+    """All annotation spans temporally CONTAINED WITHIN / overlapping a clip (item 4).
+
+    Returns ``[{channel, text, start_s, end_s, overlap_s}]`` for every auxiliary span
+    that overlaps ``[seg_start_s, seg_end_s]`` by at least ``min_overlap_frac`` of the
+    SPAN's own length (so a span the clip barely clips at the edge isn't attached). The
+    span that DROVE the clip (matched by channel+text) is excluded here -- it is the
+    clip's default annotation; the rest are auxiliary. Times are returned clip-relative.
+    """
+    out: list[dict[str, Any]] = []
+    seg_len = seg_end_s - seg_start_s
+    for s in aux_spans:
+        a, b = s["start_s"], s["end_s"]
+        ov = min(b, seg_end_s) - max(a, seg_start_s)
+        if ov <= 0:
+            continue
+        span_len = b - a
+        if span_len > 0 and (ov / span_len) < min_overlap_frac and ov < seg_len - 1e-6:
+            continue  # only a sliver of the span overlaps and it doesn't fill the clip
+        # Skip the exact span that drove this clip (it's the default annotation).
+        if (s["channel"] == driver_channel and driver_text is not None
+                and str(s["text"]) in str(driver_text)):
+            continue
+        out.append({
+            "channel": s["channel"],
+            "text": s["text"],
+            "start_s": round(max(0.0, a - seg_start_s), 3),
+            "end_s": round(min(seg_len, b - seg_start_s), 3),
+            "overlap_s": round(ov, 3),
+        })
+    out.sort(key=lambda r: (r["channel"], r["start_s"]))
     return out
 
 
@@ -536,6 +623,7 @@ def coalesce_short_segments(
     *,
     min_duration_s: float,
     max_clip_s: float,
+    drop_unmergeable: bool = True,
 ) -> list[dict[str, Any]]:
     """Coalesce too-short clips with the following clip(s) to reach ``min_duration_s``.
 
@@ -543,8 +631,13 @@ def coalesce_short_segments(
     extend it to absorb the NEXT segment(s) in time order, combining their texts into
     a numbered list (:func:`_numbered_text`). Coalescing stops once the merged clip
     reaches ``min_duration_s`` or absorbing the next would exceed ``max_clip_s`` (the
-    hard ceiling always wins). A trailing short segment with nothing left to merge is
-    kept as-is. ``min_duration_s <= 0`` disables this (returns ``segments`` unchanged).
+    hard ceiling always wins). ``min_duration_s <= 0`` disables this (returns
+    ``segments`` unchanged).
+
+    DROP RULE (item 3): a merged clip that STILL falls short of ``min_duration_s``
+    (e.g. a single isolated egtea clip with no following segment to absorb, or a
+    trailing remainder) is DROPPED when ``drop_unmergeable`` is True (the default) --
+    we do not ship clips below the requested minimum duration. Set False to keep them.
 
     The merged segment keeps the FIRST segment's driving ``channel``; its ``text`` is
     the numbered concatenation of every absorbed segment's text. Operates on the
@@ -573,6 +666,10 @@ def coalesce_short_segments(
             cur["coalesced"] = j - i  # how many source segments merged (provenance)
         cur["start_s"] = round(cur["start_s"], 6)
         cur["end_s"] = round(cur["end_s"], 6)
+        # Item 3: never ship a clip below the requested minimum duration.
+        if drop_unmergeable and (cur["end_s"] - cur["start_s"]) < min_duration_s - 1e-6:
+            i = j if j > i else i + 1
+            continue
         out.append(cur)
         i = j if j > i else i + 1
     return out
@@ -1255,6 +1352,10 @@ def _build_molmoact_episode(
         return [], {"dataset": slug, "episode": episode_id, "segments": 0,
                     "note": "no annotation-bounded segments"}
 
+    # All annotation spans (driver + context channels; disabled excluded) for attaching
+    # every temporally-containing channel to each clip as auxiliary annotations (item 4).
+    aux_spans = auxiliary_channel_spans(data)
+
     # Project the gaze track once (source px, video clock). Subsample raw samples to
     # ~2.5x the grid fps before projecting (Aria CPF projection is ~60s for 30k
     # samples; we only resample to `fps` downstream, so projecting all is wasteful).
@@ -1295,12 +1396,19 @@ def _build_molmoact_episode(
         )
         if num_real == 0:
             continue
+        # Item 4: attach every other annotation channel temporally covering this clip
+        # as AUXILIARY context (the driving span is the default annotation).
+        aux = annotations_covering_clip(
+            aux_spans, seg_start, seg_end,
+            driver_channel=seg.get("channel"), driver_text=seg.get("text"),
+        )
         # Each segment carries the channel + text of the span that drove its boundaries.
         examples.append(ma.build_molmoact_row(
             dataset=slug, episode_id=episode_id, seg_index=k, video_rel=video_rel,
             seg_start_s=seg_start, seg_end_s=seg_end, frames=frames, num_real=num_real,
             fps=fps, side=resolution,
             annotation_text=seg.get("text"), annotation_channel=seg.get("channel"),
+            auxiliary_annotations=aux,
             prompt=prompt,
         ))
 
