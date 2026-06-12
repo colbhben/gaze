@@ -503,19 +503,28 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
             "Each --source is PATH[:dataset,dataset] -- keep only those datasets from that file "
             "(omit the :list to keep all). De-dupes clip ids, skips error rows. Constant memory. "
             "Use to merge the non-nymeria and nymeria runs, taking only nymeria from the nym run "
-            "and only the 4 real datasets from the nonnym run (dropping sample-default strays)."
+            "and only the 4 real datasets from the nonnym run (dropping sample-default strays).\n\n"
+            "By DEFAULT, clip videos are COPIED beside the joint manifest (into "
+            "<out-dir>/../videos/<dataset>/) and the manifest's `video` pointers are rewritten "
+            "to RELATIVE paths. This makes the manifest + videos a self-contained, relocatable "
+            "bundle that the trainer resolves under --gaze-data-dir (so it works after syncing "
+            "to S3/NFS). The old behavior baked absolute extraction-time paths in, which broke "
+            "on any other node."
         ),
         epilog=(
-            "Example:\n"
+            "Example (self-contained bundle: writes <out>/../videos + relative pointers):\n"
             "  gaze curate join-manifests \\\n"
             "    --source /path/nonnym/manifest.jsonl:ego-exo4d,egtea,holoassist,hd-epic \\\n"
             "    --source /path/nym/manifest.jsonl:nymeria \\\n"
-            "    --out /path/joint/manifest.jsonl"
+            "    --out /nfs/.../manifests/<name>/joint/manifest.jsonl"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     join.add_argument("--source", metavar="PATH[:DS,DS]", action="append", required=True, help="A manifest.jsonl, optionally :dataset,dataset to keep only those. Repeatable.")
     join.add_argument("--out", metavar="PATH", required=True, help="Output joint manifest.jsonl path.")
+    join.add_argument("--video-root", metavar="PATH", help="Where to collect clip videos; default <out-dir>/../videos (beside the manifest, under the gaze-data-dir).")
+    join.add_argument("--no-collect-videos", action="store_true", help="Do NOT copy videos beside the manifest; leave `video` pointers as written in the sources.")
+    join.add_argument("--absolute-video", action="store_true", help="With --no-collect-videos: rewrite relative `video` paths to absolute (legacy; breaks if the bundle moves).")
     join.set_defaults(func=cmd_curate_join_manifests)
 
     mksplit = curate_sub.add_parser(
@@ -872,7 +881,12 @@ def cmd_curate_join_manifests(args: argparse.Namespace) -> int:
         path, sep, dslist = spec.partition(":")
         keep = {d.strip() for d in dslist.split(",") if d.strip()} if sep else None
         sources.append((path, keep))
-    report = join_manifests(sources, args.out)
+    report = join_manifests(
+        sources, args.out,
+        collect_videos=not args.no_collect_videos,
+        absolute_video=args.absolute_video,
+        video_root=args.video_root,
+    )
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0
 

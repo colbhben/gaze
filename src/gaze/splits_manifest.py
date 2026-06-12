@@ -20,8 +20,10 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import shutil
 import subprocess
 from collections import defaultdict
+from os.path import join
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -30,7 +32,9 @@ def join_manifests(
     sources: list[tuple[str | Path, set[str] | None]],
     out_path: str | Path,
     *,
-    absolute_video: bool = True,
+    absolute_video: bool = False,
+    collect_videos: bool = True,
+    video_root: str | Path | None = None,
 ) -> dict[str, Any]:
     """Concatenate per-run manifests into ONE joint manifest.jsonl (streaming).
 
@@ -41,18 +45,32 @@ def join_manifests(
     an id are skipped; duplicate ids (same clip appearing twice) are de-duped, first wins.
     Streams line by line -> constant memory. Returns counts by dataset + total.
 
-    ``absolute_video`` (default True): rewrite each row's relative ``video`` path
-    (``videos/<slug>/<ep>.mp4``, relative to its source manifest's directory) to an
-    ABSOLUTE path, so the joint manifest is self-contained -- the downstream gaze dataset
-    can resolve clips no matter where the joint manifest itself lives. Clips that are
-    already absolute are left untouched.
+    Video handling -- exactly one of these applies per row:
+      ``collect_videos`` (default True): COPY each clip video into ``video_root`` (default
+        ``<joint-manifest-dir>/../videos`` so it sits beside <gaze-data-dir>) under
+        ``videos/<dataset>/<basename>`` and write the pointer as that RELATIVE path. This
+        makes the manifest+videos a self-contained, relocatable unit: the trainer's
+        ``_resolve_video`` joins the relative path onto --gaze-data-dir, so it resolves
+        wherever the bundle is synced (e.g. S3-via-/nfs). This is the recommended layout.
+      ``absolute_video`` (only if collect_videos=False): rewrite each relative source
+        ``video`` to an ABSOLUTE path against its source manifest dir. Self-contained only
+        as long as those absolute paths exist on the training node (they usually don't
+        after the bundle moves) -- kept for backward compatibility.
+      neither: leave ``video`` exactly as written in the source manifest.
     """
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
+    # Default video collection root: a sibling `videos/` of the joint manifest's parent, i.e.
+    # <gaze-data-dir>/videos when the manifest is written to <gaze-data-dir>/joint/manifest.jsonl.
+    if collect_videos:
+        vroot = Path(video_root) if video_root else (out_path.parent.parent / "videos")
+        vroot.mkdir(parents=True, exist_ok=True)
     seen: set[str] = set()
     by_ds: dict[str, int] = defaultdict(int)
     dropped = 0
     rewritten = 0
+    copied = 0
+    missing = 0
     with out_path.open("w", encoding="utf-8") as out_fh:
         for src, keep in sources:
             src_root = Path(src).resolve().parent
@@ -73,17 +91,39 @@ def join_manifests(
                         continue
                     if row["id"] in seen:
                         continue
+                    if row.get("video"):
+                        vid = Path(row["video"])
+                        abs_src = vid if vid.is_absolute() else (src_root / vid)
+                        if collect_videos:
+                            # Copy into <video_root>/<dataset>/<basename>, point relatively.
+                            rel = join("videos", ds, abs_src.name)
+                            dest = vroot / ds / abs_src.name
+                            if not dest.exists():
+                                if not abs_src.exists():
+                                    missing += 1
+                                    # keep the row but flag the gap; training will skip-or-error
+                                    row["error"] = f"source video missing: {abs_src}"
+                                    out_fh.write(json.dumps(row, sort_keys=True) + "\n")
+                                    seen.add(row["id"]); by_ds[ds] += 1
+                                    continue
+                                dest.parent.mkdir(parents=True, exist_ok=True)
+                                shutil.copy2(abs_src, dest)
+                                copied += 1
+                            row["video"] = rel
+                        elif absolute_video and not vid.is_absolute():
+                            row["video"] = str(abs_src.resolve())
+                            rewritten += 1
                     seen.add(row["id"])
                     by_ds[ds] += 1
-                    if absolute_video and row.get("video"):
-                        vid = Path(row["video"])
-                        if not vid.is_absolute():
-                            row["video"] = str((src_root / vid).resolve())
-                            rewritten += 1
                     out_fh.write(json.dumps(row, sort_keys=True) + "\n")
-    return {"out": str(out_path), "total": len(seen),
-            "by_dataset": dict(sorted(by_ds.items())), "dropped_off_dataset": dropped,
-            "video_paths_made_absolute": rewritten}
+    result = {"out": str(out_path), "total": len(seen),
+              "by_dataset": dict(sorted(by_ds.items())), "dropped_off_dataset": dropped}
+    if collect_videos:
+        result.update({"videos_root": str(vroot), "videos_copied": copied,
+                       "videos_missing": missing})
+    else:
+        result["video_paths_made_absolute"] = rewritten
+    return result
 
 
 def iter_clip_pointers(manifest_path: str | Path) -> Iterator[dict[str, str]]:

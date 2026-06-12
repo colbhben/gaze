@@ -116,20 +116,20 @@ class TestPointersAndJoin(unittest.TestCase):
             {"id": "ego:1#0", "dataset": "ego-exo4d", "video": "dup"},   # dup id -> first wins, dropped here
         ]), encoding="utf-8")
         out = self.tmp / "joint.jsonl"
-        rep = join_manifests([(m1, {"ego-exo4d"}), (m2, {"nymeria"})], out)
+        rep = join_manifests([(m1, {"ego-exo4d"}), (m2, {"nymeria"})], out, collect_videos=False)
         ids = [json.loads(l)["id"] for l in out.read_text().splitlines()]
         self.assertEqual(sorted(ids), ["ego:1#0", "nym:1#0"])   # stray nymeria + dup dropped
         self.assertEqual(rep["by_dataset"], {"ego-exo4d": 1, "nymeria": 1})
 
     def test_join_rewrites_video_to_absolute(self):
-        # relative video paths become absolute (resolved against the source manifest's dir)
-        # so the joint manifest is self-contained for the downstream gaze dataset.
+        # legacy mode (collect_videos=False, absolute_video=True): relative video paths become
+        # absolute (resolved against the source manifest's dir).
         m = self._manifest([
             {"id": "a:1#0", "dataset": "a", "video": "videos/a/1.mp4"},
             {"id": "a:2#0", "dataset": "a", "video": "/already/abs/2.mp4"},  # left as-is
         ])
         out = self.tmp / "joint_abs.jsonl"
-        rep = join_manifests([(m, {"a"})], out)
+        rep = join_manifests([(m, {"a"})], out, collect_videos=False, absolute_video=True)
         rows = {json.loads(l)["id"]: json.loads(l) for l in out.read_text().splitlines()}
         self.assertEqual(rows["a:1#0"]["video"], str((self.tmp / "videos/a/1.mp4").resolve()))
         self.assertTrue(Path(rows["a:1#0"]["video"]).is_absolute())
@@ -139,9 +139,37 @@ class TestPointersAndJoin(unittest.TestCase):
     def test_join_can_keep_relative_video(self):
         m = self._manifest([{"id": "a:1#0", "dataset": "a", "video": "videos/a/1.mp4"}])
         out = self.tmp / "joint_rel.jsonl"
-        join_manifests([(m, {"a"})], out, absolute_video=False)
+        join_manifests([(m, {"a"})], out, collect_videos=False, absolute_video=False)
         row = json.loads(out.read_text().splitlines()[0])
         self.assertEqual(row["video"], "videos/a/1.mp4")
+
+    def test_join_collect_videos_copies_and_relativizes(self):
+        # default mode: copy clip videos beside the joint manifest and write RELATIVE pointers,
+        # so the manifest+videos are a self-contained, relocatable bundle.
+        src_root = self.tmp / "extract"
+        (src_root / "videos" / "a").mkdir(parents=True)
+        (src_root / "videos" / "a" / "1.mp4").write_bytes(b"fakevid")
+        m = src_root / "manifest.jsonl"
+        m.write_text(json.dumps({"id": "a:1#0", "dataset": "a", "video": "videos/a/1.mp4"}) + "\n",
+                     encoding="utf-8")
+        out = self.tmp / "bundle" / "joint" / "manifest.jsonl"
+        rep = join_manifests([(m, {"a"})], out)   # collect_videos=True default
+        row = json.loads(out.read_text().splitlines()[0])
+        # pointer is relative; resolves under the bundle (<out>/../videos)
+        self.assertEqual(row["video"], "videos/a/1.mp4")
+        copied = self.tmp / "bundle" / "videos" / "a" / "1.mp4"
+        self.assertTrue(copied.exists())
+        self.assertEqual(copied.read_bytes(), b"fakevid")
+        self.assertEqual(rep["videos_copied"], 1)
+        self.assertEqual(rep["videos_missing"], 0)
+
+    def test_join_collect_videos_flags_missing_source(self):
+        m = self._manifest([{"id": "a:1#0", "dataset": "a", "video": "videos/a/gone.mp4"}])
+        out = self.tmp / "b2" / "joint" / "manifest.jsonl"
+        rep = join_manifests([(m, {"a"})], out)
+        row = json.loads(out.read_text().splitlines()[0])
+        self.assertIn("error", row)            # missing source flagged, not silently dropped
+        self.assertEqual(rep["videos_missing"], 1)
 
     def test_build_split_end_to_end(self):
         m = self._manifest(
