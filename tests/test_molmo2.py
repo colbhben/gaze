@@ -105,6 +105,26 @@ class TestSampleSegmentFrames(unittest.TestCase):
         self.assertIsNone(frames[0].x_px)
         self.assertEqual(num_real, 5)
 
+    def test_out_of_frame_gaze_is_masked_not_clamped(self):
+        # Letterboxed source (holoassist-like 896x504 -> 378): a gaze sample that is a
+        # valid track sample but fell OUTSIDE the source FOV (in_frame=False) must be
+        # MASKED (empty point), not clamped into the black letterbox band.
+        gt, gpx, gpy, gin, gv = self._grid(11)
+        gin[2] = False  # grid idx 2 (t=1.0) projected out of frame, but valid track sample
+        pad = PadTransform(896, 504, 378)
+        frames, num_real = sample_segment_frames(
+            gt, gpx, gpy, gin, gv, seg_start_s=1.0, seg_end_s=4.0,
+            fps=2.0, n_frames=6, pad=pad,
+        )
+        self.assertFalse(frames[0].valid)        # out-of-frame -> masked
+        self.assertIsNone(frames[0].x_px)        # no clamped point in the black band
+        self.assertEqual(num_real, 5)            # the other 5 in-frame frames kept
+        # every emitted point lies within the content band, never the letterbox
+        top = pad.offset_y; bot = pad.side - pad.offset_y
+        for f in frames:
+            if f.y_px is not None:
+                self.assertTrue(top - 1e-6 <= f.y_px <= bot + 1e-6)
+
     def test_frames_past_grid_end_are_masked(self):
         # request more frames than the grid covers -> trailing slots masked, kept.
         gt, gpx, gpy, gin, gv = self._grid(5)  # grid only to t=2.0

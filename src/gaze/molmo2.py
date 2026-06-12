@@ -122,9 +122,19 @@ def sample_segment_frames(
         t_rel = round(j * dt, 3)
         if 0 <= gi < n_grid:
             xs, ys = grid_px[gi], grid_py[gi]
-            valid = bool(grid_valid[gi] and xs is not None and ys is not None)
+            # A frame carries a REAL point only when the gaze sample exists AND its
+            # projected pixel lands INSIDE the content region (not the letterbox). The
+            # pad.in_content check is authoritative: it catches both out-of-FOV source
+            # samples and bad interpolations whose pixel falls in the black band (e.g.
+            # holoassist 896x504 -> 378). Otherwise px_to_padded_px would clamp it to
+            # the padded-frame edge -- i.e. onto the black bar. Such gaze is masked.
+            in_frame = bool(
+                xs is not None and ys is not None and grid_in[gi] and pad.in_content(xs, ys)
+            )
+            valid = bool(grid_valid[gi] and in_frame)
         else:
             xs = ys = None
+            in_frame = False
             valid = False
         if valid:
             x_pad, y_pad = px_to_padded_px(pad, xs, ys)
@@ -132,7 +142,7 @@ def sample_segment_frames(
             xn, yn = clamp01(xn), clamp01(yn)
             frames.append(FrameGaze(
                 t_s=t_rel, x_px=round(x_pad, 1), y_px=round(y_pad, 1),
-                valid=True, in_frame=bool(grid_in[gi]),
+                valid=True, in_frame=True,
                 x_norm=round(xn, 6), y_norm=round(yn, 6),
                 x_1000=to_bins(xn), y_1000=to_bins(yn),
             ))

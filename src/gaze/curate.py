@@ -471,6 +471,21 @@ class PadTransform:
         py = self.offset_y + y_px * self.scale
         return px / self.side, py / self.side
 
+    def in_content(self, x_px: float, y_px: float, *, tol: float = 0.5) -> bool:
+        """True iff source pixel maps INSIDE the content region (not the letterbox).
+
+        For a non-square source the padded frame has black bars; a gaze point whose
+        un-clamped padded position lands in a bar (e.g. holoassist 896x504 -> 378, where
+        y<offset_y or y>side-offset_y is black) is NOT on the actual content. This is the
+        authoritative content check -- it catches both out-of-FOV source samples and bad
+        interpolations, regardless of any upstream in_frame flag. ``tol`` (px on the padded
+        frame) allows a sub-pixel margin at the exact content edge.
+        """
+        px = self.offset_x + x_px * self.scale
+        py = self.offset_y + y_px * self.scale
+        return (self.offset_x - tol <= px <= self.side - self.offset_x + tol
+                and self.offset_y - tol <= py <= self.side - self.offset_y + tol)
+
 
 def clamp01(v: float) -> float:
     return 0.0 if v < 0.0 else (1.0 if v > 1.0 else v)
