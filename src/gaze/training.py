@@ -1111,6 +1111,24 @@ def build_training_manifest(
 
         n_workers = max(1, workers if workers else (os.cpu_count() or 4))
 
+        # --- per-episode shard cache (crash-safe resume) ----------------------------- #
+        # Every completed episode persists its rows + report to _shards/<slug>__<ep>.json
+        # IMMEDIATELY. On restart, an episode whose shard already exists is loaded from
+        # cache and NOT re-extracted -- so a crash never loses or repeats completed work.
+        # The final manifest.jsonl is just the concatenation of all shards.
+        shards_dir = out_root / "_shards"
+        shards_dir.mkdir(parents=True, exist_ok=True)
+
+        def shard_path(slug: str, episode_id: str) -> Path:
+            return shards_dir / f"{_safe(slug)}__{_safe(episode_id)}.json"
+
+        import sys as _sys
+        cached_jobs = [j for j in jobs if shard_path(*j).exists()]
+        pending_jobs = [j for j in jobs if not shard_path(*j).exists()]
+        if cached_jobs:
+            print(f"[curate] resume: {len(cached_jobs)} episodes already sharded (skipped), "
+                  f"{len(pending_jobs)} to do", file=_sys.stderr, flush=True)
+
         # Per-episode positional tokens (derived from each episode id) must NOT be
         # inherited from the sample episode when iterating a multi-episode list -- else
         # e.g. egtea's sample session leaks onto every other episode's video path.
@@ -1151,19 +1169,39 @@ def build_training_manifest(
                 _tb.print_exc(file=_sys.stderr)
                 return [], {"dataset": slug, "episode": episode_id, "error": str(exc)}
             print(f"[curate] done  {slug}:{episode_id} clips={len(res[0])}", file=_sys.stderr, flush=True)
+            # Persist this episode's result to its shard IMMEDIATELY (crash-safe). Write
+            # atomically (tmp + rename) so a crash mid-write can't leave a corrupt shard.
+            examples, rep = res
+            sp = shard_path(slug, episode_id)
+            tmp = sp.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps({"examples": examples, "report": rep}, sort_keys=True), encoding="utf-8")
+            tmp.replace(sp)
             return res
 
-        if n_workers == 1 or len(jobs) <= 1:
-            results = [run_job(j) for j in jobs]
-        else:
-            results = []
-            with concurrent.futures.ThreadPoolExecutor(max_workers=min(n_workers, len(jobs))) as ex:
-                futs = {ex.submit(run_job, j): j for j in jobs}
-                for fut in concurrent.futures.as_completed(futs):
-                    results.append(fut.result())
-        for examples, rep in results:
-            all_examples.extend(examples)
-            rows_report.append(rep)
+        # Only run the PENDING jobs (cached ones are reloaded from shards below).
+        if pending_jobs:
+            if n_workers == 1 or len(pending_jobs) <= 1:
+                for j in pending_jobs:
+                    run_job(j)
+            else:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=min(n_workers, len(pending_jobs))) as ex:
+                    futs = {ex.submit(run_job, j): j for j in pending_jobs}
+                    for fut in concurrent.futures.as_completed(futs):
+                        fut.result()  # shard already written inside run_job
+
+        # Assemble the final manifest from ALL shards (cached + just-built).
+        for slug, episode_id in jobs:
+            sp = shard_path(slug, episode_id)
+            if not sp.exists():
+                continue
+            try:
+                d = json.loads(sp.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError) as exc:
+                print(f"[curate] WARN bad shard {sp.name}: {exc}", file=_sys.stderr, flush=True)
+                continue
+            all_examples.extend(d.get("examples") or [])
+            if d.get("report") is not None:
+                rows_report.append(d["report"])
 
         return _write_manifest_outputs(
             out_root, all_examples, rows_report,
@@ -1174,6 +1212,7 @@ def build_training_manifest(
                 "max_frames": max_frames or "unlimited", "max_clip_s": max_clip_s,
                 "merge_gap_s": merge_gap_s, "drop_shorter_than_s": drop_shorter_than_s,
                 "min_duration_s": min_duration_s, "workers": n_workers,
+                "episodes_total": len(jobs), "episodes_cached_on_resume": len(cached_jobs),
             },
         )
 

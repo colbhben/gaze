@@ -94,12 +94,29 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--region", default=None, help="AWS region")
     ap.add_argument("--limit", type=int, default=None, help="only classify the first N takes")
     ap.add_argument("--workers", type=int, default=8, help="parallel takes; default 8")
+    ap.add_argument("--resume", action="store_true", help="reuse takes already present in --out (and any --reuse-map); only classify the rest. Crash-safe / append.")
+    ap.add_argument("--reuse-map", action="append", default=[], help="existing interesting-map JSON(s) to seed from; takes present there are NOT re-classified (repeatable).")
     ap.add_argument("--dry-run", action="store_true", help="print prompts + cost estimate, no model call")
     args = ap.parse_args(argv)
 
     records = [json.loads(line) for line in Path(args.inp).read_text(encoding="utf-8").splitlines() if line.strip()]
     if args.limit:
         records = records[: args.limit]
+
+    # RESUME / REUSE: seed from prior maps (the preserved interesting-list is reusable here)
+    # so already-classified takes are never re-paid for. Existing verdicts pass through.
+    out_map: dict[str, dict] = {}
+    for mp in (args.reuse_map + ([args.out] if args.resume else [])):
+        if mp and Path(mp).exists():
+            try:
+                prior = json.loads(Path(mp).read_text(encoding="utf-8"))
+                out_map.update(prior)
+            except (json.JSONDecodeError, OSError):
+                pass
+    if out_map:
+        before = len(records)
+        records = [r for r in records if r["take_id"] not in out_map]
+        print(f"[resume] seeded {len(out_map)} takes from prior map(s); {len(records)}/{before} left to classify", flush=True)
 
     if args.dry_run:
         total_spans = sum(len(r["spans"]) for r in records)
@@ -111,7 +128,6 @@ def main(argv: list[str]) -> int:
         return 0
 
     import concurrent.futures
-    out_map: dict[str, dict] = {}
     done = 0
 
     def work(rec):
