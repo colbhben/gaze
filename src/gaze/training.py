@@ -73,6 +73,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -1023,6 +1024,198 @@ def build_episode_examples(
 
 
 # =========================================================================== #
+# Process-parallel molmo2 extraction: per-episode worker + sharded dispatch.
+#
+# Manifest generation is CPU-bound in pure Python (gaze projection/resampling, row
+# assembly), so a thread pool is GIL-bound and pins one core. We parallelize across
+# PROCESSES instead -- each worker handles one episode end to end and persists its
+# result to a per-episode shard. The shard cache is both the crash-safe resume log
+# AND the cross-worker coordination: a worker skips an episode whose shard exists, so
+# any number of processes (or a relaunch after a crash) converge with zero rework.
+# =========================================================================== #
+@dataclass
+class _EpisodeJobConfig:
+    """Immutable per-run knobs passed to each episode worker (picklable)."""
+
+    out_root: str
+    fps: float
+    resolution: int
+    max_frames: int
+    max_clip_s: float
+    merge_gap_s: float
+    drop_shorter_than_s: float
+    min_duration_s: float
+    prompt: str
+    reuse_bundle: bool
+    reuse_clips: bool
+    ssh_host: str | None
+    remote_root: str
+    local_root: str | None
+    multi: bool  # iterating a multi-episode list -> don't inherit sample positional tokens
+
+
+# Positional tokens (derived per episode id) must NOT be inherited from the sample
+# episode in multi-episode mode -- else e.g. egtea's sample session leaks onto every
+# episode's video path.
+_PER_EPISODE_TOKEN_KEYS = {"session", "participant", "take_name", "take_uid", "stem", "video_uid"}
+
+
+def _shard_path(out_root: Path, slug: str, episode_id: str) -> Path:
+    return out_root / "_shards" / f"{_safe(slug)}__{_safe(episode_id)}.json"
+
+
+def _run_one_episode(
+    slug: str, episode_id: str, sample_entry: dict[str, Any],
+    interesting: dict[str, Any] | None, cfg: _EpisodeJobConfig,
+) -> str:
+    """Build ONE episode and persist its shard. Returns a short status string.
+
+    Module-level + picklable so it runs under ProcessPoolExecutor. Idempotent: if the
+    episode's shard already exists it is skipped (cross-process / resume coordination).
+    Any failure is caught and written as an error shard -- one bad take never aborts
+    the run. The shard write is atomic (tmp + rename) so a crash can't corrupt it.
+    """
+    import sys as _sys
+    out_root = Path(cfg.out_root)
+    sp = _shard_path(out_root, slug, episode_id)
+    if sp.exists():
+        return f"skip {slug}:{episode_id}"  # already done (resume / another worker)
+
+    extra = {
+        k: v for k, v in sample_entry.items()
+        if k != "episode_id" and not (cfg.multi and k in _PER_EPISODE_TOKEN_KEYS)
+    }
+    ep_puller = Puller(
+        ssh_host=cfg.ssh_host, remote_root=cfg.remote_root, local_root=cfg.local_root,
+        workdir=out_root / "_work" / _safe(f"{slug}__{episode_id}"),
+    )
+    print(f"[curate] start {slug}:{episode_id}", file=_sys.stderr, flush=True)
+    try:
+        examples, rep = _build_molmo2_episode(
+            slug, episode_id, extra, out_root, ep_puller,
+            fps=cfg.fps, resolution=cfg.resolution, max_frames=cfg.max_frames,
+            max_clip_s=cfg.max_clip_s, merge_gap_s=cfg.merge_gap_s,
+            drop_shorter_than_s=cfg.drop_shorter_than_s, min_duration_s=cfg.min_duration_s,
+            prompt=cfg.prompt, reuse_bundle=cfg.reuse_bundle,
+            interesting=interesting, reuse_clips=cfg.reuse_clips,
+        )
+    except Exception as exc:  # noqa
+        import traceback as _tb
+        print(f"[curate] ERROR {slug}:{episode_id}: {exc}", file=_sys.stderr, flush=True)
+        _tb.print_exc(file=_sys.stderr)
+        examples, rep = [], {"dataset": slug, "episode": episode_id, "error": str(exc)}
+
+    sp.parent.mkdir(parents=True, exist_ok=True)
+    tmp = sp.with_suffix(f".{os.getpid()}.tmp")
+    tmp.write_text(json.dumps({"examples": examples, "report": rep}, sort_keys=True), encoding="utf-8")
+    tmp.replace(sp)  # atomic
+    print(f"[curate] done  {slug}:{episode_id} clips={len(examples)}", file=_sys.stderr, flush=True)
+    return f"done {slug}:{episode_id} clips={len(examples)}"
+
+
+def _default_workers(n_jobs: int) -> int:
+    """Process count: one per core, capped to the job count, leaving 2 cores free."""
+    return max(1, min(n_jobs, (os.cpu_count() or 4) - 2))
+
+
+def _build_molmo2_manifest(
+    out_root: Path,
+    slugs: list[str],
+    sample_map: dict[str, dict[str, Any]],
+    episodes_for,
+    *,
+    multi: bool,
+    interesting_maps: dict[str, dict[str, Any]],
+    puller: Puller,
+    workers: int | None,
+    fps: float, resolution: int, max_frames: int, max_clip_s: float,
+    merge_gap_s: float, drop_shorter_than_s: float, min_duration_s: float,
+    prompt: str, reuse_bundle: bool, reuse_clips: bool,
+) -> dict[str, Any]:
+    """Process-parallel molmo2 extraction with crash-safe per-episode shard caching.
+
+    One worker PROCESS per episode (pool size = ``workers``, default ~all cores). Each
+    worker is idempotent and self-coordinating via the shard cache, so this is fully
+    resumable: rerun the same command after a crash and only un-sharded episodes run.
+    Final manifest is the concatenation of all shards.
+    """
+    import concurrent.futures
+    import sys as _sys
+    from . import curate_readers as cr
+
+    (out_root / "_shards").mkdir(parents=True, exist_ok=True)
+    rows_report: list[dict[str, Any]] = []
+
+    # Flat work list of (slug, episode_id), honoring cull + exclude globs.
+    jobs: list[tuple[str, str]] = []
+    for slug in slugs:
+        if cr.is_culled(slug):
+            rows_report.append({"dataset": slug, "culled": True})
+            continue
+        for episode_id in episodes_for(slug):
+            jobs.append((slug, episode_id))
+
+    pending = [j for j in jobs if not _shard_path(out_root, *j).exists()]
+    n_cached = len(jobs) - len(pending)
+    n_workers = max(1, workers) if workers else _default_workers(len(pending) or 1)
+    print(f"[curate] molmo2: {len(jobs)} episodes ({n_cached} already done, {len(pending)} pending) "
+          f"on {n_workers} worker process(es)", file=_sys.stderr, flush=True)
+
+    cfg = _EpisodeJobConfig(
+        out_root=str(out_root), fps=fps, resolution=resolution, max_frames=max_frames,
+        max_clip_s=max_clip_s, merge_gap_s=merge_gap_s, drop_shorter_than_s=drop_shorter_than_s,
+        min_duration_s=min_duration_s, prompt=prompt, reuse_bundle=reuse_bundle,
+        reuse_clips=reuse_clips, ssh_host=puller.ssh_host, remote_root=puller.remote_root,
+        local_root=str(puller.local_root) if puller.local_root else None, multi=multi,
+    )
+
+    # Dispatch pending episodes across PROCESSES (CPU-bound pure-Python work; threads
+    # would be GIL-bound). 1 worker / 1 job -> run inline (simpler, debuggable).
+    if pending:
+        if n_workers == 1 or len(pending) == 1:
+            for slug, ep in pending:
+                _run_one_episode(slug, ep, sample_map[slug], interesting_maps.get(slug), cfg)
+        else:
+            ctx = __import__("multiprocessing").get_context("spawn")
+            with concurrent.futures.ProcessPoolExecutor(max_workers=n_workers, mp_context=ctx) as ex:
+                futs = [ex.submit(_run_one_episode, slug, ep, sample_map[slug],
+                                  interesting_maps.get(slug), cfg) for slug, ep in pending]
+                for fut in concurrent.futures.as_completed(futs):
+                    try:
+                        fut.result()  # shard already persisted in the worker
+                    except Exception as exc:  # noqa: a worker crash shouldn't sink the pool
+                        print(f"[curate] WARN worker crashed: {exc}", file=_sys.stderr, flush=True)
+
+    # Assemble the manifest from ALL shards (cached + just-built).
+    all_examples: list[dict[str, Any]] = []
+    for slug, episode_id in jobs:
+        sp = _shard_path(out_root, slug, episode_id)
+        if not sp.exists():
+            continue
+        try:
+            d = json.loads(sp.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            print(f"[curate] WARN bad shard {sp.name}: {exc}", file=_sys.stderr, flush=True)
+            continue
+        all_examples.extend(d.get("examples") or [])
+        if d.get("report") is not None:
+            rows_report.append(d["report"])
+
+    return _write_manifest_outputs(
+        out_root, all_examples, rows_report,
+        schema=ma.MOLMO2_SCHEMA,
+        report_meta={
+            "output_format": "molmo2", "fps": fps, "resolution": resolution,
+            "gaze_hz": fps, "points_per_video_frame": 1,
+            "max_frames": max_frames or "unlimited", "max_clip_s": max_clip_s,
+            "merge_gap_s": merge_gap_s, "drop_shorter_than_s": drop_shorter_than_s,
+            "min_duration_s": min_duration_s, "workers": n_workers,
+            "episodes_total": len(jobs), "episodes_cached_on_resume": n_cached,
+        },
+    )
+
+
+# =========================================================================== #
 # Top-level builder.
 # =========================================================================== #
 def build_training_manifest(
@@ -1097,123 +1290,13 @@ def build_training_manifest(
         return cr.filter_episode_ids(slug, ids)
 
     if output_format == "molmo2":
-        import concurrent.futures
-        import os
-
-        # Flat work list of (slug, episode_id), honoring cull + exclude globs.
-        jobs: list[tuple[str, str]] = []
-        for slug in slugs:
-            if cr.is_culled(slug):
-                rows_report.append({"dataset": slug, "culled": True})
-                continue
-            for episode_id in episodes_for(slug):
-                jobs.append((slug, episode_id))
-
-        n_workers = max(1, workers if workers else (os.cpu_count() or 4))
-
-        # --- per-episode shard cache (crash-safe resume) ----------------------------- #
-        # Every completed episode persists its rows + report to _shards/<slug>__<ep>.json
-        # IMMEDIATELY. On restart, an episode whose shard already exists is loaded from
-        # cache and NOT re-extracted -- so a crash never loses or repeats completed work.
-        # The final manifest.jsonl is just the concatenation of all shards.
-        shards_dir = out_root / "_shards"
-        shards_dir.mkdir(parents=True, exist_ok=True)
-
-        def shard_path(slug: str, episode_id: str) -> Path:
-            return shards_dir / f"{_safe(slug)}__{_safe(episode_id)}.json"
-
-        import sys as _sys
-        cached_jobs = [j for j in jobs if shard_path(*j).exists()]
-        pending_jobs = [j for j in jobs if not shard_path(*j).exists()]
-        if cached_jobs:
-            print(f"[curate] resume: {len(cached_jobs)} episodes already sharded (skipped), "
-                  f"{len(pending_jobs)} to do", file=_sys.stderr, flush=True)
-
-        # Per-episode positional tokens (derived from each episode id) must NOT be
-        # inherited from the sample episode when iterating a multi-episode list -- else
-        # e.g. egtea's sample session leaks onto every other episode's video path.
-        per_episode_keys = {"session", "participant", "take_name", "take_uid", "stem", "video_uid"}
-        multi = bool(episode_lists)
-
-        def run_job(job: tuple[str, str]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-            slug, episode_id = job
-            extra = {
-                k: v for k, v in sample_map[slug].items()
-                if k != "episode_id" and not (multi and k in per_episode_keys)
-            }
-            # Each episode gets its OWN Puller workdir so parallel pulls/trims never collide.
-            ep_puller = Puller(
-                ssh_host=puller.ssh_host, remote_root=puller.remote_root,
-                local_root=puller.local_root,
-                workdir=out_root / "_work" / _safe(f"{slug}__{episode_id}"),
-            )
-            import sys as _sys
-            print(f"[curate] start {slug}:{episode_id}", file=_sys.stderr, flush=True)
-            try:
-                res = _build_molmo2_episode(
-                    slug, episode_id, extra, out_root, ep_puller,
-                    fps=fps, resolution=resolution, max_frames=max_frames,
-                    max_clip_s=max_clip_s, merge_gap_s=merge_gap_s, drop_shorter_than_s=drop_shorter_than_s,
-                    min_duration_s=min_duration_s,
-                    prompt=prompt, reuse_bundle=reuse_bundle,
-                    interesting=interesting_maps.get(slug),
-                    reuse_clips=reuse_clips,
-                )
-            except Exception as exc:  # noqa
-                # One bad take must NEVER kill the whole run. Any unhandled error
-                # (e.g. an unresolved {slam_index} -> missing calib file on the in-place
-                # mount, a projectaria failure, an ffmpeg crash) becomes a logged error
-                # row and the run continues. Matches the skip-and-log policy.
-                import traceback as _tb
-                print(f"[curate] ERROR {slug}:{episode_id}: {exc}", file=_sys.stderr, flush=True)
-                _tb.print_exc(file=_sys.stderr)
-                return [], {"dataset": slug, "episode": episode_id, "error": str(exc)}
-            print(f"[curate] done  {slug}:{episode_id} clips={len(res[0])}", file=_sys.stderr, flush=True)
-            # Persist this episode's result to its shard IMMEDIATELY (crash-safe). Write
-            # atomically (tmp + rename) so a crash mid-write can't leave a corrupt shard.
-            examples, rep = res
-            sp = shard_path(slug, episode_id)
-            tmp = sp.with_suffix(".json.tmp")
-            tmp.write_text(json.dumps({"examples": examples, "report": rep}, sort_keys=True), encoding="utf-8")
-            tmp.replace(sp)
-            return res
-
-        # Only run the PENDING jobs (cached ones are reloaded from shards below).
-        if pending_jobs:
-            if n_workers == 1 or len(pending_jobs) <= 1:
-                for j in pending_jobs:
-                    run_job(j)
-            else:
-                with concurrent.futures.ThreadPoolExecutor(max_workers=min(n_workers, len(pending_jobs))) as ex:
-                    futs = {ex.submit(run_job, j): j for j in pending_jobs}
-                    for fut in concurrent.futures.as_completed(futs):
-                        fut.result()  # shard already written inside run_job
-
-        # Assemble the final manifest from ALL shards (cached + just-built).
-        for slug, episode_id in jobs:
-            sp = shard_path(slug, episode_id)
-            if not sp.exists():
-                continue
-            try:
-                d = json.loads(sp.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError) as exc:
-                print(f"[curate] WARN bad shard {sp.name}: {exc}", file=_sys.stderr, flush=True)
-                continue
-            all_examples.extend(d.get("examples") or [])
-            if d.get("report") is not None:
-                rows_report.append(d["report"])
-
-        return _write_manifest_outputs(
-            out_root, all_examples, rows_report,
-            schema=ma.MOLMO2_SCHEMA,
-            report_meta={
-                "output_format": "molmo2", "fps": fps, "resolution": resolution,
-                "gaze_hz": fps, "points_per_video_frame": 1,
-                "max_frames": max_frames or "unlimited", "max_clip_s": max_clip_s,
-                "merge_gap_s": merge_gap_s, "drop_shorter_than_s": drop_shorter_than_s,
-                "min_duration_s": min_duration_s, "workers": n_workers,
-                "episodes_total": len(jobs), "episodes_cached_on_resume": len(cached_jobs),
-            },
+        return _build_molmo2_manifest(
+            out_root, slugs, sample_map, episodes_for, multi=bool(episode_lists),
+            interesting_maps=interesting_maps, puller=puller, workers=workers,
+            fps=fps, resolution=resolution, max_frames=max_frames, max_clip_s=max_clip_s,
+            merge_gap_s=merge_gap_s, drop_shorter_than_s=drop_shorter_than_s,
+            min_duration_s=min_duration_s, prompt=prompt, reuse_bundle=reuse_bundle,
+            reuse_clips=reuse_clips,
         )
 
     for slug in slugs:
