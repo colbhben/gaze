@@ -34,10 +34,10 @@
 #   Run / credentials
 #     --name NAME              [req] run name; also fills the default S3 save_folder
 #     --wandb-key KEY          wandb API key            (default: $WANDB_API_KEY)   [req]
-#     --wandb-project PROJ     wandb project            (default: $WANDB_PROJECT)   [req]
-#     --wandb-entity ENT       wandb entity/team        (default: $WANDB_ENTITY)    [req]
-#     --wandb-base-url URL     self-hosted W&B server URL; REQUIRED for "local-" keys
-#                              (default: $WANDB_BASE_URL, else api.wandb.ai)
+#     --wandb-project PROJ     wandb project                       (default: colbhben-gaze)
+#     --wandb-entity ENT       wandb entity/team                   (default: far-wandb)
+#     --wandb-base-url URL     self-hosted W&B server URL (required for "local-" keys)
+#                              (default: https://far.wandb.io)
 #     --hf-token TOK           HuggingFace token        (default: $HF_ACCESS_TOKEN)
 #   Data (no path may be on /nfs at run time -- stage to local scratch first)
 #     --gaze-data-dir DIR      [req] local dir with joint/manifest.jsonl + splits/<name>/
@@ -142,14 +142,15 @@ WARMUP=200
 ALPHA_F=0.1
 NUM_WORKERS=6
 
-# wandb (REQUIRED). Seed from env; --wandb-* flags override.
+# wandb. Project/entity/base-url default to the FAR self-hosted server; --wandb-* flags or
+# env override. The API KEY is still required (no secret hardcoded): pass --wandb-key or
+# export WANDB_API_KEY.
 WANDB_KEY=${WANDB_API_KEY:-}
-WANDB_PROJECT=${WANDB_PROJECT:-}
-WANDB_ENTITY=${WANDB_ENTITY:-}
-# Base URL of the wandb server. Self-hosted ("local-..." keys) need this pointed at your
-# W&B Server; the public cloud (api.wandb.ai) rejects local- keys with HTTP 401. Empty =>
-# wandb's default (api.wandb.ai). Set via --wandb-base-url or WANDB_BASE_URL.
-WANDB_BASE_URL_=${WANDB_BASE_URL:-}
+WANDB_PROJECT=${WANDB_PROJECT:-colbhben-gaze}
+WANDB_ENTITY=${WANDB_ENTITY:-far-wandb}
+# Base URL of the wandb server. Self-hosted ("local-..." keys) need this pointed at the
+# W&B Server; the public cloud (api.wandb.ai) rejects local- keys with HTTP 401.
+WANDB_BASE_URL_=${WANDB_BASE_URL:-https://far.wandb.io}
 
 HF_TOKEN=${HF_ACCESS_TOKEN:-}
 DRY_RUN=0
