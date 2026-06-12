@@ -500,11 +500,16 @@ def annotations_covering_clip(
 ) -> list[dict[str, Any]]:
     """All annotation spans temporally CONTAINED WITHIN / overlapping a clip (item 4).
 
-    Returns ``[{channel, text, start_s, end_s, overlap_s}]`` for every auxiliary span
-    that overlaps ``[seg_start_s, seg_end_s]`` by at least ``min_overlap_frac`` of the
-    SPAN's own length (so a span the clip barely clips at the edge isn't attached). The
-    span that DROVE the clip (matched by channel+text) is excluded here -- it is the
-    clip's default annotation; the rest are auxiliary. Times are returned clip-relative.
+    Returns ``[{channel, text, start_s, end_s, overlap_s, source_duration_s}]`` for every
+    auxiliary span that overlaps ``[seg_start_s, seg_end_s]`` by at least
+    ``min_overlap_frac`` of the SPAN's own length (so a span the clip barely clips at the
+    edge isn't attached). The span that DROVE the clip (matched by channel+text) is
+    excluded here -- it is the clip's default annotation; the rest are auxiliary.
+
+    ``start_s``/``end_s`` are clip-relative and CLAMPED to the clip window; ``overlap_s``
+    is how much of the span lies inside the clip; ``source_duration_s`` is the FULL
+    duration of the original (un-clamped) source annotation span on the video clock, so
+    a consumer can tell how much of the underlying annotation the clip actually captures.
     """
     out: list[dict[str, Any]] = []
     seg_len = seg_end_s - seg_start_s
@@ -526,6 +531,7 @@ def annotations_covering_clip(
             "start_s": round(max(0.0, a - seg_start_s), 3),
             "end_s": round(min(seg_len, b - seg_start_s), 3),
             "overlap_s": round(ov, 3),
+            "source_duration_s": round(span_len, 3),
         })
     out.sort(key=lambda r: (r["channel"], r["start_s"]))
     return out

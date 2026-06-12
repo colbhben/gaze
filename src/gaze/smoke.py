@@ -320,6 +320,8 @@ def molmo2_to_viewer_layout(manifest_root: str | Path, out_root: str | Path) -> 
                 "channel": aux.get("channel"),
                 "label": aux.get("channel"),
                 "text": aux.get("text"),
+                "source_duration_s": aux.get("source_duration_s"),
+                "overlap_s": aux.get("overlap_s"),
             })
         if anno_rows:
             write_table(anno_rows, ep_dir / "annotations.jsonl")

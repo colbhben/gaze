@@ -429,6 +429,9 @@ class TestChannelRolesAndPoints(unittest.TestCase):
         a = next(c for c in cov if c["channel"] == "activity_summary")
         self.assertAlmostEqual(a["start_s"], 0.0)            # max(0, 0-5)=0
         self.assertAlmostEqual(a["end_s"], 3.0)              # min(3, 30-5)=3
+        # source_duration_s is the FULL un-clamped span length (30-0), not the clipped 3s
+        self.assertAlmostEqual(a["source_duration_s"], 30.0)
+        self.assertAlmostEqual(a["overlap_s"], 3.0)
 
 
 class TestChopIntegration(unittest.TestCase):
