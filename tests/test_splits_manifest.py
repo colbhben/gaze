@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.gaze.splits_manifest import (
     build_split,
+    derive_splits_s3_uri,
     iter_clip_pointers,
     join_manifests,
     make_stratified_splits,
@@ -159,6 +160,29 @@ class TestPointersAndJoin(unittest.TestCase):
         # pointer files contain only pointer fields
         first = json.loads((base / "val.jsonl").read_text().splitlines()[0])
         self.assertEqual(set(first), {"id", "dataset", "video"})
+
+
+class TestDeriveSplitsS3Uri(unittest.TestCase):
+    def test_co_locates_beside_manifest(self):
+        # manifest at <m>/joint/manifest.jsonl -> splits prefix at <m>/splits (S3-mirrored)
+        uri = derive_splits_s3_uri(
+            "/nfs/colbhben/gaze/manifests/partial_20260612/joint/manifest.jsonl"
+        )
+        self.assertEqual(
+            uri,
+            "s3://far-research-internal/colbhben/gaze/manifests/partial_20260612/splits",
+        )
+
+    def test_manifest_without_joint_parent(self):
+        # if the manifest isn't in a joint/ subdir, the splits sit beside the file's dir
+        uri = derive_splits_s3_uri("/nfs/colbhben/gaze/manifests/m1/manifest.jsonl")
+        self.assertEqual(
+            uri, "s3://far-research-internal/colbhben/gaze/manifests/m1/splits"
+        )
+
+    def test_rejects_non_nfs_manifest(self):
+        with self.assertRaises(ValueError):
+            derive_splits_s3_uri("/tmp/local/joint/manifest.jsonl")
 
 
 if __name__ == "__main__":

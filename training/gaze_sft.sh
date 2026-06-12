@@ -272,8 +272,13 @@ if [ -n "$STAGE_FROM" ]; then
 fi
 
 [ -n "$GAZE_DATA_DIR" ] || die "--gaze-data-dir required (local dir with joint/manifest.jsonl + splits/)."
+# Reading inputs from /nfs is fine -- the dir is bind-mounted :ro, so the container cannot
+# write it. (Only checkpoints must never land on /nfs; see the SAVE_FOLDER guard above.)
+# Staging to local scratch is a throughput optimization, not a safety requirement -- opt in
+# with --stage-from if NFS read bandwidth bottlenecks the dataloader.
 case "$GAZE_DATA_DIR" in
-  /nfs/*) die "GAZE_DATA_DIR is on /nfs (read-only); stage to local scratch with --stage-from first." ;;
+  /nfs/*) echo ">> note: reading gaze data directly from /nfs (mounted :ro). For faster" >&2
+          echo "         data loading, stage to local scratch with --stage-from." >&2 ;;
 esac
 [ -f "$GAZE_DATA_DIR/joint/manifest.jsonl" ] || \
   die "missing $GAZE_DATA_DIR/joint/manifest.jsonl (run: gaze curate join-manifests)."
@@ -283,8 +288,9 @@ esac
   die "missing $GAZE_DATA_DIR/splits/$GAZE_SPLIT_NAME/val.jsonl (the gaze eval split)."
 
 [ -n "$MOLMO_DATA_DIR" ] || die "--molmo-data-dir required (local Molmo2-Data rehearsal root)."
+# Same as gaze data: reading rehearsal data from /nfs is fine (bind-mounted :ro below).
 case "$MOLMO_DATA_DIR" in
-  /nfs/*) die "MOLMO_DATA_DIR is on /nfs (read-only); stage the rehearsal data to local scratch first." ;;
+  /nfs/*) echo ">> note: reading rehearsal data directly from /nfs (mounted :ro)." >&2 ;;
 esac
 [ -d "$MOLMO_DATA_DIR" ] || die "MOLMO_DATA_DIR '$MOLMO_DATA_DIR' not found."
 

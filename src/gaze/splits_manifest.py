@@ -231,6 +231,37 @@ def write_splits(
     return index
 
 
+def derive_splits_s3_uri(
+    manifest_path: str | Path,
+    *,
+    nfs_mount: str = "/nfs",
+    s3_root: str = "s3://far-research-internal",
+) -> str:
+    """Derive the splits S3 prefix that sits BESIDE the manifest it's built from.
+
+    A manifest lives at ``<manifest-dir>/joint/manifest.jsonl`` and ``/nfs`` mirrors
+    ``s3://far-research-internal``. So a manifest at
+    ``/nfs/colbhben/gaze/manifests/<m>/joint/manifest.jsonl`` yields the splits prefix
+    ``s3://far-research-internal/colbhben/gaze/manifests/<m>/splits`` -- and uploading a
+    split there makes it appear at ``/nfs/.../manifests/<m>/splits/<name>/``, which is
+    exactly ``<gaze-data-dir>/splits/<name>/`` where training/gaze_sft.sh reads it.
+
+    Raises ValueError if the manifest is not under ``nfs_mount`` (so it can't be mapped to
+    S3) -- the caller should then ask for an explicit --s3-uri.
+    """
+    p = Path(manifest_path)
+    root = p.parent.parent if p.parent.name == "joint" else p.parent
+    root_str = str(root)
+    prefix = nfs_mount.rstrip("/") + "/"
+    if not root_str.startswith(prefix):
+        raise ValueError(
+            f"cannot auto-derive an S3 splits path from a manifest not under {nfs_mount}: "
+            f"{manifest_path}. Pass --s3-uri explicitly."
+        )
+    rel = root_str[len(prefix):]
+    return f"{s3_root.rstrip('/')}/{rel}/splits"
+
+
 def file_sha256(path: str | Path, _bufsize: int = 1 << 20) -> str:
     h = hashlib.sha256()
     with Path(path).open("rb") as fh:

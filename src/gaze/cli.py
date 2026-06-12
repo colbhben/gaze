@@ -527,7 +527,9 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
             "training joins back to the manifest by id. Sampling is CLIP-LEVEL and PER-DATASET "
             "STRATIFIED: the ratio is applied independently within each dataset then unioned, so "
             "the val split is GUARANTEED to contain clips from every (incl. minority) dataset. "
-            "Deterministic given --seed. Optionally uploads to s3://.../splits/<name>/."
+            "Deterministic given --seed. With --upload, splits go (by default) BESIDE their "
+            "manifest at <manifest-dir>/splits/<name>/ -- exactly where training/gaze_sft.sh "
+            "reads them."
         ),
         epilog=(
             "Examples:\n"
@@ -543,7 +545,7 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
     mksplit.add_argument("--seed", metavar="INT", type=int, default=0, help="Deterministic seed; default 0.")
     mksplit.add_argument("--out-dir", metavar="PATH", default="/tmp/gaze_splits", help="Local dir for split pointer files; default /tmp/gaze_splits.")
     mksplit.add_argument("--upload", action="store_true", help="Upload <out-dir>/<name>/ to S3 after writing.")
-    mksplit.add_argument("--s3-uri", metavar="URI", default="s3://far-research-internal/colbhben/gaze/splits", help="S3 splits prefix.")
+    mksplit.add_argument("--s3-uri", metavar="URI", default="auto", help="S3 splits prefix. Default 'auto' derives <manifest-dir>/splits from the manifest path (co-locates splits beside their manifest, where training/gaze_sft.sh expects them). Pass an explicit s3:// URI to override.")
     mksplit.add_argument("--upload-via-host", metavar="HOST", help="Run the S3 sync via ssh on this host (for envs where local AWS is read-only).")
     mksplit.add_argument("--aws-bin", metavar="PATH", default="aws", help="aws binary; default 'aws' (use /snap/bin/aws on the remote).")
     mksplit.add_argument("--dry-run", action="store_true", help="With --upload, print the plan without uploading.")
@@ -876,14 +878,24 @@ def cmd_curate_join_manifests(args: argparse.Namespace) -> int:
 
 
 def cmd_curate_make_splits(args: argparse.Namespace) -> int:
-    from .splits_manifest import build_split, upload_splits
+    from .splits_manifest import build_split, derive_splits_s3_uri, upload_splits
 
     ratios = parse_ratios(args.ratios)
     index = build_split(args.manifest, args.out_dir, name=args.name, ratios=ratios, seed=args.seed)
     result: dict = {"split": index}
     if args.upload:
+        # 'auto' (default) co-locates splits beside their manifest in S3 -- i.e.
+        # <manifest-dir>/splits/<name>/ -- so they mirror to /nfs exactly where
+        # training/gaze_sft.sh reads <gaze-data-dir>/splits/<name>/.
+        s3_uri = args.s3_uri
+        if s3_uri == "auto":
+            try:
+                s3_uri = derive_splits_s3_uri(args.manifest)
+            except ValueError as e:
+                print(f"error: {e}", file=sys.stderr)
+                return 1
         result["upload"] = upload_splits(
-            args.out_dir, name=args.name, s3_uri=args.s3_uri, aws_bin=args.aws_bin,
+            args.out_dir, name=args.name, s3_uri=s3_uri, aws_bin=args.aws_bin,
             on_remote_host=args.upload_via_host, dry_run=args.dry_run,
         )
     print(json.dumps(result, indent=2, sort_keys=True))
