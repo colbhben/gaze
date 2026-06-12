@@ -1186,17 +1186,24 @@ def _build_molmo2_manifest(
                     except Exception as exc:  # noqa: a worker crash shouldn't sink the pool
                         print(f"[curate] WARN worker crashed: {exc}", file=_sys.stderr, flush=True)
 
-    # Assemble the manifest from ALL shards (cached + just-built).
+    # Assemble the manifest from EVERY shard on disk -- a glob of _shards/*.json, NOT this
+    # process's `jobs` list. This is the union of all workers' results, so when the run is
+    # split across multiple processes sharing one out-root (each a build over a slice of
+    # episodes), the manifest still contains ALL episodes -- not just the slice that
+    # happened to assemble last. The per-episode atomic writes use a `*.<pid>.tmp` suffix,
+    # so the `*.json` glob never picks up a partial write.
+    # (Trade-off, accepted: if an out-root is REUSED across different episode configs, stale
+    # shards from a prior config are included. Shards are keyed by slug__episode and a run
+    # only writes its own, so this only bites a deliberate cross-config reuse of one dir.)
     all_examples: list[dict[str, Any]] = []
-    for slug, episode_id in jobs:
-        sp = _shard_path(out_root, slug, episode_id)
-        if not sp.exists():
-            continue
+    n_shards = 0
+    for sp in sorted((out_root / "_shards").glob("*.json")):
         try:
             d = json.loads(sp.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError) as exc:
             print(f"[curate] WARN bad shard {sp.name}: {exc}", file=_sys.stderr, flush=True)
             continue
+        n_shards += 1
         all_examples.extend(d.get("examples") or [])
         if d.get("report") is not None:
             rows_report.append(d["report"])
@@ -1211,6 +1218,7 @@ def _build_molmo2_manifest(
             "merge_gap_s": merge_gap_s, "drop_shorter_than_s": drop_shorter_than_s,
             "min_duration_s": min_duration_s, "workers": n_workers,
             "episodes_total": len(jobs), "episodes_cached_on_resume": n_cached,
+            "shards_assembled": n_shards,
         },
     )
 

@@ -379,5 +379,54 @@ class TestEpisodeListNoSampleContamination(unittest.TestCase):
         self.assertEqual({s for s, _ in scheduled}, {"egtea"})  # egtea only, no strays
 
 
+class TestShardUnionAssembly(unittest.TestCase):
+    """Manifest is assembled from EVERY shard on disk (glob of _shards/*.json), not just
+    this process's jobs list -- so multi-process / multi-slice runs sharing one out-root
+    produce the COMPLETE manifest, not one slice's subset (the partial-overwrite bug)."""
+
+    def test_assembly_unions_all_shards_not_just_jobs(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        out = Path(tempfile.mkdtemp())
+        sd = out / "_shards"
+        sd.mkdir(parents=True)
+        def _row(ds, ep):  # minimal molmo2 row the manifest writers accept
+            return {"id": f"{ds}:{ep}#seg0", "dataset": ds, "episode_id": ep,
+                    "seg_index": 0, "num_frames": 3, "metadata": {}}
+
+        # Pre-seed 5 shards as if written by OTHER slice processes (NOT in this call's jobs).
+        for i in range(5):
+            (sd / f"egtea__ep{i}.json").write_text(json.dumps({
+                "examples": [_row("egtea", f"ep{i}")],
+                "report": {"dataset": "egtea", "episode": f"ep{i}", "clips": 1},
+            }), encoding="utf-8")
+        # also a *.tmp partial that must be IGNORED by the *.json glob
+        (sd / "egtea__epX.123.tmp").write_text('{"examples":[{"id":"x"}]}', encoding="utf-8")
+
+        # This build's jobs is a DIFFERENT single episode; its worker is a no-op stub.
+        def fake_build(slug, ep, extra, out_root, puller, **kw):
+            return [_row(slug, ep)], {"dataset": slug, "episode": ep, "clips": 1}
+
+        orig = tr._build_molmo2_episode
+        tr._build_molmo2_episode = fake_build
+        try:
+            rep = tr.build_training_manifest(
+                out, output_format="molmo2",
+                episode_lists={"egtea": ["ep_new"]},   # 1 job; 5 pre-seeded shards on disk
+                fps=6, max_clip_s=16, drop_shorter_than_s=0, min_duration_s=2.5,
+                workers=1, puller=tr.Puller(local_root="/tmp"),
+            )
+        finally:
+            tr._build_molmo2_episode = orig
+
+        rows = (out / "manifest.jsonl").read_text().strip().splitlines()
+        # 5 pre-seeded + 1 new = 6 (the .tmp partial is excluded)
+        self.assertEqual(rep["total_examples"], 6)
+        self.assertEqual(rep["shards_assembled"], 6)
+        self.assertEqual(len(rows), 6)
+
+
 if __name__ == "__main__":
     unittest.main()
