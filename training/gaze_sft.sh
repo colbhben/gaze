@@ -294,11 +294,33 @@ case "$MOLMO_DATA_DIR" in
 esac
 [ -d "$MOLMO_DATA_DIR" ] || die "MOLMO_DATA_DIR '$MOLMO_DATA_DIR' not found."
 
+# Resolve the checkpoint so it is reachable INSIDE the container. The container only mounts
+# /molmo2, /gaze-data and /data/molmo -- an arbitrary host path like /nfs/.../Molmo2-4B-SFT is
+# NOT visible. Three cases:
+#   s3://...            -> pass through unchanged (molmo loads s3 checkpoints natively).
+#   existing host path  -> bind-mount it read-only at /checkpoint and point sft.py there.
+#   anything else       -> assume it is already an in-container path (e.g. the default
+#                          /data/molmo/Molmo2-4B-SFT, which resolves via the /data/molmo mount).
+CKPT_MOUNT=()
+case "$CHECKPOINT" in
+  s3://*)
+    CKPT_ARG="$CHECKPOINT" ;;
+  *)
+    if [ -e "$CHECKPOINT" ]; then
+      CKPT_HOST=$(CDPATH= cd -- "$CHECKPOINT" && pwd)   # canonicalize for the bind mount
+      CKPT_MOUNT=( -v "$CKPT_HOST:/checkpoint:ro" )
+      CKPT_ARG="/checkpoint"
+      echo ">> mounting checkpoint $CKPT_HOST -> /checkpoint (read-only)" >&2
+    else
+      CKPT_ARG="$CHECKPOINT"   # treat as an in-container path
+    fi ;;
+esac
+
 # ----------------------------------------------------------------------------------------- #
 # 3-5. Compose the sft.py command. Mixture, objective + ratio (env), flags, S3 ckpt.
 # ----------------------------------------------------------------------------------------- #
 SFT_ARGS=(
-  "$CHECKPOINT" "$MIXTURE"
+  "$CKPT_ARG" "$MIXTURE"
   "--seq_len=$SEQ_LEN"
   "--device_batch_size=$DEVICE_BATCH_SIZE"
   "--cp_degree=$CP_DEGREE"
@@ -330,7 +352,7 @@ echo "   profile         : $PROFILE  (seq_len $SEQ_LEN, device_batch $DEVICE_BAT
 echo "   gpus            : $GPUS  (cp_degree $CP_DEGREE)"
 echo "   mixture         : $MIXTURE  (gaze ${SPECIALIZE_RATIO} / rehearse)"
 echo "   objective       : $GAZE_OBJECTIVE"
-echo "   checkpoint      : $CHECKPOINT"
+echo "   checkpoint      : $CHECKPOINT  (in-container: $CKPT_ARG)"
 echo "   gaze data dir   : $GAZE_DATA_DIR  (split: $GAZE_SPLIT_NAME)"
 echo "   molmo data dir  : $MOLMO_DATA_DIR"
 echo "   save_folder     : $SAVE_FOLDER  (S3 native; /nfs untouched)"
@@ -363,6 +385,7 @@ RUN=(
   -v "$MOLMO2_DIR:/molmo2"
   -v "$GAZE_DATA_DIR:/gaze-data:ro"
   -v "$MOLMO_DATA_DIR:/data/molmo:ro"
+  "${CKPT_MOUNT[@]}"
   -w /molmo2
   -e OLMO_SHARED_FS=1
   -e MOLMO_DATA_DIR=/data/molmo
