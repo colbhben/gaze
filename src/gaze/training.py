@@ -1115,14 +1115,24 @@ def build_training_manifest(
             )
             import sys as _sys
             print(f"[curate] start {slug}:{episode_id}", file=_sys.stderr, flush=True)
-            res = _build_molmo2_episode(
-                slug, episode_id, extra, out_root, ep_puller,
-                fps=fps, resolution=resolution, max_frames=max_frames,
-                max_clip_s=max_clip_s, merge_gap_s=merge_gap_s, drop_shorter_than_s=drop_shorter_than_s,
-                min_duration_s=min_duration_s,
-                prompt=prompt, reuse_bundle=reuse_bundle,
-                interesting=interesting_maps.get(slug),
-            )
+            try:
+                res = _build_molmo2_episode(
+                    slug, episode_id, extra, out_root, ep_puller,
+                    fps=fps, resolution=resolution, max_frames=max_frames,
+                    max_clip_s=max_clip_s, merge_gap_s=merge_gap_s, drop_shorter_than_s=drop_shorter_than_s,
+                    min_duration_s=min_duration_s,
+                    prompt=prompt, reuse_bundle=reuse_bundle,
+                    interesting=interesting_maps.get(slug),
+                )
+            except Exception as exc:  # noqa
+                # One bad take must NEVER kill the whole run. Any unhandled error
+                # (e.g. an unresolved {slam_index} -> missing calib file on the in-place
+                # mount, a projectaria failure, an ffmpeg crash) becomes a logged error
+                # row and the run continues. Matches the skip-and-log policy.
+                import traceback as _tb
+                print(f"[curate] ERROR {slug}:{episode_id}: {exc}", file=_sys.stderr, flush=True)
+                _tb.print_exc(file=_sys.stderr)
+                return [], {"dataset": slug, "episode": episode_id, "error": str(exc)}
             print(f"[curate] done  {slug}:{episode_id} clips={len(res[0])}", file=_sys.stderr, flush=True)
             return res
 
