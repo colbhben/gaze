@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Full-chain launcher for the Molmo2 gaze SFT smoke run (1xH200, specialize-then-rehearse).
+# Full-chain launcher for the Molmo2 gaze SFT run (defaults: 8xL40, specialize-then-rehearse).
 #
 # One command does the whole chain:
 #   1. validate inputs + REQUIRE the user's wandb credentials (no hardcoded keys),
@@ -7,7 +7,7 @@
 #   3. select the 92%/8% gaze/rehearse specialize mixture (override via --specialize-ratio),
 #   4. compose every training-control flag with Molmo2-recommended defaults (all overridable),
 #   5. checkpoint to an S3 save_folder by default (native cloud upload; nothing lands on /nfs),
-#   6. launch `torchrun --nproc-per-node=1 launch_scripts/sft.py` inside the prebuilt image.
+#   6. launch `torchrun --nproc-per-node=$GPUS launch_scripts/sft.py` inside the prebuilt image.
 #
 # The training OBJECTIVE is flexible (--gaze-objective):
 #   first : given the full video, predict the FIRST gaze point (t0).            [default]
@@ -18,16 +18,55 @@
 # logged to wandb alongside train loss.
 #
 # Usage:
-#   training/gaze_sft.sh --name gaze-smoke-01 \
-#       --wandb-key $WANDB_API_KEY --wandb-project gaze --wandb-entity my-team \
-#       --gaze-data-dir /home/ubuntu/gaze-extract-full \
-#       [--gaze-objective first|all] [--specialize-ratio 0.92] \
-#       [--save-folder s3://far-research-internal/colbhben/gaze/molmo/runs/<name>] \
-#       [--max-duration 200] [--checkpoint <olmo-native 4B>] [--image IMG] \
-#       [--stage-from <path-or-s3>] [--dry-run] [-- <extra sft.py dotlist overrides>]
+#   training/gaze_sft.sh --name <run> --wandb-project <proj> --wandb-entity <team> \
+#       --gaze-data-dir <local-dir> --molmo-data-dir <local-dir> [flags...]
 #
 # Credentials: pass --wandb-key/-project/-entity OR export WANDB_API_KEY/WANDB_PROJECT/
-# WANDB_ENTITY before calling. The script FAILS FAST if any are missing.
+# WANDB_ENTITY before calling. The script FAILS FAST if any are missing. AWS creds for the
+# S3 checkpoint upload are read from the host env and passed through to the container.
+#
+# Flags (every default is overridable; [req] = required):
+#   Run / credentials
+#     --name NAME              [req] run name; also fills the default S3 save_folder
+#     --wandb-key KEY          wandb API key            (default: $WANDB_API_KEY)   [req]
+#     --wandb-project PROJ     wandb project            (default: $WANDB_PROJECT)   [req]
+#     --wandb-entity ENT       wandb entity/team        (default: $WANDB_ENTITY)    [req]
+#     --hf-token TOK           HuggingFace token        (default: $HF_ACCESS_TOKEN)
+#   Data (no path may be on /nfs at run time -- stage to local scratch first)
+#     --gaze-data-dir DIR      [req] local dir with joint/manifest.jsonl + splits/<name>/
+#     --gaze-split-name NAME   split subdir under splits/                  (default: v1_95_05)
+#     --molmo-data-dir DIR     [req] local Molmo2-Data rehearsal root
+#     --stage-from SRC         copy data out of an /nfs path or s3:// URL into local scratch
+#     --local-scratch DIR      where --stage-from lands         (default: /home/ubuntu/gaze-stage)
+#   Mixture / objective
+#     --mixture NAME           training mixture                       (default: gaze_specialize)
+#     --gaze-objective first|all  first=predict t0 point, all=per-frame points   (default: first)
+#     --specialize-ratio R     gaze / rehearse ratio                          (default: 0.92)
+#   Model / image
+#     --checkpoint PATH        olmo-native starting ckpt   (default: /data/molmo/Molmo2-4B-SFT)
+#     --image IMG              docker image                            (default: molmo2:l40s)
+#   Checkpointing
+#     --save-folder URL        output dir, s3:// or local; /nfs rejected
+#                              (default: s3://far-research-internal/colbhben/gaze/molmo/runs/<name>)
+#     --save-interval N        steps between checkpoint saves                  (default: 2000)
+#     --max-duration N         total training steps; e.g. 200 for a smoke   (default: sft.py default)
+#   Parallelism / batch (defaults tuned for 8xL40 48GB, not H200 141GB)
+#     --gpus N                 torchrun --nproc-per-node                          (default: 8)
+#     --cp-degree N            context-parallel degree; >1 auto-sets compile=null (default: 1)
+#     --seq-len N              sequence length                                 (default: 8192)
+#     --device-batch-size N    per-rank microbatch size                           (default: 1)
+#     --global-batch-size N    global batch; must divide gpus/cp_degree           (default: 64)
+#     --num-workers N          dataloader workers                                 (default: 6)
+#   Optimizer / schedule
+#     --llm-lr LR              LLM learning rate                               (default: 1e-5)
+#     --vit-lr LR              ViT learning rate                               (default: 5e-6)
+#     --connector-lr LR        connector learning rate                         (default: 5e-6)
+#     --warmup N               warmup steps (llm/vit/connector)                 (default: 200)
+#     --alpha-f F              scheduler final-LR fraction                      (default: 0.1)
+#   Other
+#     --dry-run                print the docker run / torchrun command without executing
+#     -h, --help               show this help
+#     -- <extra...>            everything after -- is passed as raw sft.py dotlist overrides
 set -euo pipefail
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -36,12 +75,14 @@ MOLMO2_DIR="$ROOT/third_party/molmo2"
 # ----------------------------------------------------------------------------------------- #
 # Defaults (Molmo2 SFT recommended values; every one is overridable via flag).
 # ----------------------------------------------------------------------------------------- #
-GPUS=1                                   # 1xH200 smoke
+GPUS=8                                   # 8xL40 single node (FSDP2 full-shard across all 8)
 RUN_NAME=""
 MIXTURE="gaze_specialize"
 GAZE_OBJECTIVE="first"
 SPECIALIZE_RATIO="0.92"                  # 92% gaze / 8% rehearse
-IMAGE=${MOLMO_IMAGE:-ghcr.io/allenai/molmo2:latest}
+# L40 (Ada sm_89) needs the patched flash-attn build; stock ghcr image is sm_90/100 only.
+# Build it once on the node: docker build -f Dockerfile.l40s -t molmo2:l40s third_party/molmo2
+IMAGE=${MOLMO_IMAGE:-molmo2:l40s}
 
 # Released Molmo2 4B VLM checkpoint (olmo-native: config.yaml + model_and_optim/).
 CHECKPOINT=${MOLMO_CHECKPOINT:-/data/molmo/Molmo2-4B-SFT}
@@ -61,11 +102,15 @@ SAVE_FOLDER=""
 SAVE_INTERVAL=2000
 MAX_DURATION=""                          # steps; short for smoke (e.g. 200). empty=sft.py default
 
-# Training-control knobs (Molmo2 SFT defaults from launch_scripts/sft.py + optim).
-SEQ_LEN=16384
-DEVICE_BATCH_SIZE=2
-GLOBAL_BATCH_SIZE=""                     # empty => sft.py default (128); set for a small smoke
-CP_DEGREE=1
+# Training-control knobs. Defaults tuned for 8xL40 (48GB/card), not H200 (141GB):
+# FSDP2 shards params/grads/optim across the 8 ranks, but per-rank ACTIVATION memory scales
+# with seq_len x device_batch_size and is NOT helped by adding GPUs -- so both are dialed down
+# from the Molmo2 H200 recipe (16384 / 2). Raise them if you have headroom; for very long
+# sequences prefer --cp-degree (splits the sequence across ranks) over a larger seq_len.
+SEQ_LEN=8192
+DEVICE_BATCH_SIZE=1
+GLOBAL_BATCH_SIZE=64                     # must be divisible by GPUS/CP_DEGREE (64/8=8). empty => sft.py default 128
+CP_DEGREE=1                              # >1 splits the sequence across ranks; requires compile=null (see launch)
 LLM_LR=1e-5
 VIT_LR=5e-6
 CONNECTOR_LR=5e-6
@@ -118,7 +163,7 @@ while [ "$#" -gt 0 ]; do
     --hf-token) HF_TOKEN=$2; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --) shift; EXTRA=("$@"); break ;;
-    -h|--help) sed -n '1,46p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,69p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "ERROR: unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -137,6 +182,14 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 [ -n "$WANDB_ENTITY" ] || die "wandb entity required: pass --wandb-entity or export WANDB_ENTITY."
 
 case "$GAZE_OBJECTIVE" in first|all) ;; *) die "--gaze-objective must be 'first' or 'all'." ;; esac
+
+# Parallelism sanity: cp_degree must divide the GPU count, and the global batch must divide
+# evenly across the data-parallel replicas (world_size / cp_degree).
+[ $((GPUS % CP_DEGREE)) -eq 0 ] || die "--gpus ($GPUS) must be divisible by --cp-degree ($CP_DEGREE)."
+DP_DEGREE=$((GPUS / CP_DEGREE))
+if [ -n "$GLOBAL_BATCH_SIZE" ] && [ $((GLOBAL_BATCH_SIZE % DP_DEGREE)) -ne 0 ]; then
+  die "--global-batch-size ($GLOBAL_BATCH_SIZE) must be divisible by data-parallel degree ($DP_DEGREE = gpus/cp_degree)."
+fi
 
 # Default S3 save_folder (native cloud save; never writes /nfs).
 if [ -z "$SAVE_FOLDER" ]; then
@@ -214,6 +267,9 @@ SFT_ARGS=(
 )
 [ -n "$MAX_DURATION" ] && SFT_ARGS+=( "max_duration=$MAX_DURATION" )
 [ -n "$GLOBAL_BATCH_SIZE" ] && SFT_ARGS+=( "global_train_batch_size=$GLOBAL_BATCH_SIZE" )
+# Context parallelism is incompatible with torch.compile (sft.py enables compile by default
+# and run_trainer.py asserts cp_degree==1 when compiling). Disable compile when CP is on.
+[ "$CP_DEGREE" -gt 1 ] && SFT_ARGS+=( "compile=null" )
 [ "${#EXTRA[@]}" -gt 0 ] && SFT_ARGS+=( "${EXTRA[@]}" )
 
 echo "=================================================================="
