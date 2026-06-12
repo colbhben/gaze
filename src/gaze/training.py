@@ -813,6 +813,7 @@ def resample_segment_from_local(
     seg_len: float,
     fps: float,
     side: int,
+    reuse_existing: bool = False,
 ) -> dict[str, Any]:
     """Trim+resample one segment from an ALREADY-LOCAL full mp4 (no pull, no delete).
 
@@ -821,7 +822,21 @@ def resample_segment_from_local(
     path which pulls the big source ONCE and trims every segment from it (vs the
     per-segment re-pull the legacy window path did). Returns the EXACT encoded frame
     count (``nb_frames``) so the gaze emitter can place one point per real video frame.
+
+    When ``reuse_existing`` is True and ``out_path`` already exists as a valid
+    ``side``x``side`` clip with >0 frames, the ffmpeg encode is SKIPPED and the existing
+    clip is probed instead. This makes a manifest-recovery re-run (clips already on disk
+    from a crashed run) reuse the encoded clips and only redo the cheap gaze/annotation
+    assembly. ``full_src`` may be None in that case (not needed when reusing).
     """
+    if reuse_existing and out_path.exists():
+        meta = ov._probe(out_path)
+        nf = _probe_nframes(out_path)
+        if nf > 0 and int(meta.get("width") or 0) == side and int(meta.get("height") or 0) == side:
+            return {"path": str(out_path), "width": meta["width"], "height": meta["height"],
+                    "fps": fps, "duration_s": meta.get("duration"), "start_s": start_s,
+                    "nb_frames": nf, "reused": True}
+        # else: invalid/partial clip -> fall through and re-encode
     out_path.parent.mkdir(parents=True, exist_ok=True)
     vf = (
         f"fps={fps},"
@@ -1036,6 +1051,7 @@ def build_training_manifest(
     workers: int | None = None,
     puller: Puller | None = None,
     reuse_bundle: bool = True,
+    reuse_clips: bool = False,
 ) -> dict[str, Any]:
     """Build a training manifest.
 
@@ -1123,6 +1139,7 @@ def build_training_manifest(
                     min_duration_s=min_duration_s,
                     prompt=prompt, reuse_bundle=reuse_bundle,
                     interesting=interesting_maps.get(slug),
+                    reuse_clips=reuse_clips,
                 )
             except Exception as exc:  # noqa
                 # One bad take must NEVER kill the whole run. Any unhandled error
@@ -1355,6 +1372,7 @@ def _build_molmo2_episode(
     prompt: str,
     reuse_bundle: bool,
     interesting: dict[str, Any] | None,
+    reuse_clips: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Build Molmo2 video-point rows for one episode: filter -> chop -> per-seg clip."""
     from . import curate_readers as cr
@@ -1426,12 +1444,20 @@ def _build_molmo2_episode(
         times, xs, ys, inf, fps=fps, duration_s=grid_dur, max_gap_s=1.0,
     )
 
-    # Pull the full source mp4 ONCE, trim every segment from it locally, delete at end.
-    # (The legacy window path re-pulled per segment -> 25x downloads of a 369MB take.)
-    try:
-        full_src = puller.pull(data.video["path"])
-    except Exception as exc:  # noqa
-        return [], {"dataset": slug, "episode": episode_id, "error": f"pull: {exc}"}
+    # In reuse_clips (manifest-recovery) mode, skip pulling the big source mp4 entirely
+    # IF every segment clip already exists on disk; only pull when an encode is needed.
+    all_clips_present = reuse_clips and all(
+        (out_root / f"videos/{slug}/{_safe(episode_id)}__seg{k}.mp4").exists()
+        for k in range(len(segments))
+    )
+    full_src = None
+    if not all_clips_present:
+        # Pull the full source mp4 ONCE, trim every segment from it locally, delete at end.
+        # (The legacy window path re-pulled per segment -> 25x downloads of a 369MB take.)
+        try:
+            full_src = puller.pull(data.video["path"])
+        except Exception as exc:  # noqa
+            return [], {"dataset": slug, "episode": episode_id, "error": f"pull: {exc}"}
 
     examples: list[dict[str, Any]] = []
     for k, seg in enumerate(segments):
@@ -1442,6 +1468,7 @@ def _build_molmo2_episode(
             vmeta = resample_segment_from_local(
                 full_src, out_root / video_rel,
                 start_s=seg_start, seg_len=seg_len, fps=fps, side=resolution,
+                reuse_existing=reuse_clips,
             )
         except Exception as exc:  # noqa
             examples.append({"dataset": slug, "episode_id": episode_id, "seg_index": k,
@@ -1480,8 +1507,9 @@ def _build_molmo2_episode(
 
     # Delete the big pulled source (keep small ones like egome/egtea harmlessly).
     # NEVER delete an in-place local_root/nfs source -- only our own scp'd temp copy.
+    # full_src is None when reuse_clips skipped the pull entirely.
     try:
-        if puller.owns(full_src) and full_src.exists() and full_src.stat().st_size > 5_000_000:
+        if full_src is not None and puller.owns(full_src) and full_src.exists() and full_src.stat().st_size > 5_000_000:
             full_src.unlink()
     except OSError:
         pass

@@ -458,6 +458,7 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
     build_training.add_argument("--ssh-host", metavar="HOST", default="sumedhso-L40S", help="Remote data host; default: sumedhso-L40S.")
     build_training.add_argument("--local-root", metavar="PATH", help="Read source from a local mount instead of ssh.")
     build_training.add_argument("--no-reuse-bundle", action="store_true", help="Re-extract from source instead of reusing /tmp/gaze_extract/<slug>_full.json.")
+    build_training.add_argument("--reuse-clips", action="store_true", help="Reuse already-encoded segment mp4s in --out-root (skip ffmpeg re-encode + skip the big source pull when all clips present). For recovering a manifest after a crash where clips are on disk but manifest.jsonl was never written.")
     build_training.set_defaults(func=cmd_curate_build_training)
 
     export_anno = curate_sub.add_parser(
@@ -871,6 +872,7 @@ def cmd_curate_build_training(args: argparse.Namespace) -> int:
         workers=getattr(args, "workers", None),
         puller=puller,
         reuse_bundle=not args.no_reuse_bundle,
+        reuse_clips=getattr(args, "reuse_clips", False),
     )
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0
