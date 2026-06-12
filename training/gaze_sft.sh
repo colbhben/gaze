@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# Full-chain launcher for the Molmo2 gaze SFT run (defaults: 8xL40, specialize-then-rehearse).
+# Full-chain launcher for the Molmo2 gaze SFT run (specialize-then-rehearse).
+#
+# Pick a hardware profile with --profile l40|h200 (default: l40). The profile sets the
+# memory-bound defaults -- docker image, seq_len, device/global batch, and default GPU count
+# -- for that card. Any individual flag you pass overrides the profile. --gpus is independent:
+# either profile runs single-card (--gpus 1) or full-node (--gpus 8).
 #
 # One command does the whole chain:
 #   1. validate inputs + REQUIRE the user's wandb credentials (no hardcoded keys),
@@ -42,20 +47,24 @@
 #     --mixture NAME           training mixture                       (default: gaze_specialize)
 #     --gaze-objective first|all  first=predict t0 point, all=per-frame points   (default: first)
 #     --specialize-ratio R     gaze / rehearse ratio                          (default: 0.92)
+#   Hardware profile (sets the memory-bound defaults below; individual flags override)
+#     --profile l40|h200      l40  = 8xL40 48GB, molmo2:l40s image, seq 8192 / dbatch 1 / gbatch 64
+#                             h200 = H200 141GB, stock ghcr image,  seq 16384 / dbatch 2 / gbatch 128
+#                                                                                  (default: l40)
 #   Model / image
 #     --checkpoint PATH        olmo-native starting ckpt   (default: /data/molmo/Molmo2-4B-SFT)
-#     --image IMG              docker image                            (default: molmo2:l40s)
+#     --image IMG              docker image                              (default: per --profile)
 #   Checkpointing
 #     --save-folder URL        output dir, s3:// or local; /nfs rejected
 #                              (default: s3://far-research-internal/colbhben/gaze/molmo/runs/<name>)
 #     --save-interval N        steps between checkpoint saves                  (default: 2000)
 #     --max-duration N         total training steps; e.g. 200 for a smoke   (default: sft.py default)
-#   Parallelism / batch (defaults tuned for 8xL40 48GB, not H200 141GB)
-#     --gpus N                 torchrun --nproc-per-node                          (default: 8)
+#   Parallelism / batch (seq-len, device-batch, global-batch default per --profile)
+#     --gpus N                 torchrun --nproc-per-node                  (default: per --profile, 8)
 #     --cp-degree N            context-parallel degree; >1 auto-sets compile=null (default: 1)
-#     --seq-len N              sequence length                                 (default: 8192)
-#     --device-batch-size N    per-rank microbatch size                           (default: 1)
-#     --global-batch-size N    global batch; must divide gpus/cp_degree           (default: 64)
+#     --seq-len N              sequence length                              (default: per --profile)
+#     --device-batch-size N    per-rank microbatch size                     (default: per --profile)
+#     --global-batch-size N    global batch; must divide gpus/cp_degree     (default: per --profile)
 #     --num-workers N          dataloader workers                                 (default: 6)
 #   Optimizer / schedule
 #     --llm-lr LR              LLM learning rate                               (default: 1e-5)
@@ -75,14 +84,21 @@ MOLMO2_DIR="$ROOT/third_party/molmo2"
 # ----------------------------------------------------------------------------------------- #
 # Defaults (Molmo2 SFT recommended values; every one is overridable via flag).
 # ----------------------------------------------------------------------------------------- #
-GPUS=8                                   # 8xL40 single node (FSDP2 full-shard across all 8)
+# Hardware profile selects the memory-bound defaults (image, seq_len, device/global batch).
+# 'l40'  -> 8xL40 48GB, patched flash-attn image, smaller activations.
+# 'h200' -> H200 141GB, stock ghcr image, the Molmo2 reference seq_len/batch.
+# Switch with --profile; --gpus is independent (works as 1- or 8-GPU on either). Any knob you
+# pass explicitly always wins over the profile. Resolved in apply_profile() after arg parse.
+PROFILE="l40"
+GPUS=""                                  # empty => profile default (8). --gpus 1 for single-card.
 RUN_NAME=""
 MIXTURE="gaze_specialize"
 GAZE_OBJECTIVE="first"
 SPECIALIZE_RATIO="0.92"                  # 92% gaze / 8% rehearse
-# L40 (Ada sm_89) needs the patched flash-attn build; stock ghcr image is sm_90/100 only.
-# Build it once on the node: docker build -f Dockerfile.l40s -t molmo2:l40s third_party/molmo2
-IMAGE=${MOLMO_IMAGE:-molmo2:l40s}
+# Docker image. Empty => profile default. L40 (Ada sm_89) needs the patched flash-attn build:
+#   docker build -f Dockerfile.l40s -t molmo2:l40s third_party/molmo2
+# H200/B200 (sm_90/100) use the stock ghcr image. MOLMO_IMAGE env, if set, counts as explicit.
+IMAGE=${MOLMO_IMAGE:-}
 
 # Released Molmo2 4B VLM checkpoint (olmo-native: config.yaml + model_and_optim/).
 CHECKPOINT=${MOLMO_CHECKPOINT:-/data/molmo/Molmo2-4B-SFT}
@@ -102,14 +118,15 @@ SAVE_FOLDER=""
 SAVE_INTERVAL=2000
 MAX_DURATION=""                          # steps; short for smoke (e.g. 200). empty=sft.py default
 
-# Training-control knobs. Defaults tuned for 8xL40 (48GB/card), not H200 (141GB):
-# FSDP2 shards params/grads/optim across the 8 ranks, but per-rank ACTIVATION memory scales
-# with seq_len x device_batch_size and is NOT helped by adding GPUs -- so both are dialed down
-# from the Molmo2 H200 recipe (16384 / 2). Raise them if you have headroom; for very long
-# sequences prefer --cp-degree (splits the sequence across ranks) over a larger seq_len.
-SEQ_LEN=8192
-DEVICE_BATCH_SIZE=1
-GLOBAL_BATCH_SIZE=64                     # must be divisible by GPUS/CP_DEGREE (64/8=8). empty => sft.py default 128
+# Training-control knobs. seq_len/device_batch/global_batch are activation-memory bound and
+# set by the profile (see apply_profile): L40 (48GB) uses smaller values than H200 (141GB).
+# FSDP2 shards params/grads/optim across ranks, but per-rank ACTIVATION memory scales with
+# seq_len x device_batch_size and is NOT reduced by adding GPUs. For sequences longer than the
+# profile default, prefer --cp-degree (splits the sequence across ranks) over a bigger seq_len.
+# Empty => filled by the profile; pass the flag to override.
+SEQ_LEN=""
+DEVICE_BATCH_SIZE=""
+GLOBAL_BATCH_SIZE=""                     # must be divisible by GPUS/CP_DEGREE. empty => profile default
 CP_DEGREE=1                              # >1 splits the sequence across ranks; requires compile=null (see launch)
 LLM_LR=1e-5
 VIT_LR=5e-6
@@ -132,6 +149,7 @@ EXTRA=()
 # ----------------------------------------------------------------------------------------- #
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --profile) PROFILE=$2; shift 2 ;;
     --gpus) GPUS=$2; shift 2 ;;
     --name) RUN_NAME=$2; shift 2 ;;
     --mixture) MIXTURE=$2; shift 2 ;;
@@ -163,12 +181,39 @@ while [ "$#" -gt 0 ]; do
     --hf-token) HF_TOKEN=$2; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --) shift; EXTRA=("$@"); break ;;
-    -h|--help) sed -n '2,69p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,78p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "ERROR: unknown argument: $1" >&2; exit 2 ;;
   esac
 done
 
 die() { echo "ERROR: $*" >&2; exit 1; }
+
+# ----------------------------------------------------------------------------------------- #
+# 0. Resolve the hardware profile. Fills ONLY knobs the user left empty, so any explicit
+#    flag (or MOLMO_IMAGE env) always wins. --gpus is intentionally profile-independent:
+#    either profile runs on 1 or 8 GPUs; the profile only sets its default GPU count and the
+#    activation-memory-bound seq_len/device_batch/global_batch.
+# ----------------------------------------------------------------------------------------- #
+apply_profile() {
+  local p_gpus p_image p_seq p_dbs p_gbs
+  case "$PROFILE" in
+    l40|L40|l40s|L40S)
+      # 8xL40 48GB: patched (sm_89) flash-attn image, dialed-down activations.
+      p_gpus=8;  p_image="molmo2:l40s"; p_seq=8192;  p_dbs=1; p_gbs=64 ;;
+    h200|H200)
+      # H200 141GB: stock ghcr image, Molmo2 reference seq_len/batch.
+      p_gpus=8;  p_image="ghcr.io/allenai/molmo2:latest"; p_seq=16384; p_dbs=2; p_gbs=128 ;;
+    *)
+      die "--profile must be 'l40' or 'h200' (got '$PROFILE')." ;;
+  esac
+  # ${VAR:=default} assigns only when VAR is unset/empty -> explicit flags survive.
+  : "${GPUS:=$p_gpus}"
+  : "${IMAGE:=$p_image}"
+  : "${SEQ_LEN:=$p_seq}"
+  : "${DEVICE_BATCH_SIZE:=$p_dbs}"
+  : "${GLOBAL_BATCH_SIZE:=$p_gbs}"
+}
+apply_profile
 
 # ----------------------------------------------------------------------------------------- #
 # 1. Validate inputs + REQUIRE wandb creds (fail fast, no hardcoded secrets).
@@ -273,9 +318,10 @@ SFT_ARGS=(
 [ "${#EXTRA[@]}" -gt 0 ] && SFT_ARGS+=( "${EXTRA[@]}" )
 
 echo "=================================================================="
-echo " Molmo2 gaze SFT smoke run"
+echo " Molmo2 gaze SFT run"
 echo "   run name        : $RUN_NAME"
-echo "   gpus            : $GPUS"
+echo "   profile         : $PROFILE  (seq_len $SEQ_LEN, device_batch $DEVICE_BATCH_SIZE, global_batch $GLOBAL_BATCH_SIZE)"
+echo "   gpus            : $GPUS  (cp_degree $CP_DEGREE)"
 echo "   mixture         : $MIXTURE  (gaze ${SPECIALIZE_RATIO} / rehearse)"
 echo "   objective       : $GAZE_OBJECTIVE"
 echo "   checkpoint      : $CHECKPOINT"
