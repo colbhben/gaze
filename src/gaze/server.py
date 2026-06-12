@@ -217,6 +217,11 @@ def viewer_html() -> str:
     .active-row { outline: 2px solid #ff4757; outline-offset: -2px; }
     table { border-collapse: collapse; width: min(100%, 960px); }
     td, th { border: 1px solid #9994; padding: 4px 6px; font-size: 13px; }
+    tr.role-source td { font-weight: 600; }
+    tr.role-auxiliary td { color: #888; }
+    .badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; vertical-align: middle; }
+    .badge.src { background: #ff475733; color: #ff6b78; border: 1px solid #ff4757; }
+    .badge.aux { background: #6c8cff22; color: #8aa2ff; border: 1px solid #6c8cff88; }
   </style>
 </head>
 <body>
@@ -242,7 +247,7 @@ def viewer_html() -> str:
     <div class="hint">Keys: space play/pause · ←/k prev · →/j next · [ / ] speed · a auto-advance · / focus search</div>
     <div class="stage no-video" id="stage"><video id="video" controls></video><div class="fallback" id="fallback">No playable video for this episode</div><canvas id="overlay"></canvas></div>
     <div class="now" id="currentAnnotation"><span class="muted">No annotation selected</span></div>
-    <table><thead><tr><th>start_s</th><th>end_s</th><th>label</th><th>text</th></tr></thead><tbody id="annotations"></tbody></table>
+    <table><thead><tr><th>role</th><th>start_s</th><th>end_s</th><th>channel</th><th>text</th></tr></thead><tbody id="annotations"></tbody></table>
   </main>
   <script>
     const episodesEl = document.querySelector('#episodes');
@@ -431,30 +436,47 @@ def viewer_html() -> str:
       const intervalRows = (await json(`/api/episodes/${encodeURIComponent(id)}/annotation_intervals`)).rows || [];
       if (token !== loadToken) return;
       annotations = intervalRows.length ? intervalRows : sampledToIntervals((await json(`/api/episodes/${encodeURIComponent(id)}/annotations`)).rows || []);
-      document.querySelector('#annotations').innerHTML = annotations.slice(0, 500).map((row, index) => `<tr data-index="${index}"><td>${formatTime(row.start_s)}</td><td>${formatTime(row.end_s)}</td><td>${escapeHtml(row.label || '')}</td><td>${escapeHtml(row.text || '')}</td></tr>`).join('');
+      // Sort source first, then auxiliary; stable on start time within each group.
+      annotations.sort((a, b) => (roleRank(a) - roleRank(b)) || (Number(a.start_s) - Number(b.start_s)));
+      document.querySelector('#annotations').innerHTML = annotations.slice(0, 500).map((row, index) => {
+        const role = (row.role || (row.label ? 'source' : '')).toLowerCase();
+        const badge = role === 'source' ? '<span class="badge src">source</span>'
+                    : role === 'auxiliary' ? '<span class="badge aux">aux</span>' : '';
+        const chan = row.channel || row.label || '';
+        return `<tr data-index="${index}" class="role-${role}"><td>${badge}</td><td>${formatTime(row.start_s)}</td><td>${formatTime(row.end_s)}</td><td>${escapeHtml(chan)}</td><td>${escapeHtml(row.text || '')}</td></tr>`;
+      }).join('');
       updateCurrentAnnotation();
       draw();
     }
+    function roleRank(row) { return (row.role || (row.label ? 'source' : '')).toLowerCase() === 'auxiliary' ? 1 : 0; }
     function sampledToIntervals(rows) {
-      return rows.map((row, index) => ({ start_s: row.time_s, end_s: rows[index + 1]?.time_s ?? episodeDuration, label: row.label, text: row.text }));
+      return rows.map((row, index) => ({ start_s: row.time_s, end_s: rows[index + 1]?.time_s ?? episodeDuration, role: row.role, channel: row.channel, label: row.label, text: row.text }));
     }
     function activeTime() {
       if (mediaState === 'video') return video.currentTime || 0;
       if (mediaState === 'no-video') return episodeDuration ? ((performance.now() - syntheticStart) / 1000) % episodeDuration : 0;
       return 0;
     }
-    function activeAnnotation(t) {
-      return annotations.find(row => Number(row.start_s) <= t && t < Number(row.end_s)) || null;
+    function activeAnnotations(t) {
+      // All rows covering t (annotations is sorted source-first).
+      return annotations.filter(row => Number(row.start_s) <= t && t < Number(row.end_s));
     }
+    function isSource(row) { return (row.role || (row.label ? 'source' : '')).toLowerCase() !== 'auxiliary'; }
     function updateCurrentAnnotation() {
       const t = activeTime();
-      const row = activeAnnotation(t);
-      [...document.querySelectorAll('#annotations tr')].forEach(tr => tr.classList.toggle('active-row', row && Number(tr.dataset.index) === annotations.indexOf(row)));
-      if (!row) {
+      const active = activeAnnotations(t);
+      const activeIdx = new Set(active.map(r => annotations.indexOf(r)));
+      [...document.querySelectorAll('#annotations tr')].forEach(tr => tr.classList.toggle('active-row', activeIdx.has(Number(tr.dataset.index))));
+      if (!active.length) {
         currentAnnotation.innerHTML = `<span class="muted">${formatTime(t)}s: no active annotation</span>`;
         return;
       }
-      currentAnnotation.innerHTML = `<strong>${formatTime(t)}s</strong> ${escapeHtml(row.label || '')}<br>${escapeHtml(row.text || '')}`;
+      const src = active.find(isSource);
+      const aux = active.filter(r => !isSource(r));
+      let html = `<strong>${formatTime(t)}s</strong>`;
+      if (src) html += ` <span class="badge src">source</span> <strong>${escapeHtml(src.channel || src.label || '')}</strong>: ${escapeHtml(src.text || '')}`;
+      for (const a of aux) html += `<br><span class="badge aux">aux</span> <span class="muted">${escapeHtml(a.channel || a.label || '')}</span>: ${escapeHtml(a.text || '')}`;
+      currentAnnotation.innerHTML = html;
     }
     function draw() {
       const rect = stage.getBoundingClientRect();

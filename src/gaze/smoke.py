@@ -295,16 +295,34 @@ def molmo2_to_viewer_layout(manifest_root: str | Path, out_root: str | Path) -> 
         md = r.get("metadata") or {}
         anno_text = md.get("annotation_text")
         anno_channel = md.get("annotation_channel")
+        seg_end = md.get("clip_end_time")
+        seg_start = md.get("clip_start_time")
+        dur = (seg_end - seg_start) if (seg_end is not None and seg_start is not None) else None
+        anno_rows: list[dict[str, Any]] = []
+        # SOURCE channel: the annotation that drove the clip (spans the whole clip).
         if anno_text:
-            seg_end = md.get("clip_end_time")
-            seg_start = md.get("clip_start_time")
-            dur = (seg_end - seg_start) if (seg_end is not None and seg_start is not None) else None
-            write_table([{
+            anno_rows.append({
                 "time_s": 0.0,
                 "end_s": dur,
+                "role": "source",
+                "channel": anno_channel,
                 "label": anno_channel,   # the channel that drove this clip
                 "text": anno_text,
-            }], ep_dir / "annotations.jsonl")
+            })
+        # AUXILIARY channels: every other channel temporally covering the clip, at its
+        # own clip-relative [start_s, end_s] (item 4). Carries channel + role so the
+        # viewer can mark which annotation is the source vs auxiliary.
+        for aux in (md.get("auxiliary_annotations") or []):
+            anno_rows.append({
+                "time_s": aux.get("start_s", 0.0),
+                "end_s": aux.get("end_s", dur),
+                "role": "auxiliary",
+                "channel": aux.get("channel"),
+                "label": aux.get("channel"),
+                "text": aux.get("text"),
+            })
+        if anno_rows:
+            write_table(anno_rows, ep_dir / "annotations.jsonl")
             files["annotations"] = "annotations.jsonl"
 
         (ep_dir / "episode.json").write_text(json.dumps({
