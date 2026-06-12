@@ -495,6 +495,60 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
     viewer.add_argument("--out-root", metavar="PATH", required=True, help="Viewer-layout output root.")
     viewer.set_defaults(func=cmd_curate_viewer_layout)
 
+    join = curate_sub.add_parser(
+        "join-manifests",
+        help="Concatenate per-run manifests into one joint manifest.jsonl (drop off-dataset strays).",
+        description=(
+            "Stream-concatenate multiple per-run manifest.jsonl files into ONE joint manifest. "
+            "Each --source is PATH[:dataset,dataset] -- keep only those datasets from that file "
+            "(omit the :list to keep all). De-dupes clip ids, skips error rows. Constant memory. "
+            "Use to merge the non-nymeria and nymeria runs, taking only nymeria from the nym run "
+            "and only the 4 real datasets from the nonnym run (dropping sample-default strays)."
+        ),
+        epilog=(
+            "Example:\n"
+            "  gaze curate join-manifests \\\n"
+            "    --source /path/nonnym/manifest.jsonl:ego-exo4d,egtea,holoassist,hd-epic \\\n"
+            "    --source /path/nym/manifest.jsonl:nymeria \\\n"
+            "    --out /path/joint/manifest.jsonl"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    join.add_argument("--source", metavar="PATH[:DS,DS]", action="append", required=True, help="A manifest.jsonl, optionally :dataset,dataset to keep only those. Repeatable.")
+    join.add_argument("--out", metavar="PATH", required=True, help="Output joint manifest.jsonl path.")
+    join.set_defaults(func=cmd_curate_join_manifests)
+
+    mksplit = curate_sub.add_parser(
+        "make-splits",
+        help="Produce clip-level, per-dataset-stratified train/val split POINTERS from a manifest (+ upload to S3).",
+        description=(
+            "Read a joint manifest ONCE (streaming, pointer fields only -- no clip data copied) "
+            "and emit per-split POINTER files (one {id,dataset,video} per line) that downstream "
+            "training joins back to the manifest by id. Sampling is CLIP-LEVEL and PER-DATASET "
+            "STRATIFIED: the ratio is applied independently within each dataset then unioned, so "
+            "the val split is GUARANTEED to contain clips from every (incl. minority) dataset. "
+            "Deterministic given --seed. Optionally uploads to s3://.../splits/<name>/."
+        ),
+        epilog=(
+            "Examples:\n"
+            "  gaze curate make-splits --manifest /path/joint/manifest.jsonl --name v1_80_20 \\\n"
+            "    --ratios train=0.8,val=0.2 --out-dir /path/splits --upload\n"
+            "  gaze curate make-splits --manifest m.jsonl --name s --ratios train=0.7,val=0.15,test=0.15 --seed 42"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    mksplit.add_argument("--manifest", metavar="PATH", required=True, help="Joint manifest.jsonl to split. Required.")
+    mksplit.add_argument("--name", metavar="NAME", required=True, help="Split name (becomes the S3/dir subfolder). Required.")
+    mksplit.add_argument("--ratios", metavar="NAME=FLOAT[,...]", default="train=0.8,val=0.2", help="Split ratios, normalized to sum to 1; default train=0.8,val=0.2.")
+    mksplit.add_argument("--seed", metavar="INT", type=int, default=0, help="Deterministic seed; default 0.")
+    mksplit.add_argument("--out-dir", metavar="PATH", default="/tmp/gaze_splits", help="Local dir for split pointer files; default /tmp/gaze_splits.")
+    mksplit.add_argument("--upload", action="store_true", help="Upload <out-dir>/<name>/ to S3 after writing.")
+    mksplit.add_argument("--s3-uri", metavar="URI", default="s3://far-research-internal/colbhben/gaze/splits", help="S3 splits prefix.")
+    mksplit.add_argument("--upload-via-host", metavar="HOST", help="Run the S3 sync via ssh on this host (for envs where local AWS is read-only).")
+    mksplit.add_argument("--aws-bin", metavar="PATH", default="aws", help="aws binary; default 'aws' (use /snap/bin/aws on the remote).")
+    mksplit.add_argument("--dry-run", action="store_true", help="With --upload, print the plan without uploading.")
+    mksplit.set_defaults(func=cmd_curate_make_splits)
+
 
 def add_dataset_common(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument("--repo-root", metavar="PATH", default=".", help="Repository root containing DATASETS.md and download_links; default: current directory.")
@@ -805,6 +859,36 @@ def cmd_curate_viewer_layout(args: argparse.Namespace) -> int:
 
     report = molmo2_to_viewer_layout(args.manifest_root, args.out_root)
     print(json.dumps(report, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_curate_join_manifests(args: argparse.Namespace) -> int:
+    from .splits_manifest import join_manifests
+
+    sources: list[tuple[str, set[str] | None]] = []
+    for spec in args.source:
+        path, sep, dslist = spec.partition(":")
+        keep = {d.strip() for d in dslist.split(",") if d.strip()} if sep else None
+        sources.append((path, keep))
+    report = join_manifests(sources, args.out)
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_curate_make_splits(args: argparse.Namespace) -> int:
+    from .splits_manifest import build_split, upload_splits
+
+    ratios = parse_ratios(args.ratios)
+    index = build_split(args.manifest, args.out_dir, name=args.name, ratios=ratios, seed=args.seed)
+    result: dict = {"split": index}
+    if args.upload:
+        result["upload"] = upload_splits(
+            args.out_dir, name=args.name, s3_uri=args.s3_uri, aws_bin=args.aws_bin,
+            on_remote_host=args.upload_via_host, dry_run=args.dry_run,
+        )
+    print(json.dumps(result, indent=2, sort_keys=True))
+    if args.upload and not args.dry_run and result["upload"].get("returncode") not in (0, None):
+        return 1
     return 0
 
 
