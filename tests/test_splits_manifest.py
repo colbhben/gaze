@@ -120,6 +120,28 @@ class TestPointersAndJoin(unittest.TestCase):
         self.assertEqual(sorted(ids), ["ego:1#0", "nym:1#0"])   # stray nymeria + dup dropped
         self.assertEqual(rep["by_dataset"], {"ego-exo4d": 1, "nymeria": 1})
 
+    def test_join_rewrites_video_to_absolute(self):
+        # relative video paths become absolute (resolved against the source manifest's dir)
+        # so the joint manifest is self-contained for the downstream gaze dataset.
+        m = self._manifest([
+            {"id": "a:1#0", "dataset": "a", "video": "videos/a/1.mp4"},
+            {"id": "a:2#0", "dataset": "a", "video": "/already/abs/2.mp4"},  # left as-is
+        ])
+        out = self.tmp / "joint_abs.jsonl"
+        rep = join_manifests([(m, {"a"})], out)
+        rows = {json.loads(l)["id"]: json.loads(l) for l in out.read_text().splitlines()}
+        self.assertEqual(rows["a:1#0"]["video"], str((self.tmp / "videos/a/1.mp4").resolve()))
+        self.assertTrue(Path(rows["a:1#0"]["video"]).is_absolute())
+        self.assertEqual(rows["a:2#0"]["video"], "/already/abs/2.mp4")  # untouched
+        self.assertEqual(rep["video_paths_made_absolute"], 1)
+
+    def test_join_can_keep_relative_video(self):
+        m = self._manifest([{"id": "a:1#0", "dataset": "a", "video": "videos/a/1.mp4"}])
+        out = self.tmp / "joint_rel.jsonl"
+        join_manifests([(m, {"a"})], out, absolute_video=False)
+        row = json.loads(out.read_text().splitlines()[0])
+        self.assertEqual(row["video"], "videos/a/1.mp4")
+
     def test_build_split_end_to_end(self):
         m = self._manifest(
             [{"id": f"a:e{i}#0", "dataset": "a", "video": f"{i}.mp4"} for i in range(80)]

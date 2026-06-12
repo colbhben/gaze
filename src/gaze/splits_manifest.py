@@ -29,6 +29,8 @@ from typing import Any, Iterator
 def join_manifests(
     sources: list[tuple[str | Path, set[str] | None]],
     out_path: str | Path,
+    *,
+    absolute_video: bool = True,
 ) -> dict[str, Any]:
     """Concatenate per-run manifests into ONE joint manifest.jsonl (streaming).
 
@@ -38,35 +40,50 @@ def join_manifests(
     nym run, only the 4 real datasets from the nonnym run). Error rows and rows without
     an id are skipped; duplicate ids (same clip appearing twice) are de-duped, first wins.
     Streams line by line -> constant memory. Returns counts by dataset + total.
+
+    ``absolute_video`` (default True): rewrite each row's relative ``video`` path
+    (``videos/<slug>/<ep>.mp4``, relative to its source manifest's directory) to an
+    ABSOLUTE path, so the joint manifest is self-contained -- the downstream gaze dataset
+    can resolve clips no matter where the joint manifest itself lives. Clips that are
+    already absolute are left untouched.
     """
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     seen: set[str] = set()
     by_ds: dict[str, int] = defaultdict(int)
     dropped = 0
+    rewritten = 0
     with out_path.open("w", encoding="utf-8") as out_fh:
         for src, keep in sources:
-            for line in Path(src).open(encoding="utf-8"):
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    row = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if "error" in row or not row.get("id"):
-                    continue
-                ds = str(row.get("dataset") or _dataset_from_id(row["id"]))
-                if keep is not None and ds not in keep:
-                    dropped += 1
-                    continue
-                if row["id"] in seen:
-                    continue
-                seen.add(row["id"])
-                by_ds[ds] += 1
-                out_fh.write(json.dumps(row, sort_keys=True) + "\n")
+            src_root = Path(src).resolve().parent
+            with Path(src).open(encoding="utf-8") as src_fh:
+                for line in src_fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        row = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if "error" in row or not row.get("id"):
+                        continue
+                    ds = str(row.get("dataset") or _dataset_from_id(row["id"]))
+                    if keep is not None and ds not in keep:
+                        dropped += 1
+                        continue
+                    if row["id"] in seen:
+                        continue
+                    seen.add(row["id"])
+                    by_ds[ds] += 1
+                    if absolute_video and row.get("video"):
+                        vid = Path(row["video"])
+                        if not vid.is_absolute():
+                            row["video"] = str((src_root / vid).resolve())
+                            rewritten += 1
+                    out_fh.write(json.dumps(row, sort_keys=True) + "\n")
     return {"out": str(out_path), "total": len(seen),
-            "by_dataset": dict(sorted(by_ds.items())), "dropped_off_dataset": dropped}
+            "by_dataset": dict(sorted(by_ds.items())), "dropped_off_dataset": dropped,
+            "video_paths_made_absolute": rewritten}
 
 
 def iter_clip_pointers(manifest_path: str | Path) -> Iterator[dict[str, str]]:

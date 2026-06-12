@@ -1,0 +1,285 @@
+#!/usr/bin/env bash
+# Full-chain launcher for the Molmo2 gaze SFT smoke run (1xH200, specialize-then-rehearse).
+#
+# One command does the whole chain:
+#   1. validate inputs + REQUIRE the user's wandb credentials (no hardcoded keys),
+#   2. STAGE data into LOCAL scratch -- /nfs is a strictly READ-ONLY mount, we never write it,
+#   3. select the 92%/8% gaze/rehearse specialize mixture (override via --specialize-ratio),
+#   4. compose every training-control flag with Molmo2-recommended defaults (all overridable),
+#   5. checkpoint to an S3 save_folder by default (native cloud upload; nothing lands on /nfs),
+#   6. launch `torchrun --nproc-per-node=1 launch_scripts/sft.py` inside the prebuilt image.
+#
+# The training OBJECTIVE is flexible (--gaze-objective):
+#   first : given the full video, predict the FIRST gaze point (t0).            [default]
+#   all   : given the full video, predict ALL per-frame gaze points.
+# (Implemented as dataset-construction-time target slicing; the model always sees the full clip.)
+#
+# Gaze metrics (L2 distance + accuracy@radius) are computed on the held-out gaze val split and
+# logged to wandb alongside train loss.
+#
+# Usage:
+#   training/gaze_sft.sh --name gaze-smoke-01 \
+#       --wandb-key $WANDB_API_KEY --wandb-project gaze --wandb-entity my-team \
+#       --gaze-data-dir /home/ubuntu/gaze-extract-full \
+#       [--gaze-objective first|all] [--specialize-ratio 0.92] \
+#       [--save-folder s3://far-research-internal/colbhben/gaze/molmo/runs/<name>] \
+#       [--max-duration 200] [--checkpoint <olmo-native 4B>] [--image IMG] \
+#       [--stage-from <path-or-s3>] [--dry-run] [-- <extra sft.py dotlist overrides>]
+#
+# Credentials: pass --wandb-key/-project/-entity OR export WANDB_API_KEY/WANDB_PROJECT/
+# WANDB_ENTITY before calling. The script FAILS FAST if any are missing.
+set -euo pipefail
+
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+MOLMO2_DIR="$ROOT/third_party/molmo2"
+
+# ----------------------------------------------------------------------------------------- #
+# Defaults (Molmo2 SFT recommended values; every one is overridable via flag).
+# ----------------------------------------------------------------------------------------- #
+GPUS=1                                   # 1xH200 smoke
+RUN_NAME=""
+MIXTURE="gaze_specialize"
+GAZE_OBJECTIVE="first"
+SPECIALIZE_RATIO="0.92"                  # 92% gaze / 8% rehearse
+IMAGE=${MOLMO_IMAGE:-ghcr.io/allenai/molmo2:latest}
+
+# Released Molmo2 4B VLM checkpoint (olmo-native: config.yaml + model_and_optim/).
+CHECKPOINT=${MOLMO_CHECKPOINT:-/data/molmo/Molmo2-4B-SFT}
+
+# Data locations. GAZE_DATA_DIR (LOCAL) must hold joint/manifest.jsonl + splits/<name>/.
+# MOLMO_DATA_DIR (LOCAL) holds the rehearsal Molmo2-Data. Neither may be on /nfs at run time.
+GAZE_DATA_DIR=${GAZE_DATA_DIR:-}
+GAZE_SPLIT_NAME=${GAZE_SPLIT_NAME:-v1_95_05}
+MOLMO_DATA_DIR=${MOLMO_DATA_DIR:-}
+# Optional: stage GAZE_DATA_DIR from this read-only source (a /nfs path or s3:// URL) into
+# a LOCAL scratch dir before training. Leaves /nfs untouched (copies OUT of it).
+STAGE_FROM=${STAGE_FROM:-}
+LOCAL_SCRATCH=${LOCAL_SCRATCH:-/home/ubuntu/gaze-stage}
+
+# Checkpoints -> S3 by default (native cloud save; never /nfs). {name} filled after parse.
+SAVE_FOLDER=""
+SAVE_INTERVAL=2000
+MAX_DURATION=""                          # steps; short for smoke (e.g. 200). empty=sft.py default
+
+# Training-control knobs (Molmo2 SFT defaults from launch_scripts/sft.py + optim).
+SEQ_LEN=16384
+DEVICE_BATCH_SIZE=2
+GLOBAL_BATCH_SIZE=""                     # empty => sft.py default (128); set for a small smoke
+CP_DEGREE=1
+LLM_LR=1e-5
+VIT_LR=5e-6
+CONNECTOR_LR=5e-6
+WARMUP=200
+ALPHA_F=0.1
+NUM_WORKERS=6
+
+# wandb (REQUIRED). Seed from env; --wandb-* flags override.
+WANDB_KEY=${WANDB_API_KEY:-}
+WANDB_PROJECT=${WANDB_PROJECT:-}
+WANDB_ENTITY=${WANDB_ENTITY:-}
+
+HF_TOKEN=${HF_ACCESS_TOKEN:-}
+DRY_RUN=0
+EXTRA=()
+
+# ----------------------------------------------------------------------------------------- #
+# Parse args.
+# ----------------------------------------------------------------------------------------- #
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --gpus) GPUS=$2; shift 2 ;;
+    --name) RUN_NAME=$2; shift 2 ;;
+    --mixture) MIXTURE=$2; shift 2 ;;
+    --gaze-objective) GAZE_OBJECTIVE=$2; shift 2 ;;
+    --specialize-ratio) SPECIALIZE_RATIO=$2; shift 2 ;;
+    --checkpoint) CHECKPOINT=$2; shift 2 ;;
+    --image) IMAGE=$2; shift 2 ;;
+    --gaze-data-dir) GAZE_DATA_DIR=$2; shift 2 ;;
+    --gaze-split-name) GAZE_SPLIT_NAME=$2; shift 2 ;;
+    --molmo-data-dir) MOLMO_DATA_DIR=$2; shift 2 ;;
+    --stage-from) STAGE_FROM=$2; shift 2 ;;
+    --local-scratch) LOCAL_SCRATCH=$2; shift 2 ;;
+    --save-folder) SAVE_FOLDER=$2; shift 2 ;;
+    --save-interval) SAVE_INTERVAL=$2; shift 2 ;;
+    --max-duration) MAX_DURATION=$2; shift 2 ;;
+    --seq-len) SEQ_LEN=$2; shift 2 ;;
+    --device-batch-size) DEVICE_BATCH_SIZE=$2; shift 2 ;;
+    --global-batch-size) GLOBAL_BATCH_SIZE=$2; shift 2 ;;
+    --cp-degree) CP_DEGREE=$2; shift 2 ;;
+    --llm-lr) LLM_LR=$2; shift 2 ;;
+    --vit-lr) VIT_LR=$2; shift 2 ;;
+    --connector-lr) CONNECTOR_LR=$2; shift 2 ;;
+    --warmup) WARMUP=$2; shift 2 ;;
+    --alpha-f) ALPHA_F=$2; shift 2 ;;
+    --num-workers) NUM_WORKERS=$2; shift 2 ;;
+    --wandb-key) WANDB_KEY=$2; shift 2 ;;
+    --wandb-project) WANDB_PROJECT=$2; shift 2 ;;
+    --wandb-entity) WANDB_ENTITY=$2; shift 2 ;;
+    --hf-token) HF_TOKEN=$2; shift 2 ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    --) shift; EXTRA=("$@"); break ;;
+    -h|--help) sed -n '1,46p' "$0"; exit 0 ;;
+    *) echo "ERROR: unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+
+# ----------------------------------------------------------------------------------------- #
+# 1. Validate inputs + REQUIRE wandb creds (fail fast, no hardcoded secrets).
+# ----------------------------------------------------------------------------------------- #
+[ -n "$RUN_NAME" ] || die "--name is required (used for run name + S3 save_folder)."
+[ -f "$MOLMO2_DIR/launch_scripts/sft.py" ] || \
+  die "$MOLMO2_DIR not initialized. Run: git submodule update --init --recursive"
+
+[ -n "$WANDB_KEY" ] || die "wandb API key required: pass --wandb-key or export WANDB_API_KEY."
+[ -n "$WANDB_PROJECT" ] || die "wandb project required: pass --wandb-project or export WANDB_PROJECT."
+[ -n "$WANDB_ENTITY" ] || die "wandb entity required: pass --wandb-entity or export WANDB_ENTITY."
+
+case "$GAZE_OBJECTIVE" in first|all) ;; *) die "--gaze-objective must be 'first' or 'all'." ;; esac
+
+# Default S3 save_folder (native cloud save; never writes /nfs).
+if [ -z "$SAVE_FOLDER" ]; then
+  SAVE_FOLDER="s3://far-research-internal/colbhben/gaze/molmo/runs/$RUN_NAME"
+fi
+case "$SAVE_FOLDER" in
+  /nfs/*) die "refusing to checkpoint to /nfs (read-only mount). Use an s3:// or local scratch path." ;;
+esac
+
+# ----------------------------------------------------------------------------------------- #
+# 2. Stage data into LOCAL scratch (never write /nfs). If --stage-from is given, copy the
+#    joint manifest + splits OUT of the read-only source into LOCAL_SCRATCH and point
+#    GAZE_DATA_DIR there. Otherwise GAZE_DATA_DIR must already be a local, populated dir.
+# ----------------------------------------------------------------------------------------- #
+if [ -n "$STAGE_FROM" ]; then
+  dest="$LOCAL_SCRATCH/gaze-data"
+  echo ">> staging gaze data from $STAGE_FROM -> $dest (local scratch; /nfs stays read-only)"
+  mkdir -p "$dest"
+  case "$STAGE_FROM" in
+    s3://*)
+      command -v aws >/dev/null 2>&1 || command -v /snap/bin/aws >/dev/null 2>&1 || \
+        die "aws CLI not found for s3 staging."
+      AWS=$(command -v aws || command -v /snap/bin/aws)
+      "$AWS" s3 cp "$STAGE_FROM/joint/manifest.jsonl" "$dest/joint/manifest.jsonl"
+      "$AWS" s3 cp --recursive "$STAGE_FROM/splits/$GAZE_SPLIT_NAME" "$dest/splits/$GAZE_SPLIT_NAME"
+      ;;
+    *)
+      [ -d "$STAGE_FROM" ] || die "--stage-from '$STAGE_FROM' is not a directory or s3:// URL."
+      mkdir -p "$dest/joint" "$dest/splits"
+      cp -f "$STAGE_FROM/joint/manifest.jsonl" "$dest/joint/manifest.jsonl"
+      cp -rf "$STAGE_FROM/splits/$GAZE_SPLIT_NAME" "$dest/splits/$GAZE_SPLIT_NAME"
+      ;;
+  esac
+  GAZE_DATA_DIR="$dest"
+fi
+
+[ -n "$GAZE_DATA_DIR" ] || die "--gaze-data-dir required (local dir with joint/manifest.jsonl + splits/)."
+case "$GAZE_DATA_DIR" in
+  /nfs/*) die "GAZE_DATA_DIR is on /nfs (read-only); stage to local scratch with --stage-from first." ;;
+esac
+[ -f "$GAZE_DATA_DIR/joint/manifest.jsonl" ] || \
+  die "missing $GAZE_DATA_DIR/joint/manifest.jsonl (run: gaze curate join-manifests)."
+[ -f "$GAZE_DATA_DIR/splits/$GAZE_SPLIT_NAME/train.jsonl" ] || \
+  die "missing $GAZE_DATA_DIR/splits/$GAZE_SPLIT_NAME/train.jsonl (run: gaze curate make-splits)."
+[ -f "$GAZE_DATA_DIR/splits/$GAZE_SPLIT_NAME/val.jsonl" ] || \
+  die "missing $GAZE_DATA_DIR/splits/$GAZE_SPLIT_NAME/val.jsonl (the gaze eval split)."
+
+[ -n "$MOLMO_DATA_DIR" ] || die "--molmo-data-dir required (local Molmo2-Data rehearsal root)."
+case "$MOLMO_DATA_DIR" in
+  /nfs/*) die "MOLMO_DATA_DIR is on /nfs (read-only); stage the rehearsal data to local scratch first." ;;
+esac
+[ -d "$MOLMO_DATA_DIR" ] || die "MOLMO_DATA_DIR '$MOLMO_DATA_DIR' not found."
+
+# ----------------------------------------------------------------------------------------- #
+# 3-5. Compose the sft.py command. Mixture, objective + ratio (env), flags, S3 ckpt.
+# ----------------------------------------------------------------------------------------- #
+SFT_ARGS=(
+  "$CHECKPOINT" "$MIXTURE"
+  "--seq_len=$SEQ_LEN"
+  "--device_batch_size=$DEVICE_BATCH_SIZE"
+  "--cp_degree=$CP_DEGREE"
+  "--num_workers=$NUM_WORKERS"
+  # OmegaConf dotlist overrides merged on top of the TrainConfig:
+  "save_folder=$SAVE_FOLDER"
+  "save_overwrite=true"
+  "save_interval=$SAVE_INTERVAL"
+  "run_name=$RUN_NAME"
+  "optimizer.llm_learning_rate=$LLM_LR"
+  "optimizer.vit_learning_rate=$VIT_LR"
+  "optimizer.connector_learning_rate=$CONNECTOR_LR"
+  "scheduler.llm_t_warmup=$WARMUP"
+  "scheduler.vit_t_warmup=$WARMUP"
+  "scheduler.connector_t_warmup=$WARMUP"
+  "scheduler.alpha_f=$ALPHA_F"
+)
+[ -n "$MAX_DURATION" ] && SFT_ARGS+=( "max_duration=$MAX_DURATION" )
+[ -n "$GLOBAL_BATCH_SIZE" ] && SFT_ARGS+=( "global_train_batch_size=$GLOBAL_BATCH_SIZE" )
+[ "${#EXTRA[@]}" -gt 0 ] && SFT_ARGS+=( "${EXTRA[@]}" )
+
+echo "=================================================================="
+echo " Molmo2 gaze SFT smoke run"
+echo "   run name        : $RUN_NAME"
+echo "   gpus            : $GPUS"
+echo "   mixture         : $MIXTURE  (gaze ${SPECIALIZE_RATIO} / rehearse)"
+echo "   objective       : $GAZE_OBJECTIVE"
+echo "   checkpoint      : $CHECKPOINT"
+echo "   gaze data dir   : $GAZE_DATA_DIR  (split: $GAZE_SPLIT_NAME)"
+echo "   molmo data dir  : $MOLMO_DATA_DIR"
+echo "   save_folder     : $SAVE_FOLDER  (S3 native; /nfs untouched)"
+echo "   wandb           : $WANDB_ENTITY/$WANDB_PROJECT"
+echo "   image           : $IMAGE"
+echo "=================================================================="
+
+# Resolve the image (skip docker entirely in dry-run so the script runs anywhere).
+if [ "$DRY_RUN" -eq 0 ]; then
+  command -v docker >/dev/null 2>&1 || die "docker not found on PATH."
+  if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    echo ">> image $IMAGE not local; pulling..."
+    docker pull "$IMAGE" || { echo ">> pull failed; building from $MOLMO2_DIR/Dockerfile"; \
+      IMAGE="molmo2:local"; docker build -t "$IMAGE" "$MOLMO2_DIR"; }
+  fi
+fi
+
+# AWS creds for the S3 checkpoint upload are passed through from the host env if present.
+AWS_ENVS=()
+for v in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_DEFAULT_REGION AWS_REGION; do
+  [ -n "${!v:-}" ] && AWS_ENVS+=( -e "$v=${!v}" )
+done
+
+# ----------------------------------------------------------------------------------------- #
+# 6. Launch (1xH200 by default). Bind-mount the fork (live code), gaze data, rehearsal data.
+#    GAZE_OBJECTIVE / GAZE_SPLIT_NAME / GAZE_SPECIALIZE_RATIO are read by our dataset + mixture.
+# ----------------------------------------------------------------------------------------- #
+RUN=(
+  docker run --rm --gpus all --shm-size=32g
+  -v "$MOLMO2_DIR:/molmo2"
+  -v "$GAZE_DATA_DIR:/gaze-data:ro"
+  -v "$MOLMO_DATA_DIR:/data/molmo:ro"
+  -w /molmo2
+  -e OLMO_SHARED_FS=1
+  -e MOLMO_DATA_DIR=/data/molmo
+  -e HF_HOME=/data/molmo/huggingface
+  -e OMP_NUM_THREADS=8
+  -e GAZE_DATA_DIR=/gaze-data
+  -e GAZE_OBJECTIVE="$GAZE_OBJECTIVE"
+  -e GAZE_SPLIT_NAME="$GAZE_SPLIT_NAME"
+  -e GAZE_SPECIALIZE_RATIO="$SPECIALIZE_RATIO"
+  -e WANDB_API_KEY="$WANDB_KEY"
+  -e WANDB_PROJECT="$WANDB_PROJECT"
+  -e WANDB_ENTITY="$WANDB_ENTITY"
+  "${AWS_ENVS[@]}"
+)
+[ -n "$HF_TOKEN" ] && RUN+=( -e HF_ACCESS_TOKEN="$HF_TOKEN" )
+RUN+=(
+  "$IMAGE"
+  bash -lc "set -e; pip install -e . >/dev/null 2>&1 || true; \
+    torchrun --nproc-per-node=$GPUS launch_scripts/sft.py ${SFT_ARGS[*]}"
+)
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  echo ">> DRY RUN -- command that would execute:"
+  printf '%q ' "${RUN[@]}"; echo
+  exit 0
+fi
+
+exec "${RUN[@]}"
