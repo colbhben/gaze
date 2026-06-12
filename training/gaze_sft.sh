@@ -43,6 +43,7 @@
 #     --molmo-data-dir DIR     [req] local Molmo2-Data rehearsal root
 #     --stage-from SRC         copy data out of an /nfs path or s3:// URL into local scratch
 #     --local-scratch DIR      where --stage-from lands         (default: /home/ubuntu/gaze-stage)
+#     --hf-cache DIR           WRITABLE HuggingFace cache; never /nfs (default: <scratch>/hf-cache)
 #   Mixture / objective
 #     --mixture NAME           training mixture                       (default: gaze_specialize)
 #     --gaze-objective first|all  first=predict t0 point, all=per-frame points   (default: first)
@@ -112,6 +113,10 @@ MOLMO_DATA_DIR=${MOLMO_DATA_DIR:-}
 # a LOCAL scratch dir before training. Leaves /nfs untouched (copies OUT of it).
 STAGE_FROM=${STAGE_FROM:-}
 LOCAL_SCRATCH=${LOCAL_SCRATCH:-/home/ubuntu/gaze-stage}
+# HuggingFace cache. MUST be writable (the tokenizer/model build writes lock files + downloads
+# here), so it can NOT live under a read-only MOLMO_DATA_DIR (e.g. /nfs). Empty => defaults to
+# <local-scratch>/hf-cache after parse; mounted writable at /hf-cache in the container.
+HF_CACHE=${HF_CACHE:-}
 
 # Checkpoints -> S3 by default (native cloud save; never /nfs). {name} filled after parse.
 SAVE_FOLDER=""
@@ -162,6 +167,7 @@ while [ "$#" -gt 0 ]; do
     --molmo-data-dir) MOLMO_DATA_DIR=$2; shift 2 ;;
     --stage-from) STAGE_FROM=$2; shift 2 ;;
     --local-scratch) LOCAL_SCRATCH=$2; shift 2 ;;
+    --hf-cache) HF_CACHE=$2; shift 2 ;;
     --save-folder) SAVE_FOLDER=$2; shift 2 ;;
     --save-interval) SAVE_INTERVAL=$2; shift 2 ;;
     --max-duration) MAX_DURATION=$2; shift 2 ;;
@@ -181,7 +187,7 @@ while [ "$#" -gt 0 ]; do
     --hf-token) HF_TOKEN=$2; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --) shift; EXTRA=("$@"); break ;;
-    -h|--help) sed -n '2,78p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,79p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "ERROR: unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -294,6 +300,13 @@ case "$MOLMO_DATA_DIR" in
 esac
 [ -d "$MOLMO_DATA_DIR" ] || die "MOLMO_DATA_DIR '$MOLMO_DATA_DIR' not found."
 
+# Writable HF cache (default under local scratch; never under the read-only data mount).
+[ -n "$HF_CACHE" ] || HF_CACHE="$LOCAL_SCRATCH/hf-cache"
+case "$HF_CACHE" in
+  /nfs/*) die "HF_CACHE is on /nfs (read-only); the tokenizer build must write here. Use local scratch." ;;
+esac
+mkdir -p "$HF_CACHE" || die "could not create HF cache dir: $HF_CACHE"
+
 # Resolve the checkpoint so it is reachable INSIDE the container. The container only mounts
 # /molmo2, /gaze-data and /data/molmo -- an arbitrary host path like /nfs/.../Molmo2-4B-SFT is
 # NOT visible. Three cases:
@@ -355,6 +368,7 @@ echo "   objective       : $GAZE_OBJECTIVE"
 echo "   checkpoint      : $CHECKPOINT  (in-container: $CKPT_ARG)"
 echo "   gaze data dir   : $GAZE_DATA_DIR  (split: $GAZE_SPLIT_NAME)"
 echo "   molmo data dir  : $MOLMO_DATA_DIR"
+echo "   hf cache        : $HF_CACHE  (writable; mounted /hf-cache)"
 echo "   save_folder     : $SAVE_FOLDER  (S3 native; /nfs untouched)"
 echo "   wandb           : $WANDB_ENTITY/$WANDB_PROJECT"
 echo "   image           : $IMAGE"
@@ -385,11 +399,12 @@ RUN=(
   -v "$MOLMO2_DIR:/molmo2"
   -v "$GAZE_DATA_DIR:/gaze-data:ro"
   -v "$MOLMO_DATA_DIR:/data/molmo:ro"
-  "${CKPT_MOUNT[@]}"
+  -v "$HF_CACHE:/hf-cache"
+  ${CKPT_MOUNT[@]+"${CKPT_MOUNT[@]}"}
   -w /molmo2
   -e OLMO_SHARED_FS=1
   -e MOLMO_DATA_DIR=/data/molmo
-  -e HF_HOME=/data/molmo/huggingface
+  -e HF_HOME=/hf-cache
   -e OMP_NUM_THREADS=8
   -e GAZE_DATA_DIR=/gaze-data
   -e GAZE_OBJECTIVE="$GAZE_OBJECTIVE"
@@ -398,7 +413,7 @@ RUN=(
   -e WANDB_API_KEY="$WANDB_KEY"
   -e WANDB_PROJECT="$WANDB_PROJECT"
   -e WANDB_ENTITY="$WANDB_ENTITY"
-  "${AWS_ENVS[@]}"
+  ${AWS_ENVS[@]+"${AWS_ENVS[@]}"}
 )
 [ -n "$HF_TOKEN" ] && RUN+=( -e HF_ACCESS_TOKEN="$HF_TOKEN" )
 RUN+=(
