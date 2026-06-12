@@ -54,7 +54,11 @@ splits/
 .idea/
 .vscode/
 .codex/
+
+# Agent tooling and instructions (local-only, never push)
 CLAUDE.md
+AGENTS.md
+.agents/
 .beads/
 .claude/
 
