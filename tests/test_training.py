@@ -350,5 +350,34 @@ class TestAnnotationUnification(unittest.TestCase):
         self.assertEqual(active[0]["kind"], "interval")  # intervals sorted first
 
 
+class TestEpisodeListNoSampleContamination(unittest.TestCase):
+    """An explicit episodes-file must process ONLY its listed datasets -- no fallback to
+    per-recipe sample episodes for unlisted slugs (the old 'sample-default contamination'
+    that forced a post-hoc join). Lets ONE build produce ONE clean manifest natively."""
+
+    def test_only_listed_datasets_scheduled(self):
+        import tempfile
+        from pathlib import Path
+        scheduled = []
+
+        def fake_build(slug, ep, extra, out_root, puller, **kw):
+            scheduled.append((slug, ep))
+            return [], {"dataset": slug, "episode": ep}
+
+        orig = tr._build_molmo2_episode
+        tr._build_molmo2_episode = fake_build
+        try:
+            out = Path(tempfile.mkdtemp())
+            tr.build_training_manifest(
+                out, output_format="molmo2",
+                episode_lists={"egtea": ["OP01-R01-PastaSalad-1-2-F3-F4"]},
+                fps=6, max_clip_s=16, drop_shorter_than_s=0, min_duration_s=2.5,
+                workers=1, puller=tr.Puller(local_root="/tmp"),
+            )
+        finally:
+            tr._build_molmo2_episode = orig
+        self.assertEqual({s for s, _ in scheduled}, {"egtea"})  # egtea only, no strays
+
+
 if __name__ == "__main__":
     unittest.main()

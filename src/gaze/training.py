@@ -1278,6 +1278,16 @@ def build_training_manifest(
         want = set(datasets)
         slugs = [s for s in slugs if s in want]
 
+    # When an explicit episode_lists (episodes-file) is given, ONLY process the datasets
+    # it names -- do NOT fall back to the per-recipe sample episode for unlisted slugs.
+    # That sample-default fallback was the source of the "stray sample-default
+    # contamination" (e.g. an ego-exo4d/nymeria sample take leaking into a nymeria-only
+    # run), which previously had to be cleaned up post-hoc at the join step. Restricting
+    # to the listed datasets lets ONE build over a full episodes-file produce ONE clean,
+    # complete manifest natively -- no join, no strays.
+    if episode_lists:
+        slugs = [s for s in slugs if s in episode_lists]
+
     all_examples: list[dict[str, Any]] = []
     rows_report: list[dict[str, Any]] = []
 
@@ -1285,6 +1295,8 @@ def build_training_manifest(
     def episodes_for(slug: str) -> list[str]:
         if episode_lists and slug in episode_lists:
             ids = list(episode_lists[slug])
+        elif episode_lists:
+            ids = []  # episodes-file given but doesn't list this slug -> skip (no sample fallback)
         else:
             ids = [sample_map[slug]["episode_id"]]
         return cr.filter_episode_ids(slug, ids)
