@@ -387,6 +387,41 @@ class TestGazeReaders(unittest.TestCase):
         self.assertEqual(gt.sample_count, 2)  # frames 2 and 3 only
         self.assertAlmostEqual(gt.rows[0]["x"], 473.9)
 
+    def test_begaze_34_us_to_frame(self):
+        # BeGaze 3.4.46: col0 Time = microseconds (~30Hz); B POR X/Y at cols 5/6.
+        # Regression for the bug where frame/time were mis-mapped to col -2 (a pupil
+        # float) -> every frame=0 -> empty gaze slice. Frame = round((Time-Time0)/1e6*24).
+        p = self.tmp / "sess34.txt"
+        # Time0=1_000_000us; samples at 1/30s; frames @24fps:
+        #   t=0.000s -> frame 0;  t=1.000s (1s later) -> frame 24;  t=1.0333 -> frame 25
+        p.write_text(
+            "## [BeGaze]\n## Version:\tBeGaze 3.4.46\n## Sample Rate:\t30\n"
+            "Time\tType\tTrial\tLpup\tRpup\tB POR X [px]\tB POR Y [px]\tjunk\tval\n"
+            "1000000\tSMP\t1\t3.1\t3.5\t100.0\t200.0\t-\t0.11\n"
+            "2000000\tSMP\t1\t3.1\t3.5\t110.0\t210.0\t-\t0.12\n"   # +1.0s -> frame 24
+            "2033333\tSMP\t1\t3.1\t3.5\t120.0\t220.0\t-\t0.13\n"   # +1.0333s -> frame 25
+        )
+        gf = {
+            "reader": "begaze_txt", "coordinate_space": "pixel_2d", "frame_dims": [1280, 960],
+            "columns": {"x": 5, "y": 6, "type": 1},
+            "time": {"source": 0, "units": "us_to_frame", "fps": 24},
+            "projection": {"method": "normalize_by_dims"},
+            "variants": [
+                {"version": "3.4", "match": "## Version: BeGaze 3.4",
+                 "columns": {"x": 5, "y": 6, "type": 1},
+                 "time": {"source": 0, "units": "us_to_frame", "fps": 24}},
+            ],
+        }
+        # unsliced: frames derived 0, 24, 25 (NOT all 0)
+        full = cr.read_gaze_begaze_txt(p, gf, fps=24, frame_range=None)
+        self.assertEqual([row["frame"] for row in full.rows], [0, 24, 25])
+        self.assertAlmostEqual(full.rows[0]["x"], 100.0)   # B POR X, not a pupil float
+        # slice to clip frames [24,25] -> the 2 later samples, t rebased to ~0
+        gt = cr.read_gaze_begaze_txt(p, gf, fps=24, frame_range=(24, 25))
+        self.assertEqual(gt.sample_count, 2)
+        self.assertAlmostEqual(gt.rows[0]["x"], 110.0)
+        self.assertAlmostEqual(gt.rows[0]["t_s"], 0.0)     # rebased to clip start
+
 
 class TestProjection(unittest.TestCase):
     def test_normalize_by_dims_pixel_rescale(self):

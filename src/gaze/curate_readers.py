@@ -427,6 +427,21 @@ def read_gaze_begaze_txt(
             continue
         data_lines.append(ln)
 
+    units = time_spec.get("units", "frame_index")
+
+    # For the microsecond-`Time`-column variant (BeGaze 3.4, e.g. 3.4.46: 27 tab cols,
+    # col0 `Time` in us @ ~30Hz), the session frame index is derived from the elapsed
+    # time off the FIRST sample: frame = round((Time - Time0)/1e6 * fps). The clip
+    # filename frame range (F<start>-F<end>) is at this `fps` (24). t0 is read once.
+    t0_us = None
+    if units == "us_to_frame":
+        for ln in data_lines:
+            p0 = ln.split("\t", 1)[0]
+            v = _num(p0)
+            if v is not None:
+                t0_us = v
+                break
+
     rows: list[dict[str, Any]] = []
     valid_count = 0
     for ln in data_lines:
@@ -437,21 +452,29 @@ def read_gaze_begaze_txt(
             out[canon] = parts[i] if -len(parts) <= i < len(parts) else None
             if canon in ("x", "y"):
                 out[canon] = _num(out[canon])
-        frame_val = out.get("frame")
-        if isinstance(frame_val, str):
-            # 3.4 'frame' is actually a timecode; convert via time_spec
-            pass
         fi = time_spec.get("source")
-        if fi is not None:
-            i = int(fi)
-            raw_t = parts[i] if -len(parts) <= i < len(parts) else None
-            out["t_s"] = to_seconds(raw_t, time_spec.get("units", "frame_index"), use_fps)
-        # frame number for slicing (3.1: integer frame col; 3.4: from timecode->frame)
-        if time_spec.get("units") == "frame_index":
-            fr = _num(out.get("frame"))
-            out["frame"] = int(fr) if fr is not None else None
+        if units == "us_to_frame":
+            # source col = the us `Time`; t_s = (Time - Time0)/1e6; frame @ fps.
+            i = int(fi) if fi is not None else 0
+            raw = _num(parts[i]) if (i is not None and -len(parts) <= i < len(parts)) else None
+            if raw is not None and t0_us is not None:
+                ts = (raw - t0_us) / 1e6
+                out["t_s"] = round(ts, 6)
+                out["frame"] = int(round(ts * (use_fps or 24)))
+            else:
+                out["t_s"] = None
+                out["frame"] = None
         else:
-            out["frame"] = int(round((out.get("t_s") or 0.0) * (use_fps or 24)))
+            if fi is not None:
+                i = int(fi)
+                raw_t = parts[i] if -len(parts) <= i < len(parts) else None
+                out["t_s"] = to_seconds(raw_t, units, use_fps)
+            # frame number for slicing (3.1: integer frame col)
+            if units == "frame_index":
+                fr = _num(out.get("frame"))
+                out["frame"] = int(fr) if fr is not None else None
+            else:
+                out["frame"] = int(round((out.get("t_s") or 0.0) * (use_fps or 24)))
         out["valid"] = True
         rows.append(out)
 

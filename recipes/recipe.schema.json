@@ -345,10 +345,11 @@
         "end_from": { "type": "string", "description": "derive end when no end column, e.g. 'start+duration_approx'" },
         "point": { "type": ["string", "integer"] },
         "whole_episode": { "type": "boolean", "description": "channel has no native timing; spans the full episode [0, duration]" },
-        "units": { "enum": ["s", "ms", "us", "ns", "frame_index", "filetime_100ns", "timecode_hmsf", "hms_decimal"] },
+        "units": { "enum": ["s", "ms", "us", "ns", "frame_index", "filetime_100ns", "timecode_hmsf", "hms_decimal", "us_to_frame"] },
         "fps": { "type": "number" },
         "epoch": { "enum": ["absolute", "video_zero", "recording_zero"] },
-        "anchor_file": { "type": "string", "description": "file giving the zero/offset (e.g. VideoMp4Timing.txt)" }
+        "anchor_file": { "type": "string", "description": "file giving the zero/offset (e.g. VideoMp4Timing.txt)" },
+        "notes": { "type": "string" }
       }
     },
 

@@ -81,14 +81,14 @@
           "columns": {
             "x": 5,
             "y": 6,
-            "frame": -2,
-            "type": -1
+            "type": 1
           },
           "time": {
-            "source": -2,
-            "units": "timecode_hmsf",
+            "source": 0,
+            "units": "us_to_frame",
             "fps": 24,
-            "epoch": "recording_zero"
+            "epoch": "recording_zero",
+            "notes": "BeGaze 3.4.46: 27 tab cols. col0 Time = microseconds (~30Hz); B POR X/Y at 5/6 are the binocular point-of-regard pixels (1280x960). Session frame = round((Time - Time[0])/1e6 * 24); clip filename F<start>-F<end> is at 24fps. (Previously mis-mapped frame/time to col -2, a pupil float -> every frame=0 -> empty gaze slice.)"
           }
         }
       ]
