@@ -434,6 +434,49 @@ class TestChannelRolesAndPoints(unittest.TestCase):
         self.assertAlmostEqual(a["overlap_s"], 3.0)
 
 
+class TestFinalAnnotation(unittest.TestCase):
+    def test_source_only(self):
+        from src.gaze.training import build_final_annotation
+        b = {"policy": "source_only"}
+        self.assertEqual(
+            build_final_annotation(b, source_channel="atomic", source_text="cuts onion", auxiliary=[]),
+            "cuts onion")
+
+    def test_none_bundle_is_source(self):
+        from src.gaze.training import build_final_annotation
+        self.assertEqual(
+            build_final_annotation(None, source_channel="x", source_text="grabs cup", auxiliary=[]),
+            "grabs cup")
+
+    def test_holoassist_fine_source_prepends_coarse_context(self):
+        from src.gaze.training import build_final_annotation
+        b = {"policy": "holoassist_coarse_fine", "coarse_channel": "coarse", "fine_channels": ["fine"]}
+        aux = [{"channel": "coarse", "text": "assembles the GoPro", "overlap_s": 5.0},
+               {"channel": "narration", "text": "the student...", "overlap_s": 5.0}]
+        out = build_final_annotation(b, source_channel="fine", source_text="grab battery", auxiliary=aux)
+        self.assertEqual(out, "<context: assembles the GoPro> <action: grab battery>")
+
+    def test_holoassist_coarse_source_wraps_only(self):
+        from src.gaze.training import build_final_annotation
+        b = {"policy": "holoassist_coarse_fine", "coarse_channel": "coarse", "fine_channels": ["fine"]}
+        out = build_final_annotation(b, source_channel="coarse", source_text="opens the GoPro", auxiliary=[])
+        self.assertEqual(out, "<opens the GoPro>")
+
+    def test_holoassist_fine_no_coarse_aux_empty_context(self):
+        from src.gaze.training import build_final_annotation
+        b = {"policy": "holoassist_coarse_fine", "coarse_channel": "coarse", "fine_channels": ["fine"]}
+        out = build_final_annotation(b, source_channel="fine", source_text="rotate gopro", auxiliary=[])
+        self.assertEqual(out, "<context: > <action: rotate gopro>")
+
+    def test_holoassist_picks_longest_overlapping_coarse(self):
+        from src.gaze.training import build_final_annotation
+        b = {"policy": "holoassist_coarse_fine", "coarse_channel": "coarse", "fine_channels": ["fine"]}
+        aux = [{"channel": "coarse", "text": "short", "overlap_s": 1.0},
+               {"channel": "coarse", "text": "dominant context", "overlap_s": 9.0}]
+        out = build_final_annotation(b, source_channel="fine", source_text="x", auxiliary=aux)
+        self.assertIn("dominant context", out)
+
+
 class TestChopIntegration(unittest.TestCase):
     def test_nymeria_like_offset_annotations(self):
         # annotations start ~98s in (the v3 bug); chop must place segments there.

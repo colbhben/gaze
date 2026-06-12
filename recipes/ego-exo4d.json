@@ -218,5 +218,8 @@
       "Atomic timestamp is a point; expert is start+duration. Confirm mapping point/interval annotations to the canonical timeline (seconds vs frame_num via fps) at rectify time.",
       "Exact personalized-vs-general counts were sampled (n=400 -> ~15% personalized); a full count was blocked by NFS latency."
     ]
+  },
+  "annotation_bundle": {
+    "policy": "source_only"
   }
 }

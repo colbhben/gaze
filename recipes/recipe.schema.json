@@ -27,12 +27,35 @@
     },
     "epoch_sync": { "$ref": "#/$defs/epoch_sync" },
     "dataset_filters": { "$ref": "#/$defs/dataset_filters" },
+    "annotation_bundle": { "$ref": "#/$defs/annotation_bundle" },
     "metadata": { "$ref": "#/$defs/metadata" },
     "overrides": { "type": "object" },
     "provenance": { "$ref": "#/$defs/provenance" }
   },
 
   "$defs": {
+    "annotation_bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How to assemble the FINAL per-clip training annotation from the shipped source + auxiliary channels. All channels are preserved on the clip (metadata.annotation_text + auxiliary_annotations); this only adds a marked 'final_annotation' string built per the policy.",
+      "required": ["policy"],
+      "properties": {
+        "policy": {
+          "enum": ["source_only", "holoassist_coarse_fine"],
+          "description": "source_only = final is just the clip's source (driving) annotation text. holoassist_coarse_fine = if the source channel is FINE, final = '<context: COARSE> <action: FINE>' (coarse pulled from the covering coarse-channel span); if the source is COARSE, final = '<COARSE>'."
+        },
+        "coarse_channel": {
+          "type": "string",
+          "description": "(holoassist_coarse_fine) name of the coarse channel used for the <context: ...> part."
+        },
+        "fine_channels": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "(holoassist_coarse_fine) names of the fine action channel(s); a source from one of these is treated as the <action: ...> with coarse context prepended."
+        }
+      }
+    },
+
     "dataset_filters": {
       "type": "object",
       "additionalProperties": false,

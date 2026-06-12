@@ -224,5 +224,12 @@
       "~85 annotated takes have no video and 1 video lacks its mp4; build the episode set from annotation \u2229 video-with-mp4 \u2229 gaze.",
       "fps is NOT uniform: videoMetadata shows 24.46 and 30 across takes (read per-take videoMetadata.video.fps; do not assume a constant)."
     ]
+  },
+  "annotation_bundle": {
+    "policy": "holoassist_coarse_fine",
+    "coarse_channel": "coarse",
+    "fine_channels": [
+      "fine"
+    ]
   }
 }

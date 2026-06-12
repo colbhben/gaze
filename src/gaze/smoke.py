@@ -299,6 +299,18 @@ def molmo2_to_viewer_layout(manifest_root: str | Path, out_root: str | Path) -> 
         seg_start = md.get("clip_start_time")
         dur = (seg_end - seg_start) if (seg_end is not None and seg_start is not None) else None
         anno_rows: list[dict[str, Any]] = []
+        # FINAL training annotation (assembled from source + aux per the recipe
+        # annotation_bundle policy). Shown first; spans the whole clip.
+        final_anno = md.get("final_annotation")
+        if final_anno and final_anno != anno_text:
+            anno_rows.append({
+                "time_s": 0.0,
+                "end_s": dur,
+                "role": "final",
+                "channel": "(bundle)",
+                "label": "(bundle)",
+                "text": final_anno,
+            })
         # SOURCE channel: the annotation that drove the clip (spans the whole clip).
         if anno_text:
             anno_rows.append({

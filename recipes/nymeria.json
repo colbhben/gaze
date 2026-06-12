@@ -195,5 +195,8 @@
       "Validate the preview_rgb.mp4 image-frame vs calibrated RGB sensor-frame transform (rotation/downscale) when projectaria_tools is available.",
       "video<->gaze time alignment still needs the mp4's first-frame device timestamp (the gaze/anno clock starts at recording start, not at the trimmed preview video's frame 0) \u2014 derive from projectaria/VRS timing at projection time."
     ]
+  },
+  "annotation_bundle": {
+    "policy": "source_only"
   }
 }

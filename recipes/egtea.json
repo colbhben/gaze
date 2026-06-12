@@ -163,5 +163,8 @@
       "69 clips have empty gaze slices (documented in gaze_readme); confirm warn-and-emit (still have video+anno) vs require non-empty gaze. NOTE: under the global emit policy (require gaze), an empty gaze slice may need to count as 'gaze present' since the session file exists.",
       "ms->frame relation has ~5-frame slack; trust the F<start>-F<end> numbers for gaze bounds, not recomputation from ms."
     ]
+  },
+  "annotation_bundle": {
+    "policy": "source_only"
   }
 }

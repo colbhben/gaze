@@ -172,6 +172,7 @@ def build_molmo2_row(
     prompt: str,
     annotation_channel: str | None = None,
     auxiliary_annotations: list[dict[str, Any]] | None = None,
+    final_annotation: str | None = None,
 ) -> dict[str, Any]:
     """Assemble one Molmo2VideoPoint-style manifest row for a clip segment.
 
@@ -234,6 +235,10 @@ def build_molmo2_row(
             "clip_end_time": round(seg_end_s, 3),
             "annotation_text": annotation_text,         # DEFAULT annotation (drove this clip)
             "annotation_channel": annotation_channel,
+            # FINAL training annotation assembled from source + aux per the dataset's
+            # annotation_bundle recipe policy (all channels still shipped above/below;
+            # this is the marked string a trainer would use). Falls back to source text.
+            "final_annotation": final_annotation if final_annotation is not None else annotation_text,
             # AUXILIARY annotations: every other channel temporally covering this clip
             # (item 4). Each: {channel, text, start_s, end_s (clip-relative), overlap_s,
             # source_duration_s (full un-clamped length of the source annotation span)}.
@@ -278,7 +283,7 @@ MOLMO2_SCHEMA: dict[str, Any] = {
         "num_frames": "total frames == total points (variable per clip)",
         "fps": "canonical sampling fps == gaze hz (all datasets resampled down to this)",
         "resolution": "square side (378 for Molmo2)",
-        "metadata": "{clip_start_time, clip_end_time, annotation_text (default), annotation_channel, auxiliary_annotations:[{channel,text,start_s,end_s,overlap_s,source_duration_s}]}",
+        "metadata": "{clip_start_time, clip_end_time, annotation_text (default/source), annotation_channel, final_annotation (assembled per recipe annotation_bundle policy), auxiliary_annotations:[{channel,text,start_s,end_s,overlap_s,source_duration_s}]}",
         "provenance": "{points_norm [0,1], points_1000 0-1000, label} per frame",
     },
     "notes": [

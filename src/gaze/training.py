@@ -537,6 +537,49 @@ def annotations_covering_clip(
     return out
 
 
+def build_final_annotation(
+    bundle: dict[str, Any] | None,
+    *,
+    source_channel: str | None,
+    source_text: str | None,
+    auxiliary: list[dict[str, Any]],
+) -> str | None:
+    """Assemble the dataset's FINAL training annotation from the shipped channels.
+
+    Driven by the recipe ``annotation_bundle`` block (item: per-dataset bundling). All
+    channels stay on the clip (source = default, auxiliary = the rest); this only adds
+    a marked ``final_annotation`` string built per the policy:
+
+      * ``source_only`` (ego-exo4d / egtea / hd-epic / nymeria): final == source text.
+      * ``holoassist_coarse_fine``: if the SOURCE channel is a fine action channel, the
+        final is ``"<context: COARSE> <action: FINE>"`` where COARSE is the covering
+        coarse-channel auxiliary text (or '' if none); if the SOURCE is the coarse
+        channel, the final is just ``"<COARSE>"`` (== source text). Other source
+        channels fall back to source text.
+
+    ``bundle`` is the recipe's ``annotation_bundle`` dict; None / missing -> source text.
+    """
+    if not source_text:
+        return source_text
+    policy = (bundle or {}).get("policy", "source_only")
+    if policy == "source_only" or not bundle:
+        return source_text
+    if policy == "holoassist_coarse_fine":
+        coarse_ch = bundle.get("coarse_channel")
+        fine_chs = set(bundle.get("fine_channels") or [])
+        if source_channel in fine_chs:
+            # pick the coarse auxiliary covering this clip (longest overlap if several)
+            coarse_aux = [a for a in auxiliary if a.get("channel") == coarse_ch and a.get("text")]
+            coarse_text = ""
+            if coarse_aux:
+                coarse_text = max(coarse_aux, key=lambda a: a.get("overlap_s", 0)).get("text", "")
+            return f"<context: {coarse_text}> <action: {source_text}>"
+        if source_channel == coarse_ch:
+            return f"<{source_text}>"
+        return source_text
+    return source_text
+
+
 def chop_by_channels(
     channels: list[dict[str, Any]],
     *,
@@ -1323,6 +1366,7 @@ def _build_molmo2_episode(
     src_h = int(data.video.get("height") or resolution)
     duration_s = float(data.video.get("duration_s") or 0.0)
     pad = PadTransform(src_w=src_w, src_h=src_h, side=resolution)
+    bundle_cfg = data.recipe.get("annotation_bundle")   # per-dataset final-annotation policy
 
     # Per-channel spans ordered coarsest -> finest, optionally restricted to the
     # episode's classified-interesting regions (nymeria etc.). `interesting` is the
@@ -1408,13 +1452,19 @@ def _build_molmo2_episode(
             aux_spans, seg_start, seg_end,
             driver_channel=seg.get("channel"), driver_text=seg.get("text"),
         )
+        # FINAL training annotation assembled per the recipe annotation_bundle policy
+        # (all channels still shipped; this is an additional marked output).
+        final_anno = build_final_annotation(
+            bundle_cfg, source_channel=seg.get("channel"),
+            source_text=seg.get("text"), auxiliary=aux,
+        )
         # Each segment carries the channel + text of the span that drove its boundaries.
         examples.append(ma.build_molmo2_row(
             dataset=slug, episode_id=episode_id, seg_index=k, video_rel=video_rel,
             seg_start_s=seg_start, seg_end_s=seg_end, frames=frames, num_real=num_real,
             fps=fps, side=resolution,
             annotation_text=seg.get("text"), annotation_channel=seg.get("channel"),
-            auxiliary_annotations=aux,
+            auxiliary_annotations=aux, final_annotation=final_anno,
             prompt=prompt,
         ))
 

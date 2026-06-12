@@ -32,7 +32,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from gaze.classify import classify_prompt, parse_verdicts, build_filter_map
 
 DEFAULT_MODEL = os.environ.get(
-    "GAZE_CLASSIFY_MODEL", "us.anthropic.claude-sonnet-4-6"
+    # Opus 4.8: best accuracy on the subtle 'completed manipulation vs looking / waiting
+    # / incomplete / peer-game' distinctions in the rubric. Override with --model or
+    # GAZE_CLASSIFY_MODEL (e.g. us.anthropic.claude-sonnet-4-6 for a cheaper/faster pass).
+    "GAZE_CLASSIFY_MODEL", "us.anthropic.claude-opus-4-8"
 )
 
 

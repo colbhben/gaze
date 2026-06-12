@@ -217,9 +217,11 @@ def viewer_html() -> str:
     .active-row { outline: 2px solid #ff4757; outline-offset: -2px; }
     table { border-collapse: collapse; width: min(100%, 960px); }
     td, th { border: 1px solid #9994; padding: 4px 6px; font-size: 13px; }
+    tr.role-final td { font-weight: 700; }
     tr.role-source td { font-weight: 600; }
     tr.role-auxiliary td { color: #888; }
     .badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; vertical-align: middle; }
+    .badge.fin { background: #2ecc7133; color: #2ecc71; border: 1px solid #2ecc71; }
     .badge.src { background: #ff475733; color: #ff6b78; border: 1px solid #ff4757; }
     .badge.aux { background: #6c8cff22; color: #8aa2ff; border: 1px solid #6c8cff88; }
   </style>
@@ -440,7 +442,8 @@ def viewer_html() -> str:
       annotations.sort((a, b) => (roleRank(a) - roleRank(b)) || (Number(a.start_s) - Number(b.start_s)));
       document.querySelector('#annotations').innerHTML = annotations.slice(0, 500).map((row, index) => {
         const role = (row.role || (row.label ? 'source' : '')).toLowerCase();
-        const badge = role === 'source' ? '<span class="badge src">source</span>'
+        const badge = role === 'final' ? '<span class="badge fin">final</span>'
+                    : role === 'source' ? '<span class="badge src">source</span>'
                     : role === 'auxiliary' ? '<span class="badge aux">aux</span>' : '';
         const chan = row.channel || row.label || '';
         return `<tr data-index="${index}" class="role-${role}"><td>${badge}</td><td>${formatTime(row.start_s)}</td><td>${formatTime(row.end_s)}</td><td>${escapeHtml(chan)}</td><td>${escapeHtml(row.text || '')}</td></tr>`;
@@ -448,7 +451,10 @@ def viewer_html() -> str:
       updateCurrentAnnotation();
       draw();
     }
-    function roleRank(row) { return (row.role || (row.label ? 'source' : '')).toLowerCase() === 'auxiliary' ? 1 : 0; }
+    function roleRank(row) {
+      const r = (row.role || (row.label ? 'source' : '')).toLowerCase();
+      return r === 'final' ? 0 : r === 'source' ? 1 : 2;   // final, then source, then auxiliary
+    }
     function sampledToIntervals(rows) {
       return rows.map((row, index) => ({ start_s: row.time_s, end_s: rows[index + 1]?.time_s ?? episodeDuration, role: row.role, channel: row.channel, label: row.label, text: row.text }));
     }
@@ -461,7 +467,10 @@ def viewer_html() -> str:
       // All rows covering t (annotations is sorted source-first).
       return annotations.filter(row => Number(row.start_s) <= t && t < Number(row.end_s));
     }
-    function isSource(row) { return (row.role || (row.label ? 'source' : '')).toLowerCase() !== 'auxiliary'; }
+    function isSource(row) {
+      // 'final' and 'source' both render in the prominent (non-auxiliary) slot.
+      return (row.role || (row.label ? 'source' : '')).toLowerCase() !== 'auxiliary';
+    }
     function updateCurrentAnnotation() {
       const t = activeTime();
       const active = activeAnnotations(t);
@@ -471,10 +480,13 @@ def viewer_html() -> str:
         currentAnnotation.innerHTML = `<span class="muted">${formatTime(t)}s: no active annotation</span>`;
         return;
       }
-      const src = active.find(isSource);
-      const aux = active.filter(r => !isSource(r));
+      const roleOf = r => (r.role || (r.label ? 'source' : '')).toLowerCase();
+      const fin = active.find(r => roleOf(r) === 'final');
+      const src = active.find(r => roleOf(r) === 'source');
+      const aux = active.filter(r => roleOf(r) === 'auxiliary');
       let html = `<strong>${formatTime(t)}s</strong>`;
-      if (src) html += ` <span class="badge src">source</span> <strong>${escapeHtml(src.channel || src.label || '')}</strong>: ${escapeHtml(src.text || '')}`;
+      if (fin) html += ` <span class="badge fin">final</span> ${escapeHtml(fin.text || '')}`;
+      if (src) html += `<br><span class="badge src">source</span> <strong>${escapeHtml(src.channel || src.label || '')}</strong>: ${escapeHtml(src.text || '')}`;
       for (const a of aux) html += `<br><span class="badge aux">aux</span> <span class="muted">${escapeHtml(a.channel || a.label || '')}</span>: ${escapeHtml(a.text || '')}`;
       currentAnnotation.innerHTML = html;
     }
