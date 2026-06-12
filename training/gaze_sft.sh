@@ -36,6 +36,8 @@
 #     --wandb-key KEY          wandb API key            (default: $WANDB_API_KEY)   [req]
 #     --wandb-project PROJ     wandb project            (default: $WANDB_PROJECT)   [req]
 #     --wandb-entity ENT       wandb entity/team        (default: $WANDB_ENTITY)    [req]
+#     --wandb-base-url URL     self-hosted W&B server URL; REQUIRED for "local-" keys
+#                              (default: $WANDB_BASE_URL, else api.wandb.ai)
 #     --hf-token TOK           HuggingFace token        (default: $HF_ACCESS_TOKEN)
 #   Data (no path may be on /nfs at run time -- stage to local scratch first)
 #     --gaze-data-dir DIR      [req] local dir with joint/manifest.jsonl + splits/<name>/
@@ -144,6 +146,10 @@ NUM_WORKERS=6
 WANDB_KEY=${WANDB_API_KEY:-}
 WANDB_PROJECT=${WANDB_PROJECT:-}
 WANDB_ENTITY=${WANDB_ENTITY:-}
+# Base URL of the wandb server. Self-hosted ("local-..." keys) need this pointed at your
+# W&B Server; the public cloud (api.wandb.ai) rejects local- keys with HTTP 401. Empty =>
+# wandb's default (api.wandb.ai). Set via --wandb-base-url or WANDB_BASE_URL.
+WANDB_BASE_URL_=${WANDB_BASE_URL:-}
 
 HF_TOKEN=${HF_ACCESS_TOKEN:-}
 DRY_RUN=0
@@ -184,10 +190,11 @@ while [ "$#" -gt 0 ]; do
     --wandb-key) WANDB_KEY=$2; shift 2 ;;
     --wandb-project) WANDB_PROJECT=$2; shift 2 ;;
     --wandb-entity) WANDB_ENTITY=$2; shift 2 ;;
+    --wandb-base-url) WANDB_BASE_URL_=$2; shift 2 ;;
     --hf-token) HF_TOKEN=$2; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --) shift; EXTRA=("$@"); break ;;
-    -h|--help) sed -n '2,79p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,81p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "ERROR: unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -231,6 +238,11 @@ apply_profile
 [ -n "$WANDB_KEY" ] || die "wandb API key required: pass --wandb-key or export WANDB_API_KEY."
 [ -n "$WANDB_PROJECT" ] || die "wandb project required: pass --wandb-project or export WANDB_PROJECT."
 [ -n "$WANDB_ENTITY" ] || die "wandb entity required: pass --wandb-entity or export WANDB_ENTITY."
+# "local-" keys come from a self-hosted W&B Server and 401 against api.wandb.ai. Require the
+# server URL so we don't fail 3 minutes into setup.
+case "$WANDB_KEY" in
+  local-*) [ -n "$WANDB_BASE_URL_" ] || die "wandb key looks self-hosted ('local-...') but no server URL given; pass --wandb-base-url https://<your-wandb-server> (or export WANDB_BASE_URL)." ;;
+esac
 
 case "$GAZE_OBJECTIVE" in first|all) ;; *) die "--gaze-objective must be 'first' or 'all'." ;; esac
 
@@ -370,7 +382,7 @@ echo "   gaze data dir   : $GAZE_DATA_DIR  (split: $GAZE_SPLIT_NAME)"
 echo "   molmo data dir  : $MOLMO_DATA_DIR"
 echo "   hf cache        : $HF_CACHE  (writable; mounted /hf-cache)"
 echo "   save_folder     : $SAVE_FOLDER  (S3 native; /nfs untouched)"
-echo "   wandb           : $WANDB_ENTITY/$WANDB_PROJECT"
+echo "   wandb           : $WANDB_ENTITY/$WANDB_PROJECT${WANDB_BASE_URL_:+  (server: $WANDB_BASE_URL_)}"
 echo "   image           : $IMAGE"
 echo "=================================================================="
 
@@ -423,6 +435,8 @@ RUN=(
   -e WANDB_ENTITY="$WANDB_ENTITY"
   ${AWS_ENVS[@]+"${AWS_ENVS[@]}"}
 )
+# Point wandb at a self-hosted server when a base URL is given (required for "local-" keys).
+[ -n "$WANDB_BASE_URL_" ] && RUN+=( -e WANDB_BASE_URL="$WANDB_BASE_URL_" )
 # Pass the HF token under BOTH names the code reads (HF_ACCESS_TOKEN in tokenizer.py +
 # most loaders; HF_TOKEN in academic_video_datasets.py), so gated repos authenticate either way.
 [ -n "$HF_TOKEN" ] && RUN+=( -e HF_ACCESS_TOKEN="$HF_TOKEN" -e HF_TOKEN="$HF_TOKEN" )
