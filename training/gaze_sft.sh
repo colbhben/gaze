@@ -305,7 +305,7 @@ esac
 case "$HF_CACHE" in
   /nfs/*) die "HF_CACHE is on /nfs (read-only); the tokenizer build must write here. Use local scratch." ;;
 esac
-mkdir -p "$HF_CACHE" || die "could not create HF cache dir: $HF_CACHE"
+mkdir -p "$HF_CACHE/hub" "$HF_CACHE/datasets" || die "could not create HF cache dir: $HF_CACHE"
 
 # Resolve the checkpoint so it is reachable INSIDE the container. The container only mounts
 # /molmo2, /gaze-data and /data/molmo -- an arbitrary host path like /nfs/.../Molmo2-4B-SFT is
@@ -403,8 +403,16 @@ RUN=(
   ${CKPT_MOUNT[@]+"${CKPT_MOUNT[@]}"}
   -w /molmo2
   -e OLMO_SHARED_FS=1
+  # Prepared Molmo2-Data tree (read-only). Disk-backed datasets load_from_disk() from here;
+  # the canonical scripts/download_datasets.py layout (torch_datasets/, video_datasets/,
+  # multi_image_datasets/) must already exist under it.
   -e MOLMO_DATA_DIR=/data/molmo
+  # HF cache -> writable scratch. HF_HOME is the root the hub + datasets caches derive from,
+  # so HF-only datasets (e.g. tulu4) and the tokenizer download/cache here, never into the
+  # read-only data mount. Belt-and-suspenders: pin the sub-caches explicitly too.
   -e HF_HOME=/hf-cache
+  -e HF_HUB_CACHE=/hf-cache/hub
+  -e HF_DATASETS_CACHE=/hf-cache/datasets
   -e OMP_NUM_THREADS=8
   -e GAZE_DATA_DIR=/gaze-data
   -e GAZE_OBJECTIVE="$GAZE_OBJECTIVE"
@@ -415,7 +423,9 @@ RUN=(
   -e WANDB_ENTITY="$WANDB_ENTITY"
   ${AWS_ENVS[@]+"${AWS_ENVS[@]}"}
 )
-[ -n "$HF_TOKEN" ] && RUN+=( -e HF_ACCESS_TOKEN="$HF_TOKEN" )
+# Pass the HF token under BOTH names the code reads (HF_ACCESS_TOKEN in tokenizer.py +
+# most loaders; HF_TOKEN in academic_video_datasets.py), so gated repos authenticate either way.
+[ -n "$HF_TOKEN" ] && RUN+=( -e HF_ACCESS_TOKEN="$HF_TOKEN" -e HF_TOKEN="$HF_TOKEN" )
 RUN+=(
   "$IMAGE"
   bash -lc "set -e; pip install -e . >/dev/null 2>&1 || true; \
