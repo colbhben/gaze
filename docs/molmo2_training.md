@@ -22,6 +22,9 @@ The fork (`github.com/colbhben/molmo2`) is where our gaze dataset registration +
 
 ## 2. Gaze SFT smoke run (1×H200) — `training/gaze_sft.sh`
 
+> **Full parameter reference:** every wrapper flag and every underlying `sft.py` / `TrainConfig`
+> knob (incl. dotlist overrides) is documented in [`sft_params.md`](sft_params.md).
+
 The gaze run is a **specialize-then-rehearse SFT**: train mostly on our gaze video-point data,
 rehearsing a slice of the general Molmo2 SFT mixture to avoid forgetting. One script does the
 whole chain (validate → stage data → author the 92/8 mix → compose flags → S3 checkpoint →
@@ -58,8 +61,8 @@ training/gaze_sft.sh --name gaze-smoke-01 \
   <path-or-s3>` to copy the joint manifest + split pointers OUT of a read-only source into local
   scratch first. Required layout under `--gaze-data-dir`: `joint/manifest.jsonl` (self-contained,
   ABSOLUTE video paths — see `gaze curate join-manifests`) + `splits/<name>/{train,val}.jsonl`.
-- **All training knobs exposed** with Molmo2 defaults: `--seq-len 16384`, `--device-batch-size 2`,
-  `--cp-degree 1`, `--llm-lr 1e-5`, `--vit-lr 5e-6`, `--connector-lr 5e-6`, `--warmup 200`,
+- **All training knobs exposed** with profile defaults (h200: `--seq-len 8192`, `--device-batch-size 4`,
+  `--global-batch-size 32`), plus `--cp-degree 1`, `--llm-lr 1e-5`, `--vit-lr 5e-6`, `--connector-lr 5e-6`, `--warmup 200`,
   `--alpha-f 0.1`, `--save-interval`, `--global-batch-size`, plus `--max-duration` (short for smoke).
   Anything after `--` is passed verbatim as OmegaConf dotlist overrides.
 
