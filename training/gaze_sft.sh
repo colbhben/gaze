@@ -52,7 +52,7 @@
 #     --specialize-ratio R     gaze / rehearse ratio                          (default: 0.92)
 #   Hardware profile (sets the memory-bound defaults below; individual flags override)
 #     --profile l40|h200      l40  = 8xL40 48GB, molmo2:l40s image, seq 8192 / dbatch 1 / gbatch 64
-#                             h200 = H200 141GB, stock ghcr image,  seq 16384 / dbatch 2 / gbatch 128
+#                             h200 = H200 141GB, stock ghcr image,  seq 8192 / dbatch 4 / gbatch 32
 #                                                                                  (default: l40)
 #   Model / image
 #     --checkpoint PATH        olmo-native starting ckpt   (default: /data/molmo/Molmo2-4B-SFT)
@@ -89,7 +89,7 @@ MOLMO2_DIR="$ROOT/third_party/molmo2"
 # ----------------------------------------------------------------------------------------- #
 # Hardware profile selects the memory-bound defaults (image, seq_len, device/global batch).
 # 'l40'  -> 8xL40 48GB, patched flash-attn image, smaller activations.
-# 'h200' -> H200 141GB, stock ghcr image, the Molmo2 reference seq_len/batch.
+# 'h200' -> H200 141GB, stock ghcr image, seq 8192 / dbatch 4 (gaze-clip-sized, no CP needed).
 # Switch with --profile; --gpus is independent (works as 1- or 8-GPU on either). Any knob you
 # pass explicitly always wins over the profile. Resolved in apply_profile() after arg parse.
 PROFILE="l40"
@@ -215,8 +215,12 @@ apply_profile() {
       # 8xL40 48GB: patched (sm_89) flash-attn image, dialed-down activations.
       p_gpus=8;  p_image="molmo2:l40s"; p_seq=8192;  p_dbs=1; p_gbs=64 ;;
     h200|H200)
-      # H200 141GB: stock ghcr image, Molmo2 reference seq_len/batch.
-      p_gpus=8;  p_image="ghcr.io/allenai/molmo2:latest"; p_seq=16384; p_dbs=2; p_gbs=128 ;;
+      # H200 141GB: stock ghcr image. seq 8192 x dbatch 4 = 32768 tok-units/GPU (same activation
+      # budget as the Molmo2 16384x2 reference) but sized to our 3hz gaze clips: 8192 packs ~4 avg
+      # (6s/18-frame) clips and still fits the 16s/48-frame tail in one sequence, so no CP needed.
+      # gbatch 32 = 8 GPU x dbatch 4 (grad-accum 1) on the default single node; for multi-node
+      # scale gbatch with the GPU count (e.g. 64 @ 16 GPU, 128 @ 32 GPU) -- see bead gaze-67t.2.
+      p_gpus=8;  p_image="ghcr.io/allenai/molmo2:latest"; p_seq=8192; p_dbs=4; p_gbs=32 ;;
     *)
       die "--profile must be 'l40' or 'h200' (got '$PROFILE')." ;;
   esac
@@ -427,6 +431,10 @@ RUN=(
   -e HF_HUB_CACHE=/hf-cache/hub
   -e HF_DATASETS_CACHE=/hf-cache/datasets
   -e OMP_NUM_THREADS=8
+  # Reduce CUDA allocator fragmentation. Matters when the gaze inference eval gathers a
+  # full unsharded model onto one GPU and then frees it -- without this the freed blocks
+  # are fragmented and training can OOM on resume at the larger seq lengths.
+  -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
   -e GAZE_DATA_DIR=/gaze-data
   -e GAZE_OBJECTIVE="$GAZE_OBJECTIVE"
   -e GAZE_SPLIT_NAME="$GAZE_SPLIT_NAME"
