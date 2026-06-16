@@ -63,11 +63,15 @@
 #     --save-interval N        steps between checkpoint saves                  (default: 2000)
 #     --max-duration N         total training steps; e.g. 200 for a smoke   (default: sft.py default)
 #   Parallelism / batch (seq-len, device-batch, global-batch default per --profile)
-#     --gpus N                 torchrun --nproc-per-node                  (default: per --profile, 8)
+#     --gpus N                 PER-NODE GPU count (torchrun --nproc-per-node) (default: per --profile, 8)
+#     --nnodes N               total nodes; >1 emits a multi-node torchrun rendezvous (default: 1)
+#     --node-rank R            this node's rank in [0, nnodes) (default: 0; set per node by your scheduler)
+#     --rdzv-endpoint HOST:PORT  head node's rendezvous addr:port (REQUIRED when --nnodes>1)
+#     --rdzv-id ID             rendezvous run id (default: the run name)
 #     --cp-degree N            context-parallel degree; >1 auto-sets compile=null (default: 1)
 #     --seq-len N              sequence length                              (default: per --profile)
 #     --device-batch-size N    per-rank microbatch size                     (default: per --profile)
-#     --global-batch-size N    global batch; must divide gpus/cp_degree     (default: per --profile)
+#     --global-batch-size N    global batch; must divide (gpus*nnodes)/cp_degree (default: per --profile)
 #     --num-workers N          dataloader workers                                 (default: 6)
 #   Optimizer / schedule
 #     --llm-lr LR              LLM learning rate                               (default: 1e-5)
@@ -76,6 +80,9 @@
 #     --warmup N               warmup steps (llm/vit/connector)                 (default: 200)
 #     --alpha-f F              scheduler final-LR fraction                      (default: 0.1)
 #   Other
+#     --no-docker              run torchrun directly in the CURRENT env (do NOT auto-spin the
+#                              container); use when you started the molmo2 container yourself.
+#                              Paths used as-is (no container remap); env exported into the shell.
 #     --dry-run                print the docker run / torchrun command without executing
 #     -h, --help               show this help
 #     -- <extra...>            everything after -- is passed as raw sft.py dotlist overrides
@@ -93,7 +100,19 @@ MOLMO2_DIR="$ROOT/third_party/molmo2"
 # Switch with --profile; --gpus is independent (works as 1- or 8-GPU on either). Any knob you
 # pass explicitly always wins over the profile. Resolved in apply_profile() after arg parse.
 PROFILE="l40"
-GPUS=""                                  # empty => profile default (8). --gpus 1 for single-card.
+GPUS=""                                  # PER-NODE GPU count. empty => profile default (8). --gpus 1 for single-card.
+# Multi-node (e.g. 16 GPU = 2x 8-GPU H200 nodes). Defaults give single-node behavior, so
+# existing single-node usage is unchanged. SkyPilot (or your scheduler) sets these per node;
+# molmo2's trainer is already multi-node aware (reads torchrun's RANK/WORLD_SIZE/MASTER_*).
+NNODES=1                                 # total nodes; >1 => emit multi-node torchrun rendezvous
+NODE_RANK=0                              # this node's rank in [0, NNODES)
+RDZV_ENDPOINT=""                         # head node "HOST:PORT" for rendezvous (required when NNODES>1)
+RDZV_ID=""                               # rendezvous run id; empty => defaults to the run name
+# --no-docker: run torchrun directly in the CURRENT environment instead of auto-spinning the
+# container. Use this when you have already entered/started the molmo2 container (or set up a
+# matching env) yourself and just want the launch composed + executed. Paths are used as-is
+# (no /molmo2//gaze-data//data/molmo//checkpoint remap) and env is exported into this shell.
+NO_DOCKER=0
 RUN_NAME=""
 MIXTURE="gaze_specialize"
 GAZE_OBJECTIVE="first"
@@ -163,6 +182,10 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --profile) PROFILE=$2; shift 2 ;;
     --gpus) GPUS=$2; shift 2 ;;
+    --nnodes) NNODES=$2; shift 2 ;;
+    --node-rank) NODE_RANK=$2; shift 2 ;;
+    --rdzv-endpoint) RDZV_ENDPOINT=$2; shift 2 ;;
+    --rdzv-id) RDZV_ID=$2; shift 2 ;;
     --name) RUN_NAME=$2; shift 2 ;;
     --mixture) MIXTURE=$2; shift 2 ;;
     --gaze-objective) GAZE_OBJECTIVE=$2; shift 2 ;;
@@ -193,6 +216,7 @@ while [ "$#" -gt 0 ]; do
     --wandb-entity) WANDB_ENTITY=$2; shift 2 ;;
     --wandb-base-url) WANDB_BASE_URL_=$2; shift 2 ;;
     --hf-token) HF_TOKEN=$2; shift 2 ;;
+    --no-docker) NO_DOCKER=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     --) shift; EXTRA=("$@"); break ;;
     -h|--help) sed -n '2,81p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -216,10 +240,11 @@ apply_profile() {
       p_gpus=8;  p_image="molmo2:l40s"; p_seq=8192;  p_dbs=1; p_gbs=64 ;;
     h200|H200)
       # H200 141GB: stock ghcr image. seq 8192 x dbatch 4 = 32768 tok-units/GPU (same activation
-      # budget as the Molmo2 16384x2 reference) but sized to our 3hz gaze clips: 8192 packs ~4 avg
-      # (6s/18-frame) clips and still fits the 16s/48-frame tail in one sequence, so no CP needed.
-      # gbatch 32 = 8 GPU x dbatch 4 (grad-accum 1) on the default single node; for multi-node
-      # scale gbatch with the GPU count (e.g. 64 @ 16 GPU, 128 @ 32 GPU) -- see bead gaze-67t.2.
+      # budget as the Molmo2 16384x2 reference) but sized to our 2hz gaze clips: 8192 packs
+      # several avg clips and still fits the 16s/32-frame tail (32 frames x ~83 tok ~= 2.7K) in
+      # one sequence, so no CP needed. gbatch 32 = 8 GPU x dbatch 4 (grad-accum 1) on ONE node;
+      # for multi-node scale gbatch with the WORLD GPU count -- e.g. 64 @ 16 GPU (2 nodes:
+      # --gpus 8 --nnodes 2), 128 @ 32 GPU. See bead gaze-67t.2.
       p_gpus=8;  p_image="ghcr.io/allenai/molmo2:latest"; p_seq=8192; p_dbs=4; p_gbs=32 ;;
     *)
       die "--profile must be 'l40' or 'h200' (got '$PROFILE')." ;;
@@ -251,12 +276,22 @@ esac
 
 case "$GAZE_OBJECTIVE" in first|all) ;; *) die "--gaze-objective must be 'first' or 'all'." ;; esac
 
-# Parallelism sanity: cp_degree must divide the GPU count, and the global batch must divide
-# evenly across the data-parallel replicas (world_size / cp_degree).
-[ $((GPUS % CP_DEGREE)) -eq 0 ] || die "--gpus ($GPUS) must be divisible by --cp-degree ($CP_DEGREE)."
-DP_DEGREE=$((GPUS / CP_DEGREE))
+# Multi-node sanity: NNODES>=1, NODE_RANK in range, and a rendezvous endpoint when multi-node.
+[ "$NNODES" -ge 1 ] || die "--nnodes ($NNODES) must be >= 1."
+[ "$NODE_RANK" -ge 0 ] && [ "$NODE_RANK" -lt "$NNODES" ] || \
+  die "--node-rank ($NODE_RANK) must be in [0, --nnodes=$NNODES)."
+if [ "$NNODES" -gt 1 ] && [ -z "$RDZV_ENDPOINT" ]; then
+  die "--rdzv-endpoint HOST:PORT is required when --nnodes ($NNODES) > 1 (the head node's addr:port)."
+fi
+
+# Parallelism sanity: cp_degree must divide the *world* GPU count (gpus-per-node x nnodes),
+# and the global batch must divide evenly across the data-parallel replicas (world / cp_degree).
+WORLD=$((GPUS * NNODES))
+[ $((WORLD % CP_DEGREE)) -eq 0 ] || \
+  die "world GPUs ($WORLD = --gpus $GPUS x --nnodes $NNODES) must be divisible by --cp-degree ($CP_DEGREE)."
+DP_DEGREE=$((WORLD / CP_DEGREE))
 if [ -n "$GLOBAL_BATCH_SIZE" ] && [ $((GLOBAL_BATCH_SIZE % DP_DEGREE)) -ne 0 ]; then
-  die "--global-batch-size ($GLOBAL_BATCH_SIZE) must be divisible by data-parallel degree ($DP_DEGREE = gpus/cp_degree)."
+  die "--global-batch-size ($GLOBAL_BATCH_SIZE) must be divisible by data-parallel degree ($DP_DEGREE = world/cp_degree = $WORLD/$CP_DEGREE)."
 fi
 
 # Default S3 save_folder (native cloud save; never writes /nfs).
@@ -336,7 +371,10 @@ case "$CHECKPOINT" in
   s3://*)
     CKPT_ARG="$CHECKPOINT" ;;
   *)
-    if [ -e "$CHECKPOINT" ]; then
+    if [ "$NO_DOCKER" -eq 1 ]; then
+      # No container: use the checkpoint path as-is (no /checkpoint bind-mount remap).
+      CKPT_ARG="$CHECKPOINT"
+    elif [ -e "$CHECKPOINT" ]; then
       CKPT_HOST=$(CDPATH= cd -- "$CHECKPOINT" && pwd)   # canonicalize for the bind mount
       CKPT_MOUNT=( -v "$CKPT_HOST:/checkpoint:ro" )
       CKPT_ARG="/checkpoint"
@@ -407,12 +445,57 @@ for v in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_DEFAULT_R
   [ -n "${!v:-}" ] && AWS_ENVS+=( -e "$v=${!v}" )
 done
 
+# torchrun launch spec, shared by both the docker and --no-docker paths. Single-node
+# (NNODES=1): just --nproc-per-node (unchanged). Multi-node: add c10d rendezvous so all nodes
+# join via the head node's endpoint. molmo2's trainer reads RANK/WORLD_SIZE/MASTER_* from
+# torchrun -- no molmo2 changes needed.
+if [ "$NNODES" -gt 1 ]; then
+  TORCHRUN="torchrun --nnodes=$NNODES --node-rank=$NODE_RANK --nproc-per-node=$GPUS \
+    --rdzv-backend=c10d --rdzv-endpoint=$RDZV_ENDPOINT --rdzv-id=${RDZV_ID:-$RUN_NAME}"
+else
+  TORCHRUN="torchrun --nproc-per-node=$GPUS"
+fi
+
+# ----------------------------------------------------------------------------------------- #
+# 6a. --no-docker launch: run torchrun directly in the CURRENT environment. The user has
+#     already started the molmo2 container (or an equivalent env) and just wants the composed
+#     launch. Paths are used as-is (no container remap); env is exported into this shell.
+#     `cd` into the molmo2 dir so launch_scripts/sft.py + the editable install resolve.
+# ----------------------------------------------------------------------------------------- #
+if [ "$NO_DOCKER" -eq 1 ]; then
+  export OLMO_SHARED_FS=1
+  export MOLMO_DATA_DIR="$MOLMO_DATA_DIR"
+  export HF_HOME="$HF_CACHE" HF_HUB_CACHE="$HF_CACHE/hub" HF_DATASETS_CACHE="$HF_CACHE/datasets"
+  export OMP_NUM_THREADS=8
+  export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+  export NCCL_TIMEOUT_MINUTES="${NCCL_TIMEOUT_MINUTES:-20}"
+  export GAZE_DATA_DIR="$GAZE_DATA_DIR"
+  export GAZE_OBJECTIVE="$GAZE_OBJECTIVE" GAZE_SPLIT_NAME="$GAZE_SPLIT_NAME" GAZE_SPECIALIZE_RATIO="$SPECIALIZE_RATIO"
+  export WANDB_API_KEY="$WANDB_KEY" WANDB_PROJECT="$WANDB_PROJECT" WANDB_ENTITY="$WANDB_ENTITY"
+  [ -n "$WANDB_BASE_URL_" ] && export WANDB_BASE_URL="$WANDB_BASE_URL_"
+  [ -n "$HF_TOKEN" ] && export HF_ACCESS_TOKEN="$HF_TOKEN" HF_TOKEN="$HF_TOKEN"
+  # AWS creds + NIC pins are inherited from the current shell as-is; nothing to remap.
+  NODOCKER_RUN=( bash -lc "set -e; cd '$MOLMO2_DIR'; pip install -e . >/dev/null 2>&1 || true; \
+    $TORCHRUN launch_scripts/sft.py ${SFT_ARGS[*]}" )
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo ">> DRY RUN (--no-docker) -- command that would execute in the current env:"
+    printf '%q ' "${NODOCKER_RUN[@]}"; echo
+    exit 0
+  fi
+  exec "${NODOCKER_RUN[@]}"
+fi
+
 # ----------------------------------------------------------------------------------------- #
 # 6. Launch (1xH200 by default). Bind-mount the fork (live code), gaze data, rehearsal data.
 #    GAZE_OBJECTIVE / GAZE_SPLIT_NAME / GAZE_SPECIALIZE_RATIO are read by our dataset + mixture.
 # ----------------------------------------------------------------------------------------- #
+# Multi-node needs the container on the HOST network so cross-node NCCL + the torchrun
+# rendezvous can reach the head node's addr:port (the default bridge network isolates them).
+NET_ARGS=()
+[ "$NNODES" -gt 1 ] && NET_ARGS=( --network host )
 RUN=(
   docker run --rm --gpus all --shm-size=32g
+  ${NET_ARGS[@]+"${NET_ARGS[@]}"}
   -v "$MOLMO2_DIR:/molmo2"
   -v "$GAZE_DATA_DIR:/gaze-data:ro"
   -v "$MOLMO_DATA_DIR:/data/molmo:ro"
@@ -435,6 +518,9 @@ RUN=(
   # full unsharded model onto one GPU and then frees it -- without this the freed blocks
   # are fragmented and training can OOM on resume at the larger seq lengths.
   -e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+  # Cross-node NCCL timeout (rendezvous + first all-gather can be slow on multi-node);
+  # default 20 min, override via NCCL_TIMEOUT_MINUTES in the host env.
+  -e NCCL_TIMEOUT_MINUTES="${NCCL_TIMEOUT_MINUTES:-20}"
   -e GAZE_DATA_DIR=/gaze-data
   -e GAZE_OBJECTIVE="$GAZE_OBJECTIVE"
   -e GAZE_SPLIT_NAME="$GAZE_SPLIT_NAME"
@@ -444,15 +530,21 @@ RUN=(
   -e WANDB_ENTITY="$WANDB_ENTITY"
   ${AWS_ENVS[@]+"${AWS_ENVS[@]}"}
 )
+# Forward NIC selection for NCCL/Gloo if the host pins it (some cloud nodes need an explicit
+# interface, e.g. NCCL_SOCKET_IFNAME=eth0). Only passed through when set in the host env.
+for v in NCCL_SOCKET_IFNAME GLOO_SOCKET_IFNAME NCCL_IB_DISABLE; do
+  [ -n "${!v:-}" ] && RUN+=( -e "$v=${!v}" )
+done
 # Point wandb at a self-hosted server when a base URL is given (required for "local-" keys).
 [ -n "$WANDB_BASE_URL_" ] && RUN+=( -e WANDB_BASE_URL="$WANDB_BASE_URL_" )
 # Pass the HF token under BOTH names the code reads (HF_ACCESS_TOKEN in tokenizer.py +
 # most loaders; HF_TOKEN in academic_video_datasets.py), so gated repos authenticate either way.
 [ -n "$HF_TOKEN" ] && RUN+=( -e HF_ACCESS_TOKEN="$HF_TOKEN" -e HF_TOKEN="$HF_TOKEN" )
+# $TORCHRUN was composed above (shared with the --no-docker path).
 RUN+=(
   "$IMAGE"
   bash -lc "set -e; pip install -e . >/dev/null 2>&1 || true; \
-    torchrun --nproc-per-node=$GPUS launch_scripts/sft.py ${SFT_ARGS[*]}"
+    $TORCHRUN launch_scripts/sft.py ${SFT_ARGS[*]}"
 )
 
 if [ "$DRY_RUN" -eq 1 ]; then
