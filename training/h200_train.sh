@@ -46,6 +46,11 @@ GAZE_DATA_DIR="${GAZE_DATA_DIR:-/nfs/colbhben/gaze/manifests/full_2hz_min25_max1
 GAZE_SPLIT_NAME="${GAZE_SPLIT_NAME:-95_05}"
 MOLMO_DATA_DIR="${MOLMO_DATA_DIR:-/nfs/colbhben/gaze/molmo/Molmo2-Data}"
 CHECKPOINT="${CHECKPOINT:-/nfs/colbhben/gaze/molmo/Molmo2-4B-SFT}"
+# Sequence length. MUST be >= ~11357: the video preprocessor's worst-case output for a
+# 128-frame clip is 11357 tokens, and get_output_shapes() hard-errors if seq_len is smaller
+# (this is a static config check, independent of the actual clip lengths). The H200 profile
+# default of 8192 is too small for video and fails at dataloader build, so we pin 12288 here.
+SEQ_LEN="${SEQ_LEN:-12288}"
 GLOBAL_BATCH_SIZE="${GLOBAL_BATCH_SIZE:-}"        # empty => derived below from world size
 MAX_DURATION="${MAX_DURATION:-20000}"             # full specialize; set small (e.g. 2) to smoke
 SAVE_INTERVAL="${SAVE_INTERVAL:-2000}"
@@ -96,6 +101,7 @@ echo "   repo            : $WORK_DIR (resolved from script location)"
 echo "   nodes           : $NNODES (this node rank $NODE_RANK), $GPUS_PER_NODE GPU/node => world $WORLD"
 echo "   rendezvous      : id=$RDZV_ID endpoint=$RDZV_ENDPOINT"
 echo "   run name        : $GAZE_RUN_NAME  (profile $PROFILE, mixture $MIXTURE @ $SPECIALIZE_RATIO)"
+echo "   seq_len         : $SEQ_LEN"
 echo "   global batch    : $GLOBAL_BATCH_SIZE   max_duration: $MAX_DURATION"
 echo "   learning rates  : llm=$LLM_LR vit=$VIT_LR connector=$CONNECTOR_LR"
 echo "   eval            : every $INF_EVAL_INTERVAL steps, $EVAL_EXAMPLES episodes"
@@ -122,6 +128,7 @@ ARGS=(
   --gaze-data-dir "$GAZE_DATA_DIR" --gaze-split-name "$GAZE_SPLIT_NAME"
   --molmo-data-dir "$MOLMO_DATA_DIR"
   --checkpoint "$CHECKPOINT"
+  --seq-len "$SEQ_LEN"
   --global-batch-size "$GLOBAL_BATCH_SIZE"
   --max-duration "$MAX_DURATION" --save-interval "$SAVE_INTERVAL"
   --llm-lr "$LLM_LR" --vit-lr "$VIT_LR" --connector-lr "$CONNECTOR_LR"
