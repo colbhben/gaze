@@ -429,8 +429,10 @@ echo "   wandb           : $WANDB_ENTITY/$WANDB_PROJECT${WANDB_BASE_URL_:+  (ser
 echo "   image           : $IMAGE"
 echo "=================================================================="
 
-# Resolve the image (skip docker entirely in dry-run so the script runs anywhere).
-if [ "$DRY_RUN" -eq 0 ]; then
+# Resolve the image. Skipped entirely in dry-run (so the script runs anywhere) and in
+# --no-docker mode (we run torchrun directly in the current env; there is no container to
+# pull/build and docker need not even be installed).
+if [ "$DRY_RUN" -eq 0 ] && [ "$NO_DOCKER" -eq 0 ]; then
   command -v docker >/dev/null 2>&1 || die "docker not found on PATH."
   if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
     echo ">> image $IMAGE not local; pulling..."
