@@ -41,6 +41,12 @@ CHECKPOINT="${CHECKPOINT:-/nfs/colbhben/gaze/molmo/Molmo2-4B-SFT}"
 GLOBAL_BATCH_SIZE="${GLOBAL_BATCH_SIZE:-}"        # empty => derived below from world size
 MAX_DURATION="${MAX_DURATION:-20000}"             # full specialize; set small (e.g. 2) to smoke
 SAVE_INTERVAL="${SAVE_INTERVAL:-2000}"
+# Per-component learning rates (Molmo2 SFT recipe). Set explicitly so the run's LRs are pinned
+# here rather than relying on gaze_sft.sh's defaults. ViT/connector are gentler than the LLM so
+# the already-trained vision stack + connector adapt slowly while the LLM learns the gaze task.
+LLM_LR="${LLM_LR:-1e-5}"
+VIT_LR="${VIT_LR:-5e-6}"
+CONNECTOR_LR="${CONNECTOR_LR:-5e-6}"
 # Gaze inference eval (L2 / acc@radius / valid + prediction videos) cadence, in steps. The
 # gaze mixture defaults this to 4 (smoke cadence); a full run wants a coarser stride so the
 # eval (autoregressive generation) doesn't dominate wall-clock. Passed as a raw sft.py
@@ -83,6 +89,7 @@ echo "   nodes           : $NNODES (this node rank $NODE_RANK), $GPUS_PER_NODE G
 echo "   rendezvous      : id=$RDZV_ID endpoint=$RDZV_ENDPOINT"
 echo "   run name        : $GAZE_RUN_NAME  (profile $PROFILE, mixture $MIXTURE @ $SPECIALIZE_RATIO)"
 echo "   global batch    : $GLOBAL_BATCH_SIZE   max_duration: $MAX_DURATION"
+echo "   learning rates  : llm=$LLM_LR vit=$VIT_LR connector=$CONNECTOR_LR"
 echo "   eval            : every $INF_EVAL_INTERVAL steps, $EVAL_EXAMPLES episodes"
 echo "   gaze data       : $GAZE_DATA_DIR (split $GAZE_SPLIT_NAME)"
 echo "=================================================================="
@@ -109,6 +116,7 @@ ARGS=(
   --checkpoint "$CHECKPOINT"
   --global-batch-size "$GLOBAL_BATCH_SIZE"
   --max-duration "$MAX_DURATION" --save-interval "$SAVE_INTERVAL"
+  --llm-lr "$LLM_LR" --vit-lr "$VIT_LR" --connector-lr "$CONNECTOR_LR"
   --wandb-project "$WANDB_PROJECT" --wandb-entity "$WANDB_ENTITY" --wandb-base-url "$WANDB_BASE_URL"
 )
 if [ "$NNODES" -gt 1 ]; then
