@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # H200 gaze-SFT harness -- meant to be run INSIDE the molmo2 training container (e.g. as a
 # SkyPilot `run:` step, one invocation per node). The gaze repo (with the molmo2 submodule) is
-# assumed ALREADY CLONED at ~/gaze inside the container. It invokes training/gaze_sft.sh
+# assumed ALREADY CLONED; the harness locates the repo from its OWN path (it lives at
+# <repo>/training/h200_train.sh), so it works wherever the repo was cloned (~/gaze,
+# ~/sky_workdir/gaze, ...). Override with WORK_DIR=<path>. It invokes training/gaze_sft.sh
 # --no-docker with the recommended H200 params, wiring the torchrun multi-node rendezvous from
 # SkyPilot's env so an N-node job Just Works.
 #
@@ -22,10 +24,16 @@
 set -euo pipefail
 die() { echo "ERROR: $*" >&2; exit 1; }
 
+# This script lives at <gaze-repo>/training/h200_train.sh, so by default the gaze repo is the
+# parent of the script's own directory -- regardless of WHERE the repo was cloned (~/gaze,
+# ~/sky_workdir/gaze, etc.). Resolve it from $0 so the harness always finds itself. Override
+# with WORK_DIR=<path> if you want to run a different checkout than the one this script is in.
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)"
+
 # --------------------------------------------------------------------------------------- #
 # Config (env-overridable). Defaults target the full Stage-1 specialize run (gaze-67t.3.1).
 # --------------------------------------------------------------------------------------- #
-WORK_DIR="${WORK_DIR:-$HOME/gaze}"                # gaze repo, assumed already cloned in the container
+WORK_DIR="${WORK_DIR:-$(cd -- "$SCRIPT_DIR/.." && pwd)}"   # gaze repo root (parent of training/)
 RDZV_PORT="${RDZV_PORT:-29500}"
 
 # Training params (passed through to gaze_sft.sh; override any from the env).
@@ -84,7 +92,7 @@ fi
 
 echo "=================================================================="
 echo " H200 gaze-SFT harness"
-echo "   repo            : $WORK_DIR (pre-cloned)"
+echo "   repo            : $WORK_DIR (resolved from script location)"
 echo "   nodes           : $NNODES (this node rank $NODE_RANK), $GPUS_PER_NODE GPU/node => world $WORLD"
 echo "   rendezvous      : id=$RDZV_ID endpoint=$RDZV_ENDPOINT"
 echo "   run name        : $GAZE_RUN_NAME  (profile $PROFILE, mixture $MIXTURE @ $SPECIALIZE_RATIO)"
@@ -95,10 +103,10 @@ echo "   gaze data       : $GAZE_DATA_DIR (split $GAZE_SPLIT_NAME)"
 echo "=================================================================="
 
 # --------------------------------------------------------------------------------------- #
-# 1. Sanity-check the pre-cloned repo (assumed already present at $WORK_DIR in the container).
+# 1. Sanity-check the repo (resolved from this script's location; override via WORK_DIR).
 # --------------------------------------------------------------------------------------- #
 [ -f "$WORK_DIR/training/gaze_sft.sh" ] || \
-  die "gaze repo not found at $WORK_DIR (expected training/gaze_sft.sh). Set WORK_DIR to the clone."
+  die "gaze repo not found at $WORK_DIR (expected training/gaze_sft.sh). Override with WORK_DIR=<repo>."
 [ -f "$WORK_DIR/third_party/molmo2/launch_scripts/sft.py" ] || \
   die "molmo2 submodule not initialized under $WORK_DIR/third_party/molmo2 (run: git submodule update --init --recursive)."
 
