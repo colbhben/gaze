@@ -1,0 +1,250 @@
+"""Episode sources for the gaze viewer.
+
+The viewer's HTTP handler talks to a ``Source``, which abstracts where episodes come from:
+
+  * ``LocalSource``        — a local canonical root (manifest.parquet + episodes/<dataset>/<id>/);
+                             the original behavior, unchanged.
+  * ``S3CanonicalSource``  — the SAME canonical layout rooted at an s3:// URI, fetched on demand
+                             via boto3 with no /nfs mount (bead gaze-67t.3.4).
+  * ``S3EvalSource``       — an eval cache (summary.json + results.jsonl) produced by the gaze
+                             eval pipeline; renders GT vs predicted gaze + per-episode metrics
+                             (bead gaze-67t.3.3).
+
+Small files are cached on disk; video is range-streamed (see :mod:`gaze.s3fetch`). boto3 is only
+imported by the S3 sources, so the local path keeps zero dependencies.
+"""
+from __future__ import annotations
+
+import json
+from os.path import basename
+from pathlib import Path
+from typing import Any
+
+from .table import read_table
+
+
+class Source:
+    """Interface the request handler depends on."""
+
+    def episodes(self) -> list[dict]:
+        raise NotImplementedError
+
+    def episode_doc(self, dataset: str, episode_id: str) -> dict | None:
+        raise NotImplementedError
+
+    def table_rows(self, dataset: str, episode_id: str, key: str) -> list[dict]:
+        raise NotImplementedError
+
+    def open_video(self, dataset: str, episode_id: str):
+        raise NotImplementedError
+
+    def describe(self) -> str:
+        return self.__class__.__name__
+
+
+class LocalSource(Source):
+    """Local canonical root: manifest.parquet + episodes/<dataset>/<episode_id>/."""
+
+    def __init__(self, canonical_root: str | Path):
+        self.canonical_root = Path(canonical_root).resolve()
+
+    def _episode_root(self, dataset: str, episode_id: str) -> Path:
+        return self.canonical_root / "episodes" / dataset / episode_id
+
+    def episodes(self) -> list[dict]:
+        manifest = read_table(self.canonical_root / "manifest.parquet")
+        return [{"id": f"{row.get('dataset')}:{row.get('episode_id')}", **row} for row in manifest]
+
+    def episode_doc(self, dataset: str, episode_id: str) -> dict | None:
+        doc_path = self._episode_root(dataset, episode_id) / "episode.json"
+        if not doc_path.exists():
+            return None
+        return json.loads(doc_path.read_text(encoding="utf-8"))
+
+    def table_rows(self, dataset: str, episode_id: str, key: str) -> list[dict]:
+        doc = self.episode_doc(dataset, episode_id) or {}
+        table = doc.get("files", {}).get(key)
+        if not table:
+            return []
+        return read_table(self._episode_root(dataset, episode_id) / table)
+
+    def open_video(self, dataset: str, episode_id: str):
+        from .s3fetch import LocalVideoHandle
+
+        doc = self.episode_doc(dataset, episode_id) or {}
+        video = doc.get("files", {}).get("video")
+        if not video:
+            return None
+        path = self._episode_root(dataset, episode_id) / video
+        if not path.exists():
+            return None
+        return LocalVideoHandle(path)
+
+    def describe(self) -> str:
+        return str(self.canonical_root)
+
+
+class S3CanonicalSource(Source):
+    """The canonical viewer layout rooted at an s3:// URI (no /nfs). Bead gaze-67t.3.4."""
+
+    def __init__(self, root_uri: str, cache_root: str | Path | None = None):
+        self.root_uri = root_uri.rstrip("/")
+        self.cache_root = cache_root
+
+    def _episode_uri(self, dataset: str, episode_id: str) -> str:
+        return f"{self.root_uri}/episodes/{dataset}/{episode_id}"
+
+    def episodes(self) -> list[dict]:
+        from . import s3fetch
+
+        # Prefer the JSONL export (no parquet dep); fall back to manifest.parquet.jsonl.
+        rows: list[dict] = []
+        for name in ("manifest.jsonl", "manifest.parquet.jsonl"):
+            try:
+                text = s3fetch.get_text(f"{self.root_uri}/{name}", cache_root=self.cache_root)
+            except Exception:
+                continue
+            rows = [json.loads(line) for line in text.splitlines() if line.strip()]
+            break
+        return [{"id": f"{row.get('dataset')}:{row.get('episode_id')}", **row} for row in rows]
+
+    def episode_doc(self, dataset: str, episode_id: str) -> dict | None:
+        from . import s3fetch
+
+        try:
+            text = s3fetch.get_text(f"{self._episode_uri(dataset, episode_id)}/episode.json", cache_root=self.cache_root)
+        except Exception:
+            return None
+        return json.loads(text)
+
+    def table_rows(self, dataset: str, episode_id: str, key: str) -> list[dict]:
+        from . import s3fetch
+
+        doc = self.episode_doc(dataset, episode_id) or {}
+        table = doc.get("files", {}).get(key)
+        if not table:
+            return []
+        uri = f"{self._episode_uri(dataset, episode_id)}/{table}"
+        local = s3fetch._cache_path(uri, self.cache_root)
+        if not local.exists():
+            data = s3fetch.get_bytes(uri, cache_root=self.cache_root)
+            local.parent.mkdir(parents=True, exist_ok=True)
+            local.write_bytes(data)
+        return read_table(local)
+
+    def open_video(self, dataset: str, episode_id: str):
+        from .s3fetch import S3VideoHandle
+
+        doc = self.episode_doc(dataset, episode_id) or {}
+        video = doc.get("files", {}).get("video")
+        if not video:
+            return None
+        return S3VideoHandle(f"{self._episode_uri(dataset, episode_id)}/{video}")
+
+    def describe(self) -> str:
+        return self.root_uri
+
+
+class S3EvalSource(Source):
+    """An eval cache (summary.json + results.jsonl) -> GT vs predicted gaze. Bead gaze-67t.3.3."""
+
+    def __init__(self, cache_uri: str, cache_root: str | Path | None = None):
+        self.cache_uri = cache_uri.rstrip("/")
+        self.cache_root = cache_root
+        self._records: dict[str, dict] | None = None
+        self._summary: dict | None = None
+
+    def _load(self) -> None:
+        if self._records is not None:
+            return
+        from . import s3fetch
+
+        try:
+            self._summary = json.loads(s3fetch.get_text(f"{self.cache_uri}/summary.json", cache_root=self.cache_root))
+        except Exception:
+            self._summary = {}
+        text = s3fetch.get_text(f"{self.cache_uri}/results.jsonl", cache_root=self.cache_root)
+        records: dict[str, dict] = {}
+        for line in text.splitlines():
+            if not line.strip():
+                continue
+            rec = json.loads(line)
+            dataset = rec.get("dataset") or "gaze"
+            example_id = rec.get("example_id") or ""
+            # episode_id keeps the full example id (which itself may contain ":"); the handler
+            # splits on the FIRST ":" so dataset is recovered and episode_id is the remainder.
+            records[f"{dataset}:{example_id}"] = rec
+        self._records = records
+
+    def _key(self, dataset: str, episode_id: str) -> str:
+        return f"{dataset}:{episode_id}"
+
+    @staticmethod
+    def _triplets_to_rows(triplets: list[Any]) -> list[dict]:
+        rows = []
+        for trip in triplets or []:
+            t, x, y = trip[0], trip[1], trip[2]
+            rows.append({"time_s": float(t), "x_px": float(x), "y_px": float(y)})
+        return rows
+
+    def episodes(self) -> list[dict]:
+        self._load()
+        out = []
+        for key, rec in self._records.items():
+            m = rec.get("metrics", {})
+            out.append({
+                "id": key,
+                "dataset": rec.get("dataset"),
+                "episode_id": rec.get("example_id"),
+                "modalities": "video,gaze,gaze_pred",
+                "l2": m.get("l2"),
+            })
+        return out
+
+    def episode_doc(self, dataset: str, episode_id: str) -> dict | None:
+        self._load()
+        rec = self._records.get(self._key(dataset, episode_id))
+        if rec is None:
+            return None
+        duration = rec.get("video_duration") or rec.get("clip_end_time") or 0
+        return {
+            "dataset": dataset,
+            "episode_id": episode_id,
+            "duration_s": duration,
+            "resolution": rec.get("frame_side"),
+            "eval_mode": True,
+            "label": rec.get("label", ""),
+            "metrics": rec.get("metrics", {}),
+            "prediction_text": rec.get("prediction_text", ""),
+            "files": {"video": rec.get("video_s3_uri")},
+            "modalities": ["video", "gaze", "gaze_pred"],
+        }
+
+    def table_rows(self, dataset: str, episode_id: str, key: str) -> list[dict]:
+        self._load()
+        rec = self._records.get(self._key(dataset, episode_id))
+        if rec is None:
+            return []
+        if key == "gaze":
+            return self._triplets_to_rows(rec.get("gt_triplets"))
+        if key == "gaze_pred":
+            return self._triplets_to_rows(rec.get("pred_triplets"))
+        if key in ("annotations", "annotation_intervals"):
+            label = rec.get("label") or ""
+            if not label:
+                return []
+            duration = rec.get("video_duration") or rec.get("clip_end_time") or 0
+            return [{"start_s": 0.0, "end_s": float(duration), "role": "final", "text": label}]
+        return []
+
+    def open_video(self, dataset: str, episode_id: str):
+        from .s3fetch import S3VideoHandle
+
+        self._load()
+        rec = self._records.get(self._key(dataset, episode_id))
+        if rec is None or not rec.get("video_s3_uri"):
+            return None
+        return S3VideoHandle(rec["video_s3_uri"])
+
+    def describe(self) -> str:
+        return f"eval cache {self.cache_uri}"

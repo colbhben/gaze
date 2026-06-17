@@ -13,13 +13,14 @@ from .manifest import copy_manifest, inspect_raw_root, wait_for_downloads_and_wr
 from .rectify import rectify_dataset
 from .s3 import (
     create_s3_pull_manifest,
+    is_s3_uri,
     load_s3_config,
     mount_path_for_uri,
     parse_partitions,
     pull_processed_from_manifest,
     serial_process_backup,
 )
-from .server import serve
+from .server import serve, serve_source
 from .splits import SplitRequest, create_split
 from .table import parquet_available
 from .validate import validate_canonical_root
@@ -571,7 +572,9 @@ def add_dataset_common(parser: argparse.ArgumentParser) -> argparse.ArgumentPars
 
 
 def add_serve_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--canonical-root", metavar="PATH", required=True, help="Canonical root containing rectified episodes and manifest files. Required.")
+    parser.add_argument("--canonical-root", metavar="PATH", help="Canonical root with rectified episodes + manifest. A local path OR an s3:// URI (raw S3 ingestion, no /nfs). Provide this OR --eval-cache.")
+    parser.add_argument("--eval-cache", metavar="S3_URI", help="s3:// prefix of a gaze eval cache (summary.json + results.jsonl) to render GT vs predicted gaze. Provide this OR --canonical-root.")
+    parser.add_argument("--cache-dir", metavar="PATH", help="Local on-disk cache for S3-fetched small files; default: .gaze-cache.")
     parser.add_argument("--host", metavar="HOST", default="127.0.0.1", help="Interface to bind the local HTTP server; default: 127.0.0.1.")
     parser.add_argument("--port", metavar="PORT", type=int, default=8765, help="TCP port for the local HTTP server; default: 8765.")
     parser.add_argument("--open", action="store_true", help="Open the viewer URL in the default browser after the server starts.")
@@ -596,7 +599,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     if not report["parquet_available"]:
         print("warning: pyarrow not found; tabular outputs will use explicit JSONL fallback files", file=sys.stderr)
     if not report["nfs_mount"]:
-        print("warning: /nfs mount not found; default S3 tether commands expect s3://far-research-internal mounted at /nfs", file=sys.stderr)
+        print("warning: /nfs mount not found; default S3 tether commands expect s3://far-research-internal mounted at /nfs (the S3 viewer sources --canonical-root s3:// / --eval-cache need boto3, not /nfs: pip install 'gaze[s3]')", file=sys.stderr)
     if not report["aws"]:
         print("warning: aws CLI not found; uploads to canonical S3 paths require aws s3 commands", file=sys.stderr)
     return 0
@@ -681,7 +684,20 @@ def cmd_split_create(args: argparse.Namespace) -> int:
 
 
 def cmd_serve(args: argparse.Namespace) -> int:
-    serve(args.canonical_root, host=args.host, port=args.port, open_browser=args.open)
+    canonical_root = getattr(args, "canonical_root", None)
+    eval_cache = getattr(args, "eval_cache", None)
+    if bool(canonical_root) == bool(eval_cache):
+        print("error: provide exactly one of --canonical-root or --eval-cache", file=sys.stderr)
+        return 2
+    cache_dir = getattr(args, "cache_dir", None)
+    if eval_cache:
+        from .source import S3EvalSource
+        serve_source(S3EvalSource(eval_cache, cache_root=cache_dir), host=args.host, port=args.port, open_browser=args.open)
+    elif is_s3_uri(canonical_root):
+        from .source import S3CanonicalSource
+        serve_source(S3CanonicalSource(canonical_root, cache_root=cache_dir), host=args.host, port=args.port, open_browser=args.open)
+    else:
+        serve(canonical_root, host=args.host, port=args.port, open_browser=args.open)
     return 0
 
 

@@ -6,21 +6,28 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 import webbrowser
 
+from .source import LocalSource, Source
 from .splits import SplitRequest, create_split
-from .table import read_table
+
+# Table keys the viewer fetches per episode; "gaze_pred" is the eval-only predicted-gaze track.
+_TABLE_KEYS = {"timeline", "gaze", "gaze_pred", "annotations", "annotation_intervals", "depth"}
 
 
 def serve(canonical_root: str | Path, host: str = "127.0.0.1", port: int = 8765, open_browser: bool = False) -> str:
-    root = Path(canonical_root).resolve()
+    return serve_source(LocalSource(canonical_root), host=host, port=port, open_browser=open_browser)
 
+
+def serve_source(source: Source, host: str = "127.0.0.1", port: int = 8765, open_browser: bool = False) -> str:
     class Handler(GazeRequestHandler):
-        canonical_root = root
+        pass
+
+    Handler.source = source
 
     httpd = ThreadingHTTPServer((host, port), Handler)
     url = f"http://{host}:{httpd.server_address[1]}"
     if open_browser:
         webbrowser.open(url)
-    print(f"Serving {root} at {url}")
+    print(f"Serving {source.describe()} at {url}")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -31,7 +38,7 @@ def serve(canonical_root: str | Path, host: str = "127.0.0.1", port: int = 8765,
 
 
 class GazeRequestHandler(BaseHTTPRequestHandler):
-    canonical_root: Path
+    source: Source
 
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
@@ -39,7 +46,7 @@ class GazeRequestHandler(BaseHTTPRequestHandler):
             self.send_text(viewer_html(), "text/html; charset=utf-8")
             return
         if parsed.path == "/api/episodes":
-            self.send_json({"episodes": self.episodes()})
+            self.send_json({"episodes": self.source.episodes()})
             return
         if parsed.path.startswith("/api/episodes/"):
             self.handle_episode_get(parsed.path)
@@ -48,6 +55,10 @@ class GazeRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         if self.path == "/api/splits":
+            root = getattr(self.source, "canonical_root", None)
+            if root is None:
+                self.send_error(400, "splits are only supported for a local canonical root")
+                return
             payload = self.read_json()
             request = SplitRequest(
                 name=payload.get("name", "default"),
@@ -59,7 +70,7 @@ class GazeRequestHandler(BaseHTTPRequestHandler):
                 group_by=payload.get("group_by", "dataset"),
                 stratify_by=payload.get("stratify_by"),
             )
-            self.send_json(create_split(self.canonical_root, request))
+            self.send_json(create_split(root, request))
             return
         self.send_error(404, "not found")
 
@@ -73,41 +84,25 @@ class GazeRequestHandler(BaseHTTPRequestHandler):
             self.send_error(400, "episode id must be dataset:episode_id")
             return
         dataset, episode_id = joined.split(":", 1)
-        episode_root = self.canonical_root / "episodes" / dataset / episode_id
-        episode_doc_path = episode_root / "episode.json"
-        if not episode_doc_path.exists():
+        doc = self.source.episode_doc(dataset, episode_id)
+        if doc is None:
             self.send_error(404, "episode not found")
             return
-        doc = json.loads(episode_doc_path.read_text(encoding="utf-8"))
         if len(parts) == 3:
             self.send_json(doc)
             return
         key = parts[3]
         if key == "video":
-            video = doc.get("files", {}).get("video")
-            if not video:
+            handle = self.source.open_video(dataset, episode_id)
+            if handle is None:
                 self.send_error(404, "video not available")
                 return
-            self.send_file(episode_root / video, "video/mp4")
+            self.send_video(handle, "video/mp4")
             return
-        if key in {"timeline", "gaze", "annotations", "annotation_intervals", "depth"}:
-            table = doc.get("files", {}).get(key)
-            if not table:
-                self.send_json({"rows": []})
-                return
-            self.send_json({"rows": read_table(episode_root / table)})
+        if key in _TABLE_KEYS:
+            self.send_json({"rows": self.source.table_rows(dataset, episode_id, key)})
             return
         self.send_error(404, "not found")
-
-    def episodes(self) -> list[dict]:
-        manifest = read_table(self.canonical_root / "manifest.parquet")
-        return [
-            {
-                "id": f"{row.get('dataset')}:{row.get('episode_id')}",
-                **row,
-            }
-            for row in manifest
-        ]
 
     def read_json(self) -> dict:
         length = int(self.headers.get("Content-Length", "0"))
@@ -127,10 +122,16 @@ class GazeRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def send_file(self, path: Path, content_type: str) -> None:
-        if not path.exists():
+        from .s3fetch import LocalVideoHandle
+
+        if not Path(path).exists():
             self.send_error(404, "file not found")
             return
-        file_size = path.stat().st_size
+        self.send_video(LocalVideoHandle(path), content_type)
+
+    def send_video(self, handle, content_type: str) -> None:
+        """Stream a range-capable video handle (local file or S3) with HTTP 206 support."""
+        file_size = handle.size
         range_header = self.headers.get("Range")
         start = 0
         end = file_size - 1
@@ -164,15 +165,8 @@ class GazeRequestHandler(BaseHTTPRequestHandler):
         if status == 206:
             self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
         self.end_headers()
-        with path.open("rb") as handle:
-            handle.seek(start)
-            remaining = length
-            while remaining > 0:
-                chunk = handle.read(min(1024 * 1024, remaining))
-                if not chunk:
-                    break
-                self.wfile.write(chunk)
-                remaining -= len(chunk)
+        for chunk in handle.read_range(start, length):
+            self.wfile.write(chunk)
 
     def log_message(self, format: str, *args) -> None:  # noqa: A002
         return
@@ -248,6 +242,7 @@ def viewer_html() -> str:
     </div>
     <div class="hint">Keys: space play/pause · ←/k prev · →/j next · [ / ] speed · a auto-advance · / focus search</div>
     <div class="stage no-video" id="stage"><video id="video" controls></video><div class="fallback" id="fallback">No playable video for this episode</div><canvas id="overlay"></canvas></div>
+    <div class="now" id="evalMetrics" style="display:none"></div>
     <div class="now" id="currentAnnotation"><span class="muted">No annotation selected</span></div>
     <table><thead><tr><th>role</th><th>start_s</th><th>end_s</th><th>channel</th><th>text</th></tr></thead><tbody id="annotations"></tbody></table>
   </main>
@@ -266,12 +261,15 @@ def viewer_html() -> str:
     const video = document.querySelector('#video');
     const fallback = document.querySelector('#fallback');
     const currentAnnotation = document.querySelector('#currentAnnotation');
+    const evalMetricsEl = document.querySelector('#evalMetrics');
     const canvas = document.querySelector('#overlay');
     const ctx = canvas.getContext('2d');
     let episodes = [];
     let visibleEpisodes = [];   // current filtered+searched list (nav order)
     let currentId = null;       // selected episode id
     let gaze = [];
+    let gazePred = [];          // predicted gaze track (eval mode only)
+    let evalMode = false;       // true when the episode carries model predictions + metrics
     let annotations = [];
     let mediaState = 'empty';
     let episodeDuration = 0;
@@ -415,6 +413,9 @@ def viewer_html() -> str:
       document.querySelector('#annotations').innerHTML = '';
       currentAnnotation.innerHTML = '<span class="muted">Loading annotations</span>';
       gaze = [];
+      gazePred = [];
+      evalMode = false;
+      evalMetricsEl.style.display = 'none';
       annotations = [];
       video.pause();
       video.removeAttribute('src');
@@ -426,7 +427,9 @@ def viewer_html() -> str:
       if (token !== loadToken) return;
       episodeDuration = ep.duration_s || (ep.metadata && ep.metadata.clip_end_time) || 0;
       frameSide = Number(ep.resolution) || 0;  // for x_px/y_px gaze normalization
-      if (ep.files.video) {
+      evalMode = !!ep.eval_mode;
+      if (evalMode) renderEvalMetrics(ep);
+      if (ep.files && ep.files.video) {
         setMediaState('loading', 'Loading video...');
         video.src = `/api/episodes/${encodeURIComponent(id)}/video`;
       } else {
@@ -435,6 +438,11 @@ def viewer_html() -> str:
       const gazePayload = await json(`/api/episodes/${encodeURIComponent(id)}/gaze`);
       if (token !== loadToken) return;
       gaze = gazePayload.rows || [];
+      if (evalMode) {
+        const predPayload = await json(`/api/episodes/${encodeURIComponent(id)}/gaze_pred`);
+        if (token !== loadToken) return;
+        gazePred = predPayload.rows || [];
+      }
       const intervalRows = (await json(`/api/episodes/${encodeURIComponent(id)}/annotation_intervals`)).rows || [];
       if (token !== loadToken) return;
       annotations = intervalRows.length ? intervalRows : sampledToIntervals((await json(`/api/episodes/${encodeURIComponent(id)}/annotations`)).rows || []);
@@ -510,27 +518,48 @@ def viewer_html() -> str:
         requestAnimationFrame(draw);
         return;
       }
-      const row = gaze.reduce((best, item) => Math.abs(item.time_s - t) < Math.abs((best?.time_s || 999999) - t) ? item : best, null);
-      const norm = gazeNorm(row);  // {x,y} in [0,1] on the video frame, or null
-      if (norm) {
-        const r = videoContentRect();  // displayed video rect inside the stage (handles letterbox)
-        const cx = r.x + norm.x * r.w;
-        const cy = r.y + norm.y * r.h;
-        ctx.fillStyle = '#ff4757';
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(cx, cy, 9, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        // small crosshair for precision
-        ctx.beginPath();
-        ctx.moveTo(cx - 16, cy); ctx.lineTo(cx + 16, cy);
-        ctx.moveTo(cx, cy - 16); ctx.lineTo(cx, cy + 16);
-        ctx.stroke();
-      }
+      const r = videoContentRect();  // displayed video rect inside the stage (handles letterbox)
+      // Ground-truth gaze (red). In eval mode the model's prediction (blue) is overlaid too.
+      drawGazeDot(gaze, t, r, '#ff4757');
+      if (evalMode) drawGazeDot(gazePred, t, r, '#1e90ff');
       updateCurrentAnnotation();
       requestAnimationFrame(draw);
+    }
+    function nearestByTime(rows, t) {
+      return rows.reduce((best, item) => Math.abs(item.time_s - t) < Math.abs((best?.time_s ?? 999999) - t) ? item : best, null);
+    }
+    function drawGazeDot(rows, t, r, color) {
+      const norm = gazeNorm(nearestByTime(rows, t));  // {x,y} in [0,1] on the video frame, or null
+      if (!norm) return;
+      const cx = r.x + norm.x * r.w;
+      const cy = r.y + norm.y * r.h;
+      ctx.fillStyle = color;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      // small crosshair for precision
+      ctx.beginPath();
+      ctx.moveTo(cx - 16, cy); ctx.lineTo(cx + 16, cy);
+      ctx.moveTo(cx, cy - 16); ctx.lineTo(cx, cy + 16);
+      ctx.stroke();
+    }
+    function renderEvalMetrics(ep) {
+      const m = ep.metrics || {};
+      const fmt = (v) => (v == null ? '—' : Number(v).toFixed(3));
+      const pct = (v) => (v == null ? '—' : (Number(v) * 100).toFixed(1) + '%');
+      evalMetricsEl.innerHTML =
+        '<strong>Eval</strong> '
+        + '<span class="badge" style="background:#ff475733;color:#ff6b78;border:1px solid #ff4757">GT</span>'
+        + ' <span class="badge" style="background:#1e90ff33;color:#7ec0ff;border:1px solid #1e90ff">pred</span>'
+        + ` &nbsp; L2: <strong>${fmt(m.l2)}</strong>`
+        + ` &nbsp; acc@5: ${pct(m['acc@5'])}`
+        + ` &nbsp; acc@10: ${pct(m['acc@10'])}`
+        + ` &nbsp; acc@15: ${pct(m['acc@15'])}`
+        + ` &nbsp; valid: ${m.valid == null ? '—' : (Number(m.valid) ? 'yes' : 'no')}`;
+      evalMetricsEl.style.display = '';
     }
     function gazeNorm(row) {
       // Normalize a gaze row to [0,1] on the VIDEO FRAME, supporting both forms:
