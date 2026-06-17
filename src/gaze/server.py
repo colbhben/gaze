@@ -238,9 +238,10 @@ def viewer_html() -> str:
       <span id="speed" title="Playback speed (applies to all clips)">1.00×</span>
       <button id="speedUp" title="Faster (] or +)">+</button>
       <button id="autoAdvanceBtn" title="Auto-advance to next clip when current ends (a)">Auto-advance: OFF</button>
+      <button id="downloadBtn" title="Download this clip as a video with the gaze overlay + annotation text burned in (d)">⬇ Download</button>
       <h2 id="title" style="margin:0 0 0 8px; font-size:16px;">Select an episode</h2>
     </div>
-    <div class="hint">Keys: space play/pause · ←/k prev · →/j next · [ / ] speed · a auto-advance · / focus search</div>
+    <div class="hint">Keys: space play/pause · ←/k prev · →/j next · [ / ] speed · a auto-advance · d download · / focus search</div>
     <div class="stage no-video" id="stage"><video id="video" controls></video><div class="fallback" id="fallback">No playable video for this episode</div><canvas id="overlay"></canvas></div>
     <div class="now" id="evalMetrics" style="display:none"></div>
     <div class="now" id="currentAnnotation"><span class="muted">No annotation selected</span></div>
@@ -257,6 +258,7 @@ def viewer_html() -> str:
     const speedDown = document.querySelector('#speedDown');
     const speedUp = document.querySelector('#speedUp');
     const autoAdvanceBtn = document.querySelector('#autoAdvanceBtn');
+    const downloadBtn = document.querySelector('#downloadBtn');
     const stage = document.querySelector('#stage');
     const video = document.querySelector('#video');
     const fallback = document.querySelector('#fallback');
@@ -270,6 +272,7 @@ def viewer_html() -> str:
     let gaze = [];
     let gazePred = [];          // predicted gaze track (eval mode only)
     let evalMode = false;       // true when the episode carries model predictions + metrics
+    let currentEpisodeDoc = null;  // the loaded episode.json (carries metrics in eval mode)
     let annotations = [];
     let mediaState = 'empty';
     let episodeDuration = 0;
@@ -326,6 +329,7 @@ def viewer_html() -> str:
       speedDown.onclick = () => bumpRate(-RATE_STEP);
       speedUp.onclick = () => bumpRate(RATE_STEP);
       autoAdvanceBtn.onclick = () => setAutoAdvance(!autoAdvance);
+      downloadBtn.onclick = () => downloadOverlayVideo();
       setRate(playbackRate);          // initialize the speed indicator
       setAutoAdvance(autoAdvance);    // initialize the auto-advance indicator (OFF)
       renderEpisodeList();
@@ -404,6 +408,8 @@ def viewer_html() -> str:
       else if (e.key === '[' || e.key === '-') { e.preventDefault(); bumpRate(-RATE_STEP); }
       // 'a' toggles auto-advance to the next clip when the current one ends.
       else if (e.key === 'a') { e.preventDefault(); setAutoAdvance(!autoAdvance); }
+      // 'd' downloads the current clip with the overlay + annotation text burned in.
+      else if (e.key === 'd') { e.preventDefault(); downloadOverlayVideo(); }
     });
     async function loadEpisode(id) {
       const token = ++loadToken;
@@ -415,6 +421,7 @@ def viewer_html() -> str:
       gaze = [];
       gazePred = [];
       evalMode = false;
+      currentEpisodeDoc = null;
       evalMetricsEl.style.display = 'none';
       annotations = [];
       video.pause();
@@ -425,6 +432,7 @@ def viewer_html() -> str:
       setMediaState('loading');
       const ep = await json(`/api/episodes/${encodeURIComponent(id)}`);
       if (token !== loadToken) return;
+      currentEpisodeDoc = ep;
       episodeDuration = ep.duration_s || (ep.metadata && ep.metadata.clip_end_time) || 0;
       frameSide = Number(ep.resolution) || 0;  // for x_px/y_px gaze normalization
       evalMode = !!ep.eval_mode;
@@ -590,6 +598,140 @@ def viewer_html() -> str:
     }
     function escapeHtml(value) {
       return String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+    }
+    // ---- Download: re-render the clip to an offscreen canvas with the gaze overlay + the
+    // active annotation text burned in, capture it via MediaRecorder, and save as a video. ----
+    function activeAnnotationLines(t) {
+      // The text shown over the frame at time t: GT gaze (eval), then final/source/aux rows.
+      const active = activeAnnotations(t);
+      const roleOf = r => (r.role || (r.label ? 'source' : '')).toLowerCase();
+      const lines = [];
+      const fin = active.find(r => roleOf(r) === 'final');
+      const src = active.find(r => roleOf(r) === 'source');
+      if (fin && fin.text) lines.push(fin.text);
+      if (src) { const c = src.channel || src.label || ''; lines.push((c ? c + ': ' : '') + (src.text || '')); }
+      for (const a of active.filter(r => roleOf(r) === 'auxiliary')) {
+        const c = a.channel || a.label || ''; lines.push((c ? c + ': ' : '') + (a.text || ''));
+      }
+      return lines.filter(Boolean);
+    }
+    function wrapText(c2d, text, maxWidth) {
+      const words = String(text).split(/\\s+/);
+      const out = []; let line = '';
+      for (const w of words) {
+        const trial = line ? line + ' ' + w : w;
+        if (c2d.measureText(trial).width > maxWidth && line) { out.push(line); line = w; }
+        else line = trial;
+      }
+      if (line) out.push(line);
+      return out;
+    }
+    function drawDotOn(c2d, rows, t, w, h, color) {
+      const norm = gazeNorm(nearestByTime(rows, t));
+      if (!norm) return;
+      const cx = norm.x * w, cy = norm.y * h;
+      const rad = Math.max(6, Math.round(Math.min(w, h) * 0.018));
+      c2d.fillStyle = color; c2d.strokeStyle = '#ffffff'; c2d.lineWidth = Math.max(2, rad / 4.5);
+      c2d.beginPath(); c2d.arc(cx, cy, rad, 0, Math.PI * 2); c2d.fill(); c2d.stroke();
+      const arm = rad * 1.8;
+      c2d.beginPath();
+      c2d.moveTo(cx - arm, cy); c2d.lineTo(cx + arm, cy);
+      c2d.moveTo(cx, cy - arm); c2d.lineTo(cx, cy + arm);
+      c2d.stroke();
+    }
+    function pickMime() {
+      const cands = ['video/mp4;codecs=avc1.42E01E', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
+      for (const m of cands) { if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m; }
+      return '';
+    }
+    let downloading = false;
+    async function downloadOverlayVideo() {
+      if (downloading) return;
+      if (mediaState !== 'video' || !video.videoWidth) { alert('No playable video to download for this episode.'); return; }
+      if (!window.MediaRecorder) { alert('Your browser does not support MediaRecorder; cannot export.'); return; }
+      downloading = true;
+      const label = downloadBtn.textContent; downloadBtn.disabled = true;
+      const wasPaused = video.paused, savedTime = video.currentTime, savedRate = video.playbackRate;
+      try {
+        const w = video.videoWidth, h = video.videoHeight;
+        const off = document.createElement('canvas'); off.width = w; off.height = h;
+        const c2d = off.getContext('2d');
+        const fontPx = Math.max(14, Math.round(h * 0.035));
+        const mime = pickMime();
+        const stream = off.captureStream(30);
+        const chunks = [];
+        const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 8_000_000 } : undefined);
+        rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+        const done = new Promise(res => { rec.onstop = res; });
+
+        const renderFrame = () => {
+          const t = video.currentTime;
+          c2d.clearRect(0, 0, w, h);
+          c2d.drawImage(video, 0, 0, w, h);
+          drawDotOn(c2d, gaze, t, w, h, '#ff4757');
+          if (evalMode) drawDotOn(c2d, gazePred, t, w, h, '#1e90ff');
+          // Annotation text, wrapped, bottom-anchored with a legibility shadow.
+          c2d.font = `${fontPx}px sans-serif`;
+          const lines = [];
+          for (const ln of activeAnnotationLines(t)) lines.push(...wrapText(c2d, ln, w * 0.94));
+          c2d.textBaseline = 'bottom'; c2d.textAlign = 'left';
+          let y = h - Math.round(fontPx * 0.5);
+          for (let i = lines.length - 1; i >= 0; i--) {
+            const x = Math.round(w * 0.03);
+            c2d.lineWidth = Math.max(3, fontPx / 6); c2d.strokeStyle = 'rgba(0,0,0,0.85)';
+            c2d.strokeText(lines[i], x, y); c2d.fillStyle = '#ffffff'; c2d.fillText(lines[i], x, y);
+            y -= Math.round(fontPx * 1.25);
+          }
+          // Eval legend + metrics, top-left.
+          if (evalMode) {
+            c2d.font = `${Math.round(fontPx*0.85)}px sans-serif`; c2d.textBaseline = 'top';
+            const m = (currentEpisodeDoc && currentEpisodeDoc.metrics) || {};
+            const tag = `GT(red) pred(blue)  L2 ${m.l2==null?'—':Number(m.l2).toFixed(2)}  acc@5 ${m['acc@5']==null?'—':(m['acc@5']*100).toFixed(0)+'%'}`;
+            const ty = Math.round(fontPx*0.4), tx = Math.round(w*0.03);
+            c2d.lineWidth = Math.max(3, fontPx/6); c2d.strokeStyle = 'rgba(0,0,0,0.85)';
+            c2d.strokeText(tag, tx, ty); c2d.fillStyle = '#ffffff'; c2d.fillText(tag, tx, ty);
+          }
+        };
+
+        let raf = 0;
+        const pump = () => { renderFrame(); raf = requestAnimationFrame(pump); };
+        // Play from the start at 1x so the capture covers the whole clip in real time.
+        video.pause();
+        if (video.currentTime > 0.01) {
+          await new Promise(r => { const onSeek = () => { video.removeEventListener('seeked', onSeek); r(); }; video.addEventListener('seeked', onSeek); video.currentTime = 0; });
+        }
+        video.playbackRate = 1.0;
+        rec.start();
+        pump();
+        await video.play();
+        downloadBtn.textContent = '● Recording…';
+        // Stop at clip end; guard with a timeout (clip duration + 2s) in case 'ended' never fires.
+        const capMs = ((video.duration || episodeDuration || 10) + 2) * 1000 / (video.playbackRate || 1);
+        await new Promise(res => {
+          let to = setTimeout(() => { video.removeEventListener('ended', onEnd); res(); }, capMs);
+          function onEnd() { clearTimeout(to); video.removeEventListener('ended', onEnd); res(); }
+          video.addEventListener('ended', onEnd);
+        });
+        cancelAnimationFrame(raf);
+        rec.stop();
+        await done;
+
+        const type = (mime || 'video/webm').split(';')[0];
+        const ext = type.includes('mp4') ? 'mp4' : 'webm';
+        const blob = new Blob(chunks, { type });
+        const safe = String(currentId || 'clip').replace(/[^a-zA-Z0-9._-]+/g, '_');
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${safe}.overlay.${ext}`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      } catch (err) {
+        console.error(err); alert('Download failed: ' + err);
+      } finally {
+        // Restore the live player.
+        try { video.pause(); video.currentTime = savedTime; video.playbackRate = savedRate || playbackRate; if (!wasPaused) video.play().catch(() => {}); } catch (e) {}
+        downloadBtn.disabled = false; downloadBtn.textContent = label; downloading = false;
+      }
     }
     loadEpisodes();
   </script>
