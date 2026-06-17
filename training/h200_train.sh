@@ -46,6 +46,12 @@ GAZE_DATA_DIR="${GAZE_DATA_DIR:-/nfs/colbhben/gaze/manifests/full_2hz_min25_max1
 GAZE_SPLIT_NAME="${GAZE_SPLIT_NAME:-95_05}"
 MOLMO_DATA_DIR="${MOLMO_DATA_DIR:-/nfs/colbhben/gaze/molmo/Molmo2-Data}"
 CHECKPOINT="${CHECKPOINT:-/nfs/colbhben/gaze/molmo/Molmo2-4B-SFT}"
+# Read all HuggingFace data (rehearse datasets, baked .filter() caches, the Qwen3 tokenizer +
+# siglip2) from the PRE-STAGED cache under MOLMO_DATA_DIR/huggingface instead of downloading at
+# train time. Avoids HF 429s AND the s3-fuse cache-write hang (.filter() result-caches go to
+# local /tmp). The cache must already be fully staged on /nfs (it is, for this project). Set
+# HF_OFFLINE=0 to fall back to online download into local scratch.
+HF_OFFLINE="${HF_OFFLINE:-1}"
 # Sequence length. MUST be >= ~11357: the video preprocessor's worst-case output for a
 # 128-frame clip is 11357 tokens, and get_output_shapes() hard-errors if seq_len is smaller
 # (this is a static config check, independent of the actual clip lengths). The H200 profile
@@ -106,6 +112,7 @@ echo "   global batch    : $GLOBAL_BATCH_SIZE   max_duration: $MAX_DURATION"
 echo "   learning rates  : llm=$LLM_LR vit=$VIT_LR connector=$CONNECTOR_LR"
 echo "   eval            : every $INF_EVAL_INTERVAL steps, $EVAL_EXAMPLES episodes"
 echo "   gaze data       : $GAZE_DATA_DIR (split $GAZE_SPLIT_NAME)"
+echo "   hf data         : $([ "$HF_OFFLINE" -eq 1 ] && echo "OFFLINE from $MOLMO_DATA_DIR/huggingface (pre-staged)" || echo "online download -> local scratch")"
 echo "=================================================================="
 
 # --------------------------------------------------------------------------------------- #
@@ -152,6 +159,12 @@ ARGS=(
 )
 if [ "$NNODES" -gt 1 ]; then
   ARGS+=( --nnodes "$NNODES" --node-rank "$NODE_RANK" --rdzv-endpoint "$RDZV_ENDPOINT" --rdzv-id "$RDZV_ID" )
+fi
+# Offline HF (default): read the pre-staged cache under MOLMO_DATA_DIR/huggingface; no download,
+# no cache writes (so the s3-fuse .filter()-cache hang can't occur). gaze_sft.sh defaults
+# --hf-cache to MOLMO_DATA_DIR/huggingface under --hf-offline.
+if [ "$HF_OFFLINE" -eq 1 ]; then
+  ARGS+=( --hf-offline )
 fi
 # Everything after a single `--` is forwarded by gaze_sft.sh to sft.py: argparse flags
 # (e.g. --max_inf_eval_examples) AND OmegaConf dotlist overrides (e.g. inf_eval_interval=).
