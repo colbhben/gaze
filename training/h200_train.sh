@@ -117,6 +117,22 @@ echo "=================================================================="
   die "molmo2 submodule not initialized under $WORK_DIR/third_party/molmo2 (run: git submodule update --init --recursive)."
 
 # --------------------------------------------------------------------------------------- #
+# 1b. PixMo baked-path shim. PixMo datasets store each image's path as an ABSOLUTE path that
+#     was frozen at download time on the box that built Molmo2-Data (MOLMO_DATA_DIR=/data/molmo),
+#     e.g. /data/molmo/torch_datasets/pixmo_images/<hash>. olmo's load_image() opens that path
+#     verbatim -- it does NOT re-resolve against the current MOLMO_DATA_DIR. On this cluster the
+#     same files live under $MOLMO_DATA_DIR (/nfs/...), so we symlink the frozen root
+#     (/data/molmo) -> $MOLMO_DATA_DIR so the baked paths resolve. No-op if /data/molmo already
+#     exists (e.g. the build box). Override the frozen root via PIXMO_BAKED_ROOT.
+PIXMO_BAKED_ROOT="${PIXMO_BAKED_ROOT:-/data/molmo}"
+if [ "$MOLMO_DATA_DIR" != "$PIXMO_BAKED_ROOT" ] && [ ! -e "$PIXMO_BAKED_ROOT" ]; then
+  echo ">> linking PixMo baked root $PIXMO_BAKED_ROOT -> $MOLMO_DATA_DIR (frozen abs image paths)"
+  mkdir -p "$(dirname "$PIXMO_BAKED_ROOT")"
+  ln -s "$MOLMO_DATA_DIR" "$PIXMO_BAKED_ROOT" 2>/dev/null \
+    || echo ">> WARN: could not create $PIXMO_BAKED_ROOT symlink (may already exist or perms); continuing"
+fi
+
+# --------------------------------------------------------------------------------------- #
 # 2. Invoke gaze_sft.sh --no-docker (we are already inside the container). Multi-node flags
 #    are only added when NNODES>1; single-node reduces to the plain --gpus form.
 # --------------------------------------------------------------------------------------- #
