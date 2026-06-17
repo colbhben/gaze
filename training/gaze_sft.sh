@@ -46,10 +46,13 @@
 #     --stage-from SRC         copy data out of an /nfs path or s3:// URL into local scratch
 #     --local-scratch DIR      where --stage-from lands         (default: /home/ubuntu/gaze-stage)
 #     --hf-cache DIR           WRITABLE HuggingFace cache; never /nfs (default: <scratch>/hf-cache)
-#     --hf-offline             read HF data from a PRE-STAGED HF_CACHE (may be on /nfs); sets
-#                              HF_HUB_OFFLINE=1 + HF_DATASETS_DISABLE_CACHING=1 (no download, no
-#                              cache writes). Requires the cache to already hold every dataset,
-#                              baked filter cache, the tokenizer + siglip2. See training docs.
+#     --hf-offline             stage a pre-built HF cache (only the dataset repos the mix uses
+#                              + Qwen3 tokenizer + siglip2, ~13 GB) into LOCAL HF_CACHE, then
+#                              run with HF_HUB_OFFLINE=1 (no download at train time, no 429).
+#                              Requires --hf-stage-from <s3:// or /nfs path>.
+#     --hf-stage-from SRC      source for --hf-offline staging; an s3:// URL or local path that
+#                              contains hub/ + datasets/ subdirs (e.g.
+#                              s3://far-research-internal/.../Molmo2-Data/huggingface).
 #   Mixture / objective
 #     --mixture NAME           training mixture                       (default: gaze_specialize)
 #     --gaze-objective first|all  first=predict t0 point, all=per-frame points   (default: first)
@@ -147,9 +150,14 @@ LOCAL_SCRATCH=${LOCAL_SCRATCH:-/home/ubuntu/gaze-stage}
 #     (possibly s3-fuse-backed, write-hanging) cache dir. This lets the staged /nfs cache be used
 #     directly with zero re-download / re-staging at train time. See --hf-offline.
 HF_CACHE=${HF_CACHE:-}
-# Offline HF: 1 => export HF_HUB_OFFLINE=1 + HF_DATASETS_OFFLINE=1 + HF_DATASETS_DISABLE_CACHING=1
-# and allow HF_CACHE to live on /nfs (read-only is fine offline). Default off (online download).
+# Offline HF: 1 => stage the pre-built HF cache (datasets/ + hub/ for the mix's repos +
+# tokenizer + siglip2) from --hf-stage-from into local writable scratch, then export
+# HF_HUB_OFFLINE=1 + HF_DATASETS_OFFLINE=1 (no download at train time, no 429 risk).
+# We do NOT use HF_DATASETS_DISABLE_CACHING because .filter() still writes a cache file
+# into the dataset dir; on /nfs that fails with PermissionError, so we keep the cache local.
 HF_OFFLINE=${HF_OFFLINE:-0}
+# Source of the pre-built HF cache (s3:// URL or local dir). Required when --hf-offline.
+HF_STAGE_FROM=${HF_STAGE_FROM:-}
 
 # Checkpoints -> S3 by default (native cloud save; never /nfs). {name} filled after parse.
 SAVE_FOLDER=""
@@ -211,6 +219,7 @@ while [ "$#" -gt 0 ]; do
     --local-scratch) LOCAL_SCRATCH=$2; shift 2 ;;
     --hf-cache) HF_CACHE=$2; shift 2 ;;
     --hf-offline) HF_OFFLINE=1; shift ;;
+    --hf-stage-from) HF_STAGE_FROM=$2; shift 2 ;;
     --save-folder) SAVE_FOLDER=$2; shift 2 ;;
     --save-interval) SAVE_INTERVAL=$2; shift 2 ;;
     --max-duration) MAX_DURATION=$2; shift 2 ;;
@@ -365,21 +374,65 @@ case "$MOLMO_DATA_DIR" in
 esac
 [ -d "$MOLMO_DATA_DIR" ] || die "MOLMO_DATA_DIR '$MOLMO_DATA_DIR' not found."
 
-# HF cache. ONLINE: writable, never /nfs, created here (tokenizer/model build writes here).
-# OFFLINE (--hf-offline): a pre-staged read-only cache, MAY be on /nfs; we never write it
-# (HF_DATASETS_DISABLE_CACHING sends .filter()/.map() result-caches to local /tmp instead), so
-# the s3-fuse write-hang on /nfs cannot occur. Default the offline cache to the staged location
-# under MOLMO_DATA_DIR (that is where the datasets + tokenizer + baked filter caches live).
+# HF cache. ONLINE: writable, never /nfs (tokenizer/model build writes here).
+# OFFLINE (--hf-offline + --hf-stage-from): stage the pre-built HF cache from an S3 URL or
+# /nfs path into LOCAL writable scratch, then run with HF_HUB_OFFLINE=1. We MUST own the
+# cache locally because HF datasets .filter()/.map() write a cache-<hash>.arrow back into
+# the dataset's own cache dir (datasets/<repo>/.../cache-*.arrow) -- on this cluster /nfs
+# is read-only, so a /nfs HF_HOME fails with PermissionError. We only stage the dataset
+# repos the mix actually uses + the Qwen3 tokenizer + siglip2 (~13 GB total).
+HF_CACHE="${HF_CACHE:-$LOCAL_SCRATCH/hf-cache}"
+case "$HF_CACHE" in
+  /nfs/*) die "HF_CACHE on /nfs is read-only here; .filter()/.map() write back into the dataset dir. Use local scratch (e.g. $LOCAL_SCRATCH/hf-cache)." ;;
+esac
+mkdir -p "$HF_CACHE/hub" "$HF_CACHE/datasets" || die "could not create HF cache dir: $HF_CACHE"
+
 if [ "$HF_OFFLINE" -eq 1 ]; then
-  [ -n "$HF_CACHE" ] || HF_CACHE="$MOLMO_DATA_DIR/huggingface"
-  [ -d "$HF_CACHE/hub" ] || die "--hf-offline: HF_CACHE '$HF_CACHE' has no hub/ (not a staged HF cache). Stage it first."
-  [ -d "$HF_CACHE/datasets" ] || die "--hf-offline: HF_CACHE '$HF_CACHE' has no datasets/ (not a staged HF cache). Stage it first."
-else
-  [ -n "$HF_CACHE" ] || HF_CACHE="$LOCAL_SCRATCH/hf-cache"
-  case "$HF_CACHE" in
-    /nfs/*) die "HF_CACHE is on /nfs (read-only); the tokenizer build must write here. Use local scratch, or pass --hf-offline to read a pre-staged cache." ;;
+  [ -n "$HF_STAGE_FROM" ] || die "--hf-offline requires --hf-stage-from <s3:// URL or /nfs path with hub/+datasets/>"
+  # Repos the gaze_specialize mix actually loads (HF datasets + tokenizer + siglip2). Keep this
+  # tight -- the staged Molmo2-Data HF cache holds 78 dataset repos but the mix uses 6.
+  HF_REPOS=(
+    "datasets/allenai___molmo2-vqa2-2014"
+    "datasets/allenai___molmo2-okvqa"
+    "datasets/HuggingFaceM4___chart_qa"
+    "datasets/allenai___molmo2-a-ok-vqa"
+    "datasets/allenai___molmo2-mantis-instruct-nlvr2"
+    "datasets/allenai___molmo2-tulu4-classified"
+    "hub/datasets--allenai--molmo2-vqa2-2014"
+    "hub/datasets--allenai--molmo2-okvqa"
+    "hub/datasets--HuggingFaceM4--ChartQA"
+    "hub/datasets--allenai--molmo2-a-ok-vqa"
+    "hub/datasets--allenai--molmo2-mantis-instruct-nlvr2"
+    "hub/datasets--allenai--molmo2-tulu4-classified"
+    "hub/models--Qwen--Qwen3-4B-Instruct-2507"
+    "hub/models--google--siglip2-so400m-patch14-384"
+  )
+  echo ">> staging HF cache from $HF_STAGE_FROM -> $HF_CACHE (writable; ${#HF_REPOS[@]} repos)"
+  case "$HF_STAGE_FROM" in
+    s3://*)
+      command -v aws >/dev/null 2>&1 || command -v /snap/bin/aws >/dev/null 2>&1 || die "aws CLI required for s3 staging"
+      AWS=$(command -v aws || command -v /snap/bin/aws)
+      # Tune for parallelism on the H200 nodes.
+      "$AWS" configure set s3.max_concurrent_requests 32 || true
+      stage_t0=$(date +%s)
+      for r in "${HF_REPOS[@]}"; do
+        echo "   -> $r"
+        "$AWS" s3 cp --recursive --quiet "$HF_STAGE_FROM/$r" "$HF_CACHE/$r" || die "stage failed: $r"
+      done
+      echo ">> HF stage complete in $(( $(date +%s) - stage_t0 ))s"
+      ;;
+    *)
+      [ -d "$HF_STAGE_FROM" ] || die "--hf-stage-from '$HF_STAGE_FROM' is not s3:// or a local dir"
+      stage_t0=$(date +%s)
+      for r in "${HF_REPOS[@]}"; do
+        [ -d "$HF_STAGE_FROM/$r" ] || die "missing in stage source: $r"
+        echo "   -> $r"
+        mkdir -p "$HF_CACHE/$(dirname "$r")"
+        cp -r "$HF_STAGE_FROM/$r" "$HF_CACHE/$r" || die "stage failed: $r"
+      done
+      echo ">> HF stage complete in $(( $(date +%s) - stage_t0 ))s"
+      ;;
   esac
-  mkdir -p "$HF_CACHE/hub" "$HF_CACHE/datasets" || die "could not create HF cache dir: $HF_CACHE"
 fi
 
 # Resolve the checkpoint so it is reachable INSIDE the container. The container only mounts
@@ -447,7 +500,7 @@ echo "   checkpoint      : $CHECKPOINT  (in-container: $CKPT_ARG)"
 echo "   gaze data dir   : $GAZE_DATA_DIR  (split: $GAZE_SPLIT_NAME)"
 echo "   molmo data dir  : $MOLMO_DATA_DIR"
 if [ "$HF_OFFLINE" -eq 1 ]; then
-  echo "   hf cache        : $HF_CACHE  (OFFLINE, read-only; no download, filter-caches -> /tmp)"
+  echo "   hf cache        : $HF_CACHE  (writable, OFFLINE; staged from $HF_STAGE_FROM)"
 else
   echo "   hf cache        : $HF_CACHE  (writable; mounted /hf-cache)"
 fi
@@ -495,11 +548,12 @@ if [ "$NO_DOCKER" -eq 1 ]; then
   export OLMO_SHARED_FS=1
   export MOLMO_DATA_DIR="$MOLMO_DATA_DIR"
   export HF_HOME="$HF_CACHE" HF_HUB_CACHE="$HF_CACHE/hub" HF_DATASETS_CACHE="$HF_CACHE/datasets"
-  # Offline: read everything from the pre-staged cache; never download, never write it.
-  # DISABLE_CACHING routes .filter()/.map() result-caches to local /tmp (NOT the cache dir),
-  # so a /nfs (s3-fuse) HF_CACHE cannot deadlock on the cache-file write. See --hf-offline.
+  # Offline: cache is fully staged locally (writable); no HF download at train time.
+  # We do NOT set HF_DATASETS_DISABLE_CACHING -- .filter() must be allowed to write its
+  # cache into the (now writable) dataset dir; disabling caching does NOT prevent the
+  # write (it just means the result is not reused on a later run).
   if [ "$HF_OFFLINE" -eq 1 ]; then
-    export HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1 HF_DATASETS_DISABLE_CACHING=1
+    export HF_HUB_OFFLINE=1 HF_DATASETS_OFFLINE=1
   fi
   export OMP_NUM_THREADS=8
   export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
@@ -528,13 +582,11 @@ fi
 # rendezvous can reach the head node's addr:port (the default bridge network isolates them).
 NET_ARGS=()
 [ "$NNODES" -gt 1 ] && NET_ARGS=( --network host )
-# Offline: mount the pre-staged HF cache read-only (we never write it; .filter()/.map() caches
-# go to local /tmp via HF_DATASETS_DISABLE_CACHING). Online: writable (tokenizer build writes).
-HF_MOUNT_OPT=""
+# HF_CACHE is always writable now (offline mode stages to local scratch up-front).
+# Offline just disables network at train time.
 HF_OFFLINE_ENV=()
 if [ "$HF_OFFLINE" -eq 1 ]; then
-  HF_MOUNT_OPT=":ro"
-  HF_OFFLINE_ENV=( -e HF_HUB_OFFLINE=1 -e HF_DATASETS_OFFLINE=1 -e HF_DATASETS_DISABLE_CACHING=1 )
+  HF_OFFLINE_ENV=( -e HF_HUB_OFFLINE=1 -e HF_DATASETS_OFFLINE=1 )
 fi
 RUN=(
   docker run --rm --gpus all --shm-size=32g
@@ -542,7 +594,7 @@ RUN=(
   -v "$MOLMO2_DIR:/molmo2"
   -v "$GAZE_DATA_DIR:/gaze-data:ro"
   -v "$MOLMO_DATA_DIR:/data/molmo:ro"
-  -v "$HF_CACHE:/hf-cache$HF_MOUNT_OPT"
+  -v "$HF_CACHE:/hf-cache"
   ${CKPT_MOUNT[@]+"${CKPT_MOUNT[@]}"}
   -w /molmo2
   -e OLMO_SHARED_FS=1
