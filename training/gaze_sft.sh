@@ -141,14 +141,14 @@ MOLMO_DATA_DIR=${MOLMO_DATA_DIR:-}
 # a LOCAL scratch dir before training. Leaves /nfs untouched (copies OUT of it).
 STAGE_FROM=${STAGE_FROM:-}
 LOCAL_SCRATCH=${LOCAL_SCRATCH:-/home/ubuntu/gaze-stage}
-# HuggingFace cache. Two modes:
-#   ONLINE (default): a WRITABLE cache (tokenizer/model build downloads + writes lock files here),
-#     so it can NOT live under a read-only mount. Empty => <local-scratch>/hf-cache after parse.
-#   OFFLINE (--hf-offline): point HF_CACHE at a pre-staged, fully-populated cache (datasets +
-#     baked filter caches + the Qwen3 tokenizer + siglip2). Reads only; combined with
-#     HF_DATASETS_DISABLE_CACHING=1 so .filter()/.map() result-caches go to local /tmp, NOT the
-#     (possibly s3-fuse-backed, write-hanging) cache dir. This lets the staged /nfs cache be used
-#     directly with zero re-download / re-staging at train time. See --hf-offline.
+# HuggingFace cache. ALWAYS a WRITABLE local dir (default <local-scratch>/hf-cache). The HF
+# datasets that .filter()/.map() (mantis, tulu4, ...) write a cache-<hash>.arrow back INTO the
+# dataset dir, so HF_CACHE can never be a read-only mount (e.g. /nfs). Two modes differ only in
+# how the cache is populated:
+#   ONLINE (default):  tokenizer/model/datasets download into HF_CACHE on first use.
+#   OFFLINE (--hf-offline): STAGE a pre-built cache (only the repos the mix uses) from
+#     --hf-stage-from into HF_CACHE up-front, prune stale filter-caches, then HF_HUB_OFFLINE=1
+#     -- no train-time download (no 429), but .filter() can still write locally. See below.
 HF_CACHE=${HF_CACHE:-}
 # Offline HF: 1 => stage the pre-built HF cache (datasets/ + hub/ for the mix's repos +
 # tokenizer + siglip2) from --hf-stage-from into local writable scratch, then export
