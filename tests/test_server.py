@@ -6,7 +6,7 @@ from pathlib import Path
 import unittest
 
 from gaze.server import GazeRequestHandler
-from gaze.source import LocalSource, S3EvalSource
+from gaze.source import LocalSource, S3CanonicalSource, S3EvalSource
 from gaze.table import write_table
 
 
@@ -122,6 +122,68 @@ class S3EvalSourceTests(unittest.TestCase):
         self.assertEqual(pred, [{"time_s": 0.0, "x_px": 110.0, "y_px": 190.0}])
         intervals = src.table_rows(dataset, episode_id, "annotation_intervals")
         self.assertEqual(intervals, [{"start_s": 0.0, "end_s": 3.0, "role": "final", "text": "doing a thing"}])
+
+
+class S3CanonicalSourceTests(unittest.TestCase):
+    """S3CanonicalSource with a stub fetcher (no network, no boto3)."""
+
+    def setUp(self) -> None:
+        import gaze.s3fetch as s3fetch
+
+        self._orig_get_text = s3fetch.get_text
+        manifest = [
+            {"dataset": "toy", "episode_id": "ep1", "duration_s": 1.0, "modalities": "gaze,video"},
+        ]
+        doc = {
+            "dataset": "toy",
+            "episode_id": "ep1",
+            "duration_s": 1.0,
+            "files": {"video": "video.mp4", "gaze": "gaze.jsonl"},
+        }
+        gaze = {"time_s": 0.0, "x_px": 50.0, "y_px": 60.0}
+        self._blobs = {
+            "s3://bucket/proc/manifest.jsonl": json.dumps(manifest[0]),
+            "s3://bucket/proc/episodes/toy/ep1/episode.json": json.dumps(doc),
+            "s3://bucket/proc/episodes/toy/ep1/gaze.jsonl": json.dumps(gaze),
+        }
+
+        self._orig_get_bytes = s3fetch.get_bytes
+
+        def fake_get_text(uri, cache_root=None, use_cache=True):
+            if uri not in self._blobs:
+                raise KeyError(uri)
+            return self._blobs[uri]
+
+        def fake_get_bytes(uri, cache_root=None, use_cache=True):
+            return fake_get_text(uri).encode("utf-8")
+
+        s3fetch.get_text = fake_get_text
+        s3fetch.get_bytes = fake_get_bytes
+
+        import tempfile
+
+        self._cache = tempfile.TemporaryDirectory()
+
+    def tearDown(self) -> None:
+        import gaze.s3fetch as s3fetch
+
+        s3fetch.get_text = self._orig_get_text
+        s3fetch.get_bytes = self._orig_get_bytes
+        self._cache.cleanup()
+
+    def test_canonical_source_lists_and_reads_episode(self) -> None:
+        src = S3CanonicalSource("s3://bucket/proc/", cache_root=self._cache.name)
+        episodes = src.episodes()
+        self.assertEqual(episodes, [{"id": "toy:ep1", "dataset": "toy", "episode_id": "ep1", "duration_s": 1.0, "modalities": "gaze,video"}])
+
+        doc = src.episode_doc("toy", "ep1")
+        self.assertEqual(doc["files"]["video"], "video.mp4")
+
+        rows = src.table_rows("toy", "ep1", "gaze")
+        self.assertEqual(rows, [{"time_s": 0.0, "x_px": 50.0, "y_px": 60.0}])
+
+        handle = src.open_video("toy", "ep1")
+        self.assertEqual(handle.uri, "s3://bucket/proc/episodes/toy/ep1/video.mp4")
 
 
 if __name__ == "__main__":

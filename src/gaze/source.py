@@ -101,7 +101,8 @@ class S3CanonicalSource(Source):
         rows: list[dict] = []
         for name in ("manifest.jsonl", "manifest.parquet.jsonl"):
             try:
-                text = s3fetch.get_text(f"{self.root_uri}/{name}", cache_root=self.cache_root)
+                # The manifest is a mutable index -> read uncached so a re-export isn't masked.
+                text = s3fetch.get_text(f"{self.root_uri}/{name}", use_cache=False)
             except Exception:
                 continue
             rows = [json.loads(line) for line in text.splitlines() if line.strip()]
@@ -159,11 +160,13 @@ class S3EvalSource(Source):
             return
         from . import s3fetch
 
+        # summary.json + results.jsonl are mutable index files (an eval can be re-run at the
+        # same URI), so read them uncached -- caching by URI would serve a stale prior run.
         try:
-            self._summary = json.loads(s3fetch.get_text(f"{self.cache_uri}/summary.json", cache_root=self.cache_root))
+            self._summary = json.loads(s3fetch.get_text(f"{self.cache_uri}/summary.json", use_cache=False))
         except Exception:
             self._summary = {}
-        text = s3fetch.get_text(f"{self.cache_uri}/results.jsonl", cache_root=self.cache_root)
+        text = s3fetch.get_text(f"{self.cache_uri}/results.jsonl", use_cache=False)
         records: dict[str, dict] = {}
         for line in text.splitlines():
             if not line.strip():
