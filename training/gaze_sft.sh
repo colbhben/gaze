@@ -433,6 +433,14 @@ if [ "$HF_OFFLINE" -eq 1 ]; then
       echo ">> HF stage complete in $(( $(date +%s) - stage_t0 ))s"
       ;;
   esac
+  # Prune any pre-existing .filter()/.map() result-caches + temp files from the staged
+  # datasets/. These cache-<hash>.arrow files are tied to the EXACT datasets/python/pyarrow
+  # version, so a cache baked elsewhere never matches this container -- and some staged copies
+  # are 0-byte/partial (from interrupted bakes on the source), which makes .filter() die with
+  # "ArrowInvalid: Tried reading schema message, was null or length 0". Removing them forces a
+  # clean local recompute (~seconds), which is correct and writable here.
+  pruned=$(find "$HF_CACHE/datasets" -type f \( -name "cache-*.arrow" -o -name "tmp*" \) -print -delete 2>/dev/null | wc -l | tr -d ' ')
+  echo ">> pruned $pruned stale filter-cache/tmp file(s) from staged datasets (will recompute locally)"
 fi
 
 # Resolve the checkpoint so it is reachable INSIDE the container. The container only mounts
