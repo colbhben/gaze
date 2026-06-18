@@ -146,6 +146,123 @@ class S3CanonicalSource(Source):
         return self.root_uri
 
 
+class Molmo2ManifestSource(Source):
+    """A molmo2 training manifest (``manifest.jsonl`` + flat ``videos/<slug>/<id>__segK.mp4``).
+
+    Unlike the canonical layout (``episodes/<dataset>/<id>/episode.json`` + per-modality
+    parquet), the training manifest is one JSONL row per CLIP, with per-frame ``points``
+    (raw ``{x,y}`` pixels on a ``resolution``-square frame) and a relative ``video``
+    pointer. This adapter exposes each clip as a viewer "episode" so ``gaze serve`` can
+    render the rectified clips + per-frame gaze natively, local OR over s3://.
+
+    Each row ``id`` is ``dataset:episode#segK``; the handler splits a viewer episode id
+    on the FIRST ``:`` into ``(dataset, rest)``, so we index rows by ``(dataset, rest)``
+    where ``rest`` is everything after the first colon (``episode#segK``).
+    """
+
+    def __init__(self, root: str | Path, cache_root: str | Path | None = None):
+        from .s3 import is_s3_uri
+
+        self.is_s3 = is_s3_uri(root)
+        self.root = str(root).rstrip("/") if self.is_s3 else Path(root).resolve()
+        self.cache_root = cache_root
+        self._rows: dict[tuple[str, str], dict] | None = None
+
+    # -- manifest load (uncached on S3: a re-export shouldn't be masked) -------- #
+    def _manifest_text(self) -> str:
+        if self.is_s3:
+            from . import s3fetch
+            return s3fetch.get_text(f"{self.root}/manifest.jsonl", use_cache=False)
+        return (self.root / "manifest.jsonl").read_text(encoding="utf-8")
+
+    def _load(self) -> dict[tuple[str, str], dict]:
+        if self._rows is not None:
+            return self._rows
+        rows: dict[tuple[str, str], dict] = {}
+        for line in self._manifest_text().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            row = json.loads(line)
+            rid = row.get("id") or f"{row.get('dataset')}:{row.get('episode_id')}#seg{row.get('seg_index')}"
+            dataset, _, rest = rid.partition(":")
+            rows[(dataset, rest)] = row
+        self._rows = rows
+        return rows
+
+    def episodes(self) -> list[dict]:
+        out = []
+        for (dataset, rest), row in self._load().items():
+            meta = row.get("metadata", {})
+            out.append({
+                "id": f"{dataset}:{rest}",
+                "dataset": dataset,
+                "episode_id": rest,
+                "duration_s": (meta.get("clip_end_time") or 0) - (meta.get("clip_start_time") or 0),
+                "modalities": "video,gaze",
+                "num_frames": row.get("num_frames"),
+            })
+        out.sort(key=lambda e: e["id"])
+        return out
+
+    def episode_doc(self, dataset: str, episode_id: str) -> dict | None:
+        row = self._load().get((dataset, episode_id))
+        if row is None:
+            return None
+        meta = row.get("metadata", {})
+        return {
+            "dataset": dataset,
+            "episode_id": episode_id,
+            "duration_s": (meta.get("clip_end_time") or 0) - (meta.get("clip_start_time") or 0),
+            "resolution": row.get("resolution"),
+            "fps": row.get("fps"),
+            "label": meta.get("final_annotation") or meta.get("annotation_text") or "",
+            "files": {"video": row.get("video")},
+            "modalities": ["video", "gaze"],
+        }
+
+    def table_rows(self, dataset: str, episode_id: str, key: str) -> list[dict]:
+        row = self._load().get((dataset, episode_id))
+        if row is None:
+            return []
+        if key == "gaze":
+            # One viewer gaze row per frame: timestamps[j] + points[j] (raw px on the
+            # resolution-square frame; the frontend divides by frameSide=resolution).
+            ts = row.get("timestamps") or []
+            pts = row.get("points") or []
+            out = []
+            for j, frame_pts in enumerate(pts):
+                t = ts[j] if j < len(ts) else j / float(row.get("fps") or 1.0)
+                if frame_pts:  # non-empty -> [{x,y}]; empty -> masked frame, no dot
+                    p = frame_pts[0]
+                    out.append({"time_s": float(t), "x_px": float(p["x"]), "y_px": float(p["y"])})
+                else:
+                    out.append({"time_s": float(t), "x_px": None, "y_px": None})
+            return out
+        if key in ("annotations", "annotation_intervals"):
+            meta = row.get("metadata", {})
+            label = meta.get("final_annotation") or meta.get("annotation_text") or ""
+            if not label:
+                return []
+            dur = (meta.get("clip_end_time") or 0) - (meta.get("clip_start_time") or 0)
+            return [{"start_s": 0.0, "end_s": float(dur), "role": "final", "text": label}]
+        return []
+
+    def open_video(self, dataset: str, episode_id: str):
+        row = self._load().get((dataset, episode_id))
+        if row is None or not row.get("video"):
+            return None
+        if self.is_s3:
+            from .s3fetch import S3VideoHandle
+            return S3VideoHandle(f"{self.root}/{row['video']}")
+        from .s3fetch import LocalVideoHandle
+        path = self.root / row["video"]
+        return LocalVideoHandle(path) if path.exists() else None
+
+    def describe(self) -> str:
+        return f"molmo2 manifest {self.root}"
+
+
 class S3EvalSource(Source):
     """An eval cache (summary.json + results.jsonl) -> GT vs predicted gaze. Bead gaze-67t.3.3."""
 

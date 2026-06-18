@@ -443,6 +443,7 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
     build_training.add_argument("--merge-gap-s", metavar="S", type=float, default=1.0, help="(molmo2) merge annotation spans separated by <= this gap. Default: 1.")
     build_training.add_argument("--drop-shorter-than-s", metavar="S", type=float, default=1.0, help="(molmo2) drop chopped segments shorter than this. Default: 1.")
     build_training.add_argument("--min-duration-s", metavar="S", type=float, default=0.0, help="(molmo2) coalesce a clip shorter than this with the next clip(s) (text -> numbered list), up to --max-clip-duration-s. 0/unset = disabled. Default: 0.")
+    build_training.add_argument("--coalesce-max-gap-s", metavar="S", type=float, default=3.0, help="(molmo2) max temporal gap between two clips for coalescing to bridge them. Small gaps (sparse narration) bridge; larger gaps (e.g. culled non-interesting content) break the chain so a clip never spans across a dropped region. Default: 3.")
     build_training.add_argument("--prompt", metavar="TEXT", default="Point to where the camera wearer is looking.", help="(molmo2) gaze prompt text.")
     build_training.add_argument("--workers", metavar="N", type=int, help="(molmo2) parallel episodes; default: CPU count.")
     build_training.add_argument("--num-frames", metavar="N", type=int, default=16, help="(qwen) frames per clip; default: 16.")
@@ -460,6 +461,8 @@ def add_curate_commands(sub: argparse._SubParsersAction) -> None:
     build_training.add_argument("--local-root", metavar="PATH", help="Read source from a local mount instead of ssh.")
     build_training.add_argument("--no-reuse-bundle", action="store_true", help="Re-extract from source instead of reusing /tmp/gaze_extract/<slug>_full.json.")
     build_training.add_argument("--reuse-clips", action="store_true", help="Reuse already-encoded segment mp4s in --out-root (skip ffmpeg re-encode + skip the big source pull when all clips present). For recovering a manifest after a crash where clips are on disk but manifest.jsonl was never written.")
+    build_training.add_argument("--rectify", action="store_true", help="(molmo2) Undistort Aria (FISHEYE624) clip frames to a linear/pinhole camera and project gaze through the SAME linear calib so points still align. Aria-only (projectaria_cpf); no-op for other datasets. Requires projectaria_tools + opencv.")
+    build_training.add_argument("--rectify-focal-scale", metavar="F", type=float, default=1.0, help="(molmo2) Focal scale for the target linear camera when --rectify is set. <1 widens FOV (less periphery cropped, more stretch), >1 zooms in. Default: 1.0 (source focal).")
     build_training.set_defaults(func=cmd_curate_build_training)
 
     export_anno = curate_sub.add_parser(
@@ -572,8 +575,9 @@ def add_dataset_common(parser: argparse.ArgumentParser) -> argparse.ArgumentPars
 
 
 def add_serve_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--canonical-root", metavar="PATH", help="Canonical root with rectified episodes + manifest. A local path OR an s3:// URI (raw S3 ingestion, no /nfs). Provide this OR --eval-cache.")
+    parser.add_argument("--canonical-root", metavar="PATH", help="Canonical root with rectified episodes + manifest. A local path OR an s3:// URI (raw S3 ingestion, no /nfs). Provide this OR --eval-cache OR --molmo2-manifest.")
     parser.add_argument("--eval-cache", metavar="S3_URI", help="s3:// prefix of a gaze eval cache (summary.json + results.jsonl) to render GT vs predicted gaze. Provide this OR --canonical-root.")
+    parser.add_argument("--molmo2-manifest", metavar="PATH", help="A molmo2 training manifest root (dir/s3:// prefix containing manifest.jsonl + videos/<slug>/<id>__segK.mp4) to render training clips + per-frame gaze. Provide this OR --canonical-root.")
     parser.add_argument("--cache-dir", metavar="PATH", help="Local on-disk cache for S3-fetched small files; default: .gaze-cache.")
     parser.add_argument("--host", metavar="HOST", default="127.0.0.1", help="Interface to bind the local HTTP server; default: 127.0.0.1.")
     parser.add_argument("--port", metavar="PORT", type=int, default=8765, help="TCP port for the local HTTP server; default: 8765.")
@@ -686,11 +690,15 @@ def cmd_split_create(args: argparse.Namespace) -> int:
 def cmd_serve(args: argparse.Namespace) -> int:
     canonical_root = getattr(args, "canonical_root", None)
     eval_cache = getattr(args, "eval_cache", None)
-    if bool(canonical_root) == bool(eval_cache):
-        print("error: provide exactly one of --canonical-root or --eval-cache", file=sys.stderr)
+    molmo2_manifest = getattr(args, "molmo2_manifest", None)
+    if sum(bool(x) for x in (canonical_root, eval_cache, molmo2_manifest)) != 1:
+        print("error: provide exactly one of --canonical-root, --eval-cache, or --molmo2-manifest", file=sys.stderr)
         return 2
     cache_dir = getattr(args, "cache_dir", None)
-    if eval_cache:
+    if molmo2_manifest:
+        from .source import Molmo2ManifestSource
+        serve_source(Molmo2ManifestSource(molmo2_manifest, cache_root=cache_dir), host=args.host, port=args.port, open_browser=args.open)
+    elif eval_cache:
         from .source import S3EvalSource
         serve_source(S3EvalSource(eval_cache, cache_root=cache_dir), host=args.host, port=args.port, open_browser=args.open)
     elif is_s3_uri(canonical_root):
@@ -999,6 +1007,9 @@ def cmd_curate_build_training(args: argparse.Namespace) -> int:
         puller=puller,
         reuse_bundle=not args.no_reuse_bundle,
         reuse_clips=getattr(args, "reuse_clips", False),
+        rectify=getattr(args, "rectify", False),
+        focal_scale=getattr(args, "rectify_focal_scale", 1.0),
+        coalesce_max_gap_s=getattr(args, "coalesce_max_gap_s", 3.0),
     )
     print(json.dumps(report, indent=2, sort_keys=True))
     return 0

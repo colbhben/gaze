@@ -357,9 +357,14 @@ class ProjectionContext:
     frame_dims: tuple[float, float] | None = None
     coordinate_space: str | None = None
     notes: list[str] = field(default_factory=list)
+    # aria linear rectification (optional): when set, gaze is projected through this
+    # fixed per-episode linear calib so points match the rectified clip frames.
+    rectifier: Any = None
 
 
-def build_projection_context(data: EpisodeData, puller: Puller) -> ProjectionContext:
+def build_projection_context(
+    data: EpisodeData, puller: Puller, *, rectify: bool = False, focal_scale: float = 1.0,
+) -> ProjectionContext:
     method = data.projection_method
     w = data.video.get("width")
     h = data.video.get("height")
@@ -383,6 +388,15 @@ def build_projection_context(data: EpisodeData, puller: Puller) -> ProjectionCon
         ctx.calib_lines = cr._load_calib_lines(calib_local)
         ctx.aria_scale = (w / 2880.0) if w else 1.0
         notes.append(f"aria scale = mp4_w/2880 = {ctx.aria_scale:.5f}; make_upright=True")
+        if rectify:
+            from . import rectify_aria as ra
+            rep = ra.pick_representative_calib(ctx.calib_lines)
+            ctx.rectifier = ra.build_linear_rectifier(
+                rep, preview_w=int(w or ra.NATIVE), preview_h=int(h or ra.NATIVE),
+                focal_scale=focal_scale,
+            )
+            notes.append(f"rectify=ON linear focal_scale={focal_scale} "
+                         f"out={ctx.rectifier.out_w}x{ctx.rectifier.out_h}")
 
     elif method == "psi_pinhole_ray":
         proj = data.projection or {}
@@ -462,6 +476,12 @@ def _project_aria_one(row, ctx: ProjectionContext):
     import numpy as np
     from projectaria_tools.core.mps import EyeGaze
     from projectaria_tools.core.mps.utils import get_gaze_vector_reprojection
+
+    # Rectified path: project through the fixed per-episode linear calib so the point
+    # matches the (undistorted) clip frame. Same calib drives the image remap.
+    if ctx.rectifier is not None:
+        from . import rectify_aria as ra
+        return ra.project_gaze_linear(row, ctx.rectifier)
 
     if not ctx.calib_lines:
         return None

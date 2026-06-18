@@ -370,13 +370,13 @@ class TestEpisodeListNoSampleContamination(unittest.TestCase):
             out = Path(tempfile.mkdtemp())
             tr.build_training_manifest(
                 out, output_format="molmo2",
-                episode_lists={"egtea": ["OP01-R01-PastaSalad-1-2-F3-F4"]},
+                episode_lists={"holoassist": ["R0027-12-GoPro"]},
                 fps=6, max_clip_s=16, drop_shorter_than_s=0, min_duration_s=2.5,
                 workers=1, puller=tr.Puller(local_root="/tmp"),
             )
         finally:
             tr._build_molmo2_episode = orig
-        self.assertEqual({s for s, _ in scheduled}, {"egtea"})  # egtea only, no strays
+        self.assertEqual({s for s, _ in scheduled}, {"holoassist"})  # listed only, no strays
 
 
 class TestShardUnionAssembly(unittest.TestCase):
@@ -398,12 +398,12 @@ class TestShardUnionAssembly(unittest.TestCase):
 
         # Pre-seed 5 shards as if written by OTHER slice processes (NOT in this call's jobs).
         for i in range(5):
-            (sd / f"egtea__ep{i}.json").write_text(json.dumps({
-                "examples": [_row("egtea", f"ep{i}")],
-                "report": {"dataset": "egtea", "episode": f"ep{i}", "clips": 1},
+            (sd / f"holoassist__ep{i}.json").write_text(json.dumps({
+                "examples": [_row("holoassist", f"ep{i}")],
+                "report": {"dataset": "holoassist", "episode": f"ep{i}", "clips": 1},
             }), encoding="utf-8")
         # also a *.tmp partial that must be IGNORED by the *.json glob
-        (sd / "egtea__epX.123.tmp").write_text('{"examples":[{"id":"x"}]}', encoding="utf-8")
+        (sd / "holoassist__epX.123.tmp").write_text('{"examples":[{"id":"x"}]}', encoding="utf-8")
 
         # This build's jobs is a DIFFERENT single episode; its worker is a no-op stub.
         def fake_build(slug, ep, extra, out_root, puller, **kw):
@@ -414,7 +414,7 @@ class TestShardUnionAssembly(unittest.TestCase):
         try:
             rep = tr.build_training_manifest(
                 out, output_format="molmo2",
-                episode_lists={"egtea": ["ep_new"]},   # 1 job; 5 pre-seeded shards on disk
+                episode_lists={"holoassist": ["ep_new"]},   # 1 job; 5 pre-seeded shards on disk
                 fps=6, max_clip_s=16, drop_shorter_than_s=0, min_duration_s=2.5,
                 workers=1, puller=tr.Puller(local_root="/tmp"),
             )

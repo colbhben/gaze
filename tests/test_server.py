@@ -6,7 +6,7 @@ from pathlib import Path
 import unittest
 
 from gaze.server import GazeRequestHandler
-from gaze.source import LocalSource, S3CanonicalSource, S3EvalSource
+from gaze.source import LocalSource, Molmo2ManifestSource, S3CanonicalSource, S3EvalSource
 from gaze.table import write_table
 
 
@@ -60,6 +60,62 @@ class ServerTests(unittest.TestCase):
         tmp = getattr(self, "tmp", None)
         if tmp:
             tmp.cleanup()
+
+
+class Molmo2ManifestSourceTests(unittest.TestCase):
+    """Local molmo2 training manifest -> viewer episodes (clips + per-frame gaze)."""
+
+    def setUp(self) -> None:
+        import tempfile
+
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        (root / "videos" / "nymeria").mkdir(parents=True)
+        (root / "videos" / "nymeria" / "ep1__seg0.mp4").write_bytes(b"0123456789")
+        row = {
+            "id": "nymeria:ep1#seg0", "dataset": "nymeria", "episode_id": "ep1", "seg_index": 0,
+            "video": "videos/nymeria/ep1__seg0.mp4", "fps": 2.0, "resolution": 378, "num_frames": 3,
+            "timestamps": [0.0, 0.5, 1.0],
+            "points": [[{"x": 100.0, "y": 200.0}], [], [{"x": 110.0, "y": 210.0}]],
+            "metadata": {"clip_start_time": 30.0, "clip_end_time": 31.5,
+                         "annotation_text": "walk", "final_annotation": "1) walk"},
+        }
+        (root / "manifest.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+        self.root = root
+        self.source = Molmo2ManifestSource(root)
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_episodes_keyed_by_full_id(self) -> None:
+        eps = self.source.episodes()
+        self.assertEqual(len(eps), 1)
+        self.assertEqual(eps[0]["id"], "nymeria:ep1#seg0")
+        self.assertEqual(eps[0]["episode_id"], "ep1#seg0")
+        self.assertAlmostEqual(eps[0]["duration_s"], 1.5)
+
+    def test_episode_doc_and_video(self) -> None:
+        # the handler splits on the FIRST ":" -> dataset="nymeria", episode_id="ep1#seg0"
+        doc = self.source.episode_doc("nymeria", "ep1#seg0")
+        self.assertEqual(doc["resolution"], 378)
+        self.assertEqual(doc["files"]["video"], "videos/nymeria/ep1__seg0.mp4")
+        vh = self.source.open_video("nymeria", "ep1#seg0")
+        self.assertIsNotNone(vh)
+        self.assertEqual(vh.size, 10)
+
+    def test_gaze_rows_per_frame_with_masked_frame(self) -> None:
+        rows = self.source.table_rows("nymeria", "ep1#seg0", "gaze")
+        self.assertEqual(len(rows), 3)
+        self.assertEqual((rows[0]["x_px"], rows[0]["y_px"]), (100.0, 200.0))
+        self.assertIsNone(rows[1]["x_px"])  # empty points -> masked frame
+        self.assertEqual(rows[2]["x_px"], 110.0)
+
+    def test_annotation_interval_from_final(self) -> None:
+        anno = self.source.table_rows("nymeria", "ep1#seg0", "annotation_intervals")
+        self.assertEqual(anno, [{"start_s": 0.0, "end_s": 1.5, "role": "final", "text": "1) walk"}])
+
+    def test_missing_episode_returns_none(self) -> None:
+        self.assertIsNone(self.source.episode_doc("nymeria", "nope#seg9"))
 
 
 class S3EvalSourceTests(unittest.TestCase):

@@ -249,7 +249,8 @@ def resample_track_linear(
 # =========================================================================== #
 def projected_gaze_track(
     data: EpisodeData, puller: Puller, *, project_max_hz: float | None = None,
-) -> tuple[list[float], list[float], list[float], list[bool]]:
+    rectify: bool = False, focal_scale: float = 1.0,
+) -> tuple[list[float], list[float], list[float], list[bool], Any]:
     """Project gaze samples to source-mp4 pixels on the video clock.
 
     Returns ascending ``(times_s, xs_px, ys_px, in_frame)`` keeping only samples
@@ -263,7 +264,7 @@ def projected_gaze_track(
     -> ~5x fewer projections, accurate interpolation preserved). None = project all.
     """
     gaze_times = reconciled_gaze_times(data)
-    ctx = build_projection_context(data, puller)
+    ctx = build_projection_context(data, puller, rectify=rectify, focal_scale=focal_scale)
     w = data.video.get("width")
     h = data.video.get("height")
     min_dt = (1.0 / project_max_hz) if project_max_hz else 0.0
@@ -288,7 +289,7 @@ def projected_gaze_track(
     xs = [r[1] for r in triples]
     ys = [r[2] for r in triples]
     inf = [r[3] for r in triples]
-    return times, xs, ys, inf
+    return times, xs, ys, inf, ctx.rectifier
 
 
 # =========================================================================== #
@@ -673,21 +674,35 @@ def coalesce_short_segments(
     *,
     min_duration_s: float,
     max_clip_s: float,
+    max_gap_s: float = 0.0,
     drop_unmergeable: bool = True,
 ) -> list[dict[str, Any]]:
-    """Coalesce too-short clips with the following clip(s) to reach ``min_duration_s``.
+    """Coalesce adjacent same-coarseness clips into the LONGEST clip that fits ``max_clip_s``.
 
-    When a segment's duration ``(end_s - start_s)`` is below ``min_duration_s`` we
-    extend it to absorb the NEXT segment(s) in time order, combining their texts into
-    a numbered list (:func:`_numbered_text`). Coalescing stops once the merged clip
-    reaches ``min_duration_s`` or absorbing the next would exceed ``max_clip_s`` (the
-    hard ceiling always wins). ``min_duration_s <= 0`` disables this (returns
-    ``segments`` unchanged).
+    The pass biases toward the longest clip in the ``[min_duration_s, max_clip_s]``
+    range rather than the shortest that merely clears ``min_duration_s``. Walking in
+    time order, a clip GREEDILY absorbs the next clip(s) while ALL hold:
 
-    DROP RULE (item 3): a merged clip that STILL falls short of ``min_duration_s``
-    (e.g. a single isolated egtea clip with no following segment to absorb, or a
-    trailing remainder) is DROPPED when ``drop_unmergeable`` is True (the default) --
-    we do not ship clips below the requested minimum duration. Set False to keep them.
+      * same coarseness level -- the next clip's ``channel`` equals the current clip's
+        (we never merge a coarse clip with a finer-channel clip, nor vice-versa),
+      * temporally adjacent -- the gap ``next.start_s - cur.end_s`` is ``<= max_gap_s``
+        (so we never weld two clips ACROSS a dropped region; e.g. after the interesting
+        filter culls non-interesting spans, the time it removed becomes a gap, and an
+        interesting clip must NOT swallow that gap to reach the next interesting clip),
+        and
+      * the merge still fits -- ``next.end_s - cur.start_s <= max_clip_s``.
+
+    Coalescing stops at the first neighbour that changes channel, sits beyond
+    ``max_gap_s``, or would overflow ``max_clip_s``; that neighbour starts the next clip.
+    So ``45s coarse`` + adjacent ``8s coarse`` (= 53s <= 55s) coalesce, but ``45s
+    coarse`` + ``30s coarse`` (= 75s) do NOT, and neither does an interesting clip reach
+    across a culled non-interesting gap. Absorbed texts become a numbered list
+    (:func:`_numbered_text`). ``min_duration_s <= 0`` disables the pass.
+
+    DROP RULE: a clip that STILL falls short of ``min_duration_s`` after packing (an
+    isolated clip with no adjacent same-channel neighbour to absorb, or one capped by
+    ``max_clip_s`` before reaching ``min``) is DROPPED when ``drop_unmergeable`` is True
+    (the default) -- we do not ship clips below the requested minimum. Set False to keep.
 
     The merged segment keeps the FIRST segment's driving ``channel``; its ``text`` is
     the numbered concatenation of every absorbed segment's text. Operates on the
@@ -702,10 +717,18 @@ def coalesce_short_segments(
     while i < n:
         cur = dict(segs[i])
         texts = [cur.get("text", "")]
+        chan = cur.get("channel")
         j = i + 1
-        # Absorb following segments while we're still short AND the merge fits.
-        while (cur["end_s"] - cur["start_s"]) < min_duration_s - 1e-6 and j < n:
+        # Greedily pack toward max_clip_s: absorb the next clip while it is the SAME
+        # coarseness level, TEMPORALLY ADJACENT (no dropped region in between), AND the
+        # merge stays within the ceiling. No min-gate -- a clip already past min keeps
+        # growing up to max as long as adjacent same-channel neighbours fit.
+        while j < n:
             nxt = segs[j]
+            if nxt.get("channel") != chan:
+                break  # different coarseness level -> don't merge across channels
+            if (nxt["start_s"] - cur["end_s"]) > max_gap_s + 1e-6:
+                break  # gap between clips (e.g. culled non-interesting span) -> don't bridge
             if (nxt["end_s"] - cur["start_s"]) > max_clip_s + 1e-6:
                 break  # absorbing would blow past the max-clip ceiling
             cur["end_s"] = nxt["end_s"]
@@ -716,12 +739,12 @@ def coalesce_short_segments(
             cur["coalesced"] = j - i  # how many source segments merged (provenance)
         cur["start_s"] = round(cur["start_s"], 6)
         cur["end_s"] = round(cur["end_s"], 6)
-        # Item 3: never ship a clip below the requested minimum duration.
+        # Never ship a clip below the requested minimum duration.
         if drop_unmergeable and (cur["end_s"] - cur["start_s"]) < min_duration_s - 1e-6:
-            i = j if j > i else i + 1
+            i = j
             continue
         out.append(cur)
-        i = j if j > i else i + 1
+        i = j
     return out
 
 
@@ -1052,6 +1075,9 @@ class _EpisodeJobConfig:
     remote_root: str
     local_root: str | None
     multi: bool  # iterating a multi-episode list -> don't inherit sample positional tokens
+    rectify: bool = False
+    focal_scale: float = 1.0
+    coalesce_max_gap_s: float = 3.0
 
 
 # Positional tokens (derived per episode id) must NOT be inherited from the sample
@@ -1098,6 +1124,8 @@ def _run_one_episode(
             drop_shorter_than_s=cfg.drop_shorter_than_s, min_duration_s=cfg.min_duration_s,
             prompt=cfg.prompt, reuse_bundle=cfg.reuse_bundle,
             interesting=interesting, reuse_clips=cfg.reuse_clips,
+            rectify=cfg.rectify, focal_scale=cfg.focal_scale,
+            coalesce_max_gap_s=cfg.coalesce_max_gap_s,
         )
     except Exception as exc:  # noqa
         import traceback as _tb
@@ -1131,6 +1159,7 @@ def _build_molmo2_manifest(
     fps: float, resolution: int, max_frames: int, max_clip_s: float,
     merge_gap_s: float, drop_shorter_than_s: float, min_duration_s: float,
     prompt: str, reuse_bundle: bool, reuse_clips: bool,
+    rectify: bool = False, focal_scale: float = 1.0, coalesce_max_gap_s: float = 3.0,
 ) -> dict[str, Any]:
     """Process-parallel molmo2 extraction with crash-safe per-episode shard caching.
 
@@ -1167,6 +1196,7 @@ def _build_molmo2_manifest(
         min_duration_s=min_duration_s, prompt=prompt, reuse_bundle=reuse_bundle,
         reuse_clips=reuse_clips, ssh_host=puller.ssh_host, remote_root=puller.remote_root,
         local_root=str(puller.local_root) if puller.local_root else None, multi=multi,
+        rectify=rectify, focal_scale=focal_scale, coalesce_max_gap_s=coalesce_max_gap_s,
     )
 
     # Dispatch pending episodes across PROCESSES (CPU-bound pure-Python work; threads
@@ -1216,7 +1246,9 @@ def _build_molmo2_manifest(
             "gaze_hz": fps, "points_per_video_frame": 1,
             "max_frames": max_frames or "unlimited", "max_clip_s": max_clip_s,
             "merge_gap_s": merge_gap_s, "drop_shorter_than_s": drop_shorter_than_s,
-            "min_duration_s": min_duration_s, "workers": n_workers,
+            "min_duration_s": min_duration_s, "coalesce_max_gap_s": coalesce_max_gap_s,
+            "workers": n_workers,
+            "rectify": rectify, "rectify_focal_scale": focal_scale if rectify else None,
             "episodes_total": len(jobs), "episodes_cached_on_resume": n_cached,
             "shards_assembled": n_shards,
         },
@@ -1253,6 +1285,9 @@ def build_training_manifest(
     puller: Puller | None = None,
     reuse_bundle: bool = True,
     reuse_clips: bool = False,
+    rectify: bool = False,
+    focal_scale: float = 1.0,
+    coalesce_max_gap_s: float = 3.0,
 ) -> dict[str, Any]:
     """Build a training manifest.
 
@@ -1316,7 +1351,8 @@ def build_training_manifest(
             fps=fps, resolution=resolution, max_frames=max_frames, max_clip_s=max_clip_s,
             merge_gap_s=merge_gap_s, drop_shorter_than_s=drop_shorter_than_s,
             min_duration_s=min_duration_s, prompt=prompt, reuse_bundle=reuse_bundle,
-            reuse_clips=reuse_clips,
+            reuse_clips=reuse_clips, rectify=rectify, focal_scale=focal_scale,
+            coalesce_max_gap_s=coalesce_max_gap_s,
         )
 
     for slug in slugs:
@@ -1354,7 +1390,7 @@ def build_training_manifest(
         clip_start_offset = float(vmeta.get("start_s") or 0.0)
 
         # 3. projected gaze track (source px, video clock), rebased to clip-local time
-        times, xs, ys, inf = projected_gaze_track(data, puller)
+        times, xs, ys, inf, _ = projected_gaze_track(data, puller)
         # restrict to the resampled window and rebase to clip-local seconds
         rebased = [
             (t - clip_start_offset, x, y, f)
@@ -1515,6 +1551,9 @@ def _build_molmo2_episode(
     reuse_bundle: bool,
     interesting: dict[str, Any] | None,
     reuse_clips: bool = False,
+    rectify: bool = False,
+    focal_scale: float = 1.0,
+    coalesce_max_gap_s: float = 3.0,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Build Molmo2 video-point rows for one episode: filter -> chop -> per-seg clip."""
     from . import curate_readers as cr
@@ -1557,6 +1596,9 @@ def _build_molmo2_episode(
     if max_frames and max_frames > 0:
         eff_max_clip_s = min(max_clip_s, max_frames / fps)
 
+    # Rectification is Aria-only (FISHEYE624 -> linear); no-op for every other method.
+    do_rectify = bool(rectify and data.projection_method == "projectaria_cpf")
+
     # Hierarchical chop: coarsest channel that fits <= max_clip; else descend to finer.
     # Each segment carries the channel + text of the span that drove its boundaries.
     segments = chop_by_channels(
@@ -1567,6 +1609,7 @@ def _build_molmo2_episode(
     n_before_coalesce = len(segments)
     segments = coalesce_short_segments(
         segments, min_duration_s=min_duration_s, max_clip_s=eff_max_clip_s,
+        max_gap_s=coalesce_max_gap_s,
     )
     if not segments:
         return [], {"dataset": slug, "episode": episode_id, "segments": 0,
@@ -1579,7 +1622,10 @@ def _build_molmo2_episode(
     # Project the gaze track once (source px, video clock). Subsample raw samples to
     # ~2.5x the grid fps before projecting (Aria CPF projection is ~60s for 30k
     # samples; we only resample to `fps` downstream, so projecting all is wasteful).
-    times, xs, ys, inf = projected_gaze_track(data, puller, project_max_hz=max(8.0, 2.0 * fps))
+    times, xs, ys, inf, rectifier = projected_gaze_track(
+        data, puller, project_max_hz=max(8.0, 2.0 * fps),
+        rectify=do_rectify, focal_scale=focal_scale,
+    )
     # Resample to the canonical fps grid over the whole episode (video clock).
     grid_dur = duration_s or (segments[-1]["end_s"] if segments else 0.0)
     resampled = resample_track_linear(
@@ -1607,11 +1653,19 @@ def _build_molmo2_episode(
         seg_len = seg_end - seg_start
         video_rel = f"videos/{slug}/{_safe(episode_id)}__seg{k}.mp4"
         try:
-            vmeta = resample_segment_from_local(
-                full_src, out_root / video_rel,
-                start_s=seg_start, seg_len=seg_len, fps=fps, side=resolution,
-                reuse_existing=reuse_clips,
-            )
+            if do_rectify and rectifier is not None:
+                from . import rectify_aria as ra
+                vmeta = ra.rectify_clip_video(
+                    full_src, out_root / video_rel, rectifier,
+                    start_s=seg_start, seg_len=seg_len, fps=fps, side=resolution,
+                    reuse_existing=reuse_clips,
+                )
+            else:
+                vmeta = resample_segment_from_local(
+                    full_src, out_root / video_rel,
+                    start_s=seg_start, seg_len=seg_len, fps=fps, side=resolution,
+                    reuse_existing=reuse_clips,
+                )
         except Exception as exc:  # noqa
             examples.append({"dataset": slug, "episode_id": episode_id, "seg_index": k,
                              "error": f"video: {exc}"})
@@ -1669,6 +1723,8 @@ def _build_molmo2_episode(
         "source_dims": f"{src_w}x{src_h}", "duration_s": round(duration_s, 3),
         "projection": data.projection_method, "gaze_space": data.gaze_space,
         "interesting_filtered": interesting is not None,
+        "rectified": do_rectify,
+        "rectify_focal_scale": focal_scale if do_rectify else None,
     }
     return examples, rep
 

@@ -14,6 +14,10 @@
       "comment": "Episode = one cropped CLIP (~15484). Clip filename = <SESSION>-<startMs>-<endMs>-F<startFrame>-F<endFrame>.mp4. SESSION (e.g. OP01-R01-PastaSalad) is the parent dir and the gaze key; the F<start>-F<end> range slices the session gaze. fps=24, frame 1280x960."
     }
   },
+  "dataset_filters": {
+    "cull": true,
+    "comment": "CULLED from the data mix (2026-06-17). Each episode is a single short cropped action clip (~1-3s); the pipeline processes episodes in isolation, so at min_duration_s>=12 every clip drops (nothing to coalesce within one episode). Clips ARE temporally orderable per session via the F<start>-F<end> frame range and the gaze is per-session, but there is no full session video (only cropped_clips/) and the clips overlap / have gaps (not a clean tiling), so stitching would require a session-grouping pre-pass + ffmpeg concat with overlap-dedup -- out of scope. Dropped rather than shipped as sub-min clips."
+  },
   "video": {
     "select": {
       "path_template": "video/cropped_clips/{session}/{episode_id}.mp4",

@@ -318,20 +318,56 @@ class TestCoalesceShortSegments(unittest.TestCase):
         self.assertEqual(out[0]["text"], "1) A 2) B")
         self.assertEqual(out[0]["coalesced"], 2)
 
-    def test_keeps_long_enough_alone(self):
+    def test_packs_same_channel_to_longest_under_max(self):
+        # two same-channel clips that BOTH fit under max -> merge to the longest clip
+        # (longest-clip bias), even though each already clears min.
         segs = self._segs([(0, 3, "A"), (3, 6, "B")])
         out = coalesce_short_segments(segs, min_duration_s=2.0, max_clip_s=20)
-        self.assertEqual(len(out), 2)
-        self.assertNotIn("coalesced", out[0])
+        self.assertEqual(len(out), 1)
+        self.assertAlmostEqual(out[0]["end_s"] - out[0]["start_s"], 6.0)
+        self.assertEqual(out[0]["text"], "1) A 2) B")
+        self.assertEqual(out[0]["coalesced"], 2)
 
-    def test_absorbs_multiple_until_min_then_drops_trailing(self):
-        # four 1s clips, min 3s -> first absorbs 2 more (0..3); trailing 1s clip D
-        # cannot reach 3s and is DROPPED (item 3: never ship sub-min clips).
+    def test_absorbs_multiple_packing_to_max(self):
+        # four 1s same-channel clips, min 3s, max 20 -> all pack into one 4s clip
+        # (longest fit), not stopping at the 3s minimum.
         segs = self._segs([(0, 1, "A"), (1, 2, "B"), (2, 3, "C"), (3, 4, "D")])
         out = coalesce_short_segments(segs, min_duration_s=3.0, max_clip_s=20)
         self.assertEqual(len(out), 1)
-        self.assertAlmostEqual(out[0]["end_s"] - out[0]["start_s"], 3.0)
-        self.assertEqual(out[0]["text"], "1) A 2) B 3) C")
+        self.assertAlmostEqual(out[0]["end_s"] - out[0]["start_s"], 4.0)
+        self.assertEqual(out[0]["text"], "1) A 2) B 3) C 4) D")
+
+    def test_longest_clip_bias_caps_at_max(self):
+        # five 4s same-channel clips, min 12, max 14 -> pack 3 (12s) since a 4th would
+        # hit 16 > 14; the bias fills as close to max as fits, NOT just past min.
+        segs = self._segs([(i * 4.0, i * 4.0 + 4.0, f"a{i}") for i in range(5)])
+        out = coalesce_short_segments(segs, min_duration_s=12.0, max_clip_s=14.0)
+        self.assertAlmostEqual(out[0]["end_s"] - out[0]["start_s"], 12.0)
+
+    def test_does_not_merge_across_coarseness(self):
+        # 45s coarse + 8s coarse -> coalesce (53 <= 55); but a following finer-channel
+        # clip is NOT absorbed even though it would fit (left as its own clip; >= min
+        # so it survives the drop rule).
+        segs = [
+            {"start_s": 0.0, "end_s": 45.0, "channel": "coarse", "text": "X"},
+            {"start_s": 45.0, "end_s": 53.0, "channel": "coarse", "text": "Y"},
+            {"start_s": 53.0, "end_s": 66.0, "channel": "fine", "text": "z"},
+        ]
+        out = coalesce_short_segments(segs, min_duration_s=12.0, max_clip_s=55.0)
+        self.assertEqual(len(out), 2)
+        self.assertAlmostEqual(out[0]["end_s"], 53.0)
+        self.assertEqual(out[0]["text"], "1) X 2) Y")
+        self.assertEqual(out[1]["channel"], "fine")
+
+    def test_does_not_merge_coarse_when_next_coarse_overflows(self):
+        # 45s coarse + 30s coarse -> 75 > 55 max -> do NOT merge; each stands alone.
+        segs = [
+            {"start_s": 0.0, "end_s": 45.0, "channel": "coarse", "text": "X"},
+            {"start_s": 45.0, "end_s": 75.0, "channel": "coarse", "text": "Y"},
+        ]
+        out = coalesce_short_segments(segs, min_duration_s=12.0, max_clip_s=55.0)
+        self.assertEqual(len(out), 2)
+        self.assertNotIn("coalesced", out[0])
 
     def test_drop_unmergeable_single_short_clip(self):
         # one isolated 1s clip, min 3s, nothing to merge -> DROPPED by default
@@ -350,12 +386,34 @@ class TestCoalesceShortSegments(unittest.TestCase):
         for s in kept:
             self.assertLessEqual(s["end_s"] - s["start_s"], 2.0 + 1e-6)
 
-    def test_gap_between_clips_preserved_in_span(self):
-        # clips with a gap: merging extends end to absorbed clip's end (covers the gap)
+    def test_does_not_bridge_dropped_gap(self):
+        # Two interesting clips with a large gap between them (the gap is content the
+        # interesting filter culled). With the default max_gap_s=0 they must NOT be
+        # welded across the gap -- each stands alone (and is dropped if below min).
         segs = self._segs([(0, 1, "A"), (5, 6, "B")])
         out = coalesce_short_segments(segs, min_duration_s=2.0, max_clip_s=20)
+        # neither reaches min 2s alone, and they cannot bridge the 4s gap -> both dropped
+        self.assertEqual(out, [])
+        # with drop_unmergeable=False they survive as two separate short clips, NOT one
+        kept = coalesce_short_segments(segs, min_duration_s=2.0, max_clip_s=20, drop_unmergeable=False)
+        self.assertEqual(len(kept), 2)
+        self.assertAlmostEqual(kept[0]["end_s"], 1.0)
+        self.assertAlmostEqual(kept[1]["start_s"], 5.0)
+
+    def test_bridges_small_gap_within_tolerance(self):
+        # A small gap <= max_gap_s is allowed (e.g. merge_gap_s=1.0): adjacent-enough
+        # same-channel clips coalesce; the span covers the small gap.
+        segs = self._segs([(0, 3, "A"), (3.5, 9, "B")])
+        out = coalesce_short_segments(segs, min_duration_s=4.0, max_clip_s=20, max_gap_s=1.0)
         self.assertEqual(len(out), 1)
-        self.assertAlmostEqual(out[0]["end_s"], 6.0)
+        self.assertAlmostEqual(out[0]["end_s"], 9.0)
+
+    def test_large_gap_breaks_chain_even_same_channel(self):
+        # 10s + 10s same channel but a 5s gap between, max_gap_s=1 -> do NOT merge.
+        segs = self._segs([(0, 10, "A"), (15, 25, "B")])
+        out = coalesce_short_segments(segs, min_duration_s=12.0, max_clip_s=55, max_gap_s=1.0)
+        # each is below min 12 alone and can't bridge the 5s gap -> both dropped
+        self.assertEqual(out, [])
 
 
 class TestChannelRolesAndPoints(unittest.TestCase):
