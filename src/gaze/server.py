@@ -198,6 +198,8 @@ def viewer_html() -> str:
     button.ep.selected { background: #ff475722; border-color: #ff4757; font-weight: 600; }
     button.ep .ep-sub { color: #888; font-weight: 400; font-size: 11px; }
     select, input[type=search] { width: 100%; padding: 7px; margin: 0 0 8px; border: 1px solid #9996; border-radius: 6px; background: Canvas; color: CanvasText; box-sizing: border-box; font-size: 13px; }
+    .dur-input { flex: 1 1 0; min-width: 0; width: 100%; padding: 5px 6px; margin: 0; border: 1px solid #9996; border-radius: 6px; background: Canvas; color: CanvasText; box-sizing: border-box; font-size: 12px; -moz-appearance: textfield; }
+    .dur-input::-webkit-outer-spin-button, .dur-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     .navbar { display: flex; gap: 8px; align-items: center; }
     .navbar button { flex: 0 0 auto; padding: 6px 12px; border: 1px solid #9996; background: transparent; border-radius: 6px; cursor: pointer; }
     .navbar button:disabled { opacity: 0.4; cursor: default; }
@@ -233,9 +235,9 @@ def viewer_html() -> str:
       <select id="datasetFilter"></select>
       <input type="search" id="search" placeholder="Filter episodes (id substring)…" autocomplete="off">
       <div class="dur-filter" style="display:flex; gap:6px; align-items:center; margin:0 0 8px;">
-        <input type="number" id="minDur" min="0" step="0.5" placeholder="min s" style="margin:0; -moz-appearance:textfield;" title="Minimum episode duration (seconds)">
-        <span style="color:#888; font-size:12px;">–</span>
-        <input type="number" id="maxDur" min="0" step="0.5" placeholder="max s" style="margin:0;" title="Maximum episode duration (seconds)">
+        <input type="number" id="minDur" class="dur-input" min="0" step="0.5" placeholder="min s" title="Minimum episode duration (seconds)">
+        <span style="color:#888; font-size:12px; flex:0 0 auto;">–</span>
+        <input type="number" id="maxDur" class="dur-input" min="0" step="0.5" placeholder="max s" title="Maximum episode duration (seconds)">
       </div>
       <div class="count" id="count"></div>
     </div>
