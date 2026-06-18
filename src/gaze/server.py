@@ -165,8 +165,14 @@ class GazeRequestHandler(BaseHTTPRequestHandler):
         if status == 206:
             self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
         self.end_headers()
-        for chunk in handle.read_range(start, length):
-            self.wfile.write(chunk)
+        try:
+            for chunk in handle.read_range(start, length):
+                self.wfile.write(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            # The browser routinely aborts an in-flight range request when the user scrubs
+            # the timeline or switches clips. The socket is gone, so just stop streaming --
+            # this is expected, not an error.
+            return
 
     def log_message(self, format: str, *args) -> None:  # noqa: A002
         return
@@ -226,6 +232,11 @@ def viewer_html() -> str:
       <h1>Episodes</h1>
       <select id="datasetFilter"></select>
       <input type="search" id="search" placeholder="Filter episodes (id substring)…" autocomplete="off">
+      <div class="dur-filter" style="display:flex; gap:6px; align-items:center; margin:0 0 8px;">
+        <input type="number" id="minDur" min="0" step="0.5" placeholder="min s" style="margin:0; -moz-appearance:textfield;" title="Minimum episode duration (seconds)">
+        <span style="color:#888; font-size:12px;">–</span>
+        <input type="number" id="maxDur" min="0" step="0.5" placeholder="max s" style="margin:0;" title="Maximum episode duration (seconds)">
+      </div>
       <div class="count" id="count"></div>
     </div>
     <div class="episode-list" id="episodes"></div>
@@ -251,6 +262,8 @@ def viewer_html() -> str:
     const episodesEl = document.querySelector('#episodes');
     const datasetFilter = document.querySelector('#datasetFilter');
     const searchEl = document.querySelector('#search');
+    const minDurEl = document.querySelector('#minDur');
+    const maxDurEl = document.querySelector('#maxDur');
     const countEl = document.querySelector('#count');
     const prevBtn = document.querySelector('#prevBtn');
     const nextBtn = document.querySelector('#nextBtn');
@@ -324,6 +337,8 @@ def viewer_html() -> str:
         datasets.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)} (${counts[name]})</option>`).join('');
       datasetFilter.onchange = renderEpisodeList;
       searchEl.oninput = renderEpisodeList;
+      minDurEl.oninput = renderEpisodeList;
+      maxDurEl.oninput = renderEpisodeList;
       prevBtn.onclick = () => step(-1);
       nextBtn.onclick = () => step(1);
       speedDown.onclick = () => bumpRate(-RATE_STEP);
@@ -337,9 +352,22 @@ def viewer_html() -> str:
     function renderEpisodeList() {
       const selected = datasetFilter.value;
       const q = (searchEl.value || '').trim().toLowerCase();
+      // Duration range filter (seconds). Blank = unbounded; episodes with no duration_s
+      // are only excluded when a bound is actually set.
+      const minD = minDurEl.value === '' ? null : Number(minDurEl.value);
+      const maxD = maxDurEl.value === '' ? null : Number(maxDurEl.value);
+      const inDuration = (ep) => {
+        if (minD == null && maxD == null) return true;
+        const d = Number(ep.duration_s);
+        if (!Number.isFinite(d)) return false;
+        if (minD != null && d < minD) return false;
+        if (maxD != null && d > maxD) return false;
+        return true;
+      };
       visibleEpisodes = episodes.filter(ep =>
         (!selected || ep.dataset === selected) &&
-        (!q || String(ep.id).toLowerCase().includes(q)));
+        (!q || String(ep.id).toLowerCase().includes(q)) &&
+        inDuration(ep));
       countEl.textContent = `${visibleEpisodes.length} of ${episodes.length} episode(s)`;
       episodesEl.innerHTML = '';
       const frag = document.createDocumentFragment();
@@ -392,6 +420,8 @@ def viewer_html() -> str:
     }
     document.addEventListener('keydown', (e) => {
       if (e.target === searchEl) { if (e.key === 'Escape') searchEl.blur(); return; }
+      // Don't hijack keys while typing in the duration filter inputs.
+      if (e.target === minDurEl || e.target === maxDurEl) { if (e.key === 'Escape') e.target.blur(); return; }
       if (e.key === 'ArrowRight' || e.key === 'j') { e.preventDefault(); step(1); }
       else if (e.key === 'ArrowLeft' || e.key === 'k') { e.preventDefault(); step(-1); }
       else if (e.key === '/') { e.preventDefault(); searchEl.focus(); }

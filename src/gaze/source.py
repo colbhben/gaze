@@ -316,6 +316,7 @@ class S3EvalSource(Source):
                 "id": key,
                 "dataset": rec.get("dataset"),
                 "episode_id": rec.get("example_id"),
+                "duration_s": rec.get("video_duration") or rec.get("clip_end_time") or 0,
                 "modalities": "video,gaze,gaze_pred",
                 "l2": m.get("l2"),
             })
